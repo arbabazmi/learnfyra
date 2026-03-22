@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd C:/arbab-github/edusheet-ai && npm install 2>&1)",
+      "Bash(cd:*)",
+      "Bash(cd C:/arbab-github/edusheet-ai && npm run test:unit 2>&1)"
+    ]
+  }
+}

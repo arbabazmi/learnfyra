@@ -1,0 +1,96 @@
+{
+  "$schema": "edusheet-ai/worksheet/v1",
+  "title": "Grade 3 Math: Multiplication Facts",
+  "grade": 3,
+  "subject": "Math",
+  "topic": "Multiplication Facts (1–10)",
+  "difficulty": "Medium",
+  "standards": ["CCSS.MATH.CONTENT.3.OA.A.1", "CCSS.MATH.CONTENT.3.OA.C.7"],
+  "estimatedTime": "20 minutes",
+  "instructions": "Solve each multiplication problem. Show your work where required. Circle the letter of the correct answer for multiple-choice questions.",
+  "totalPoints": 10,
+  "questions": [
+    {
+      "number": 1,
+      "type": "fill-in-the-blank",
+      "question": "4 × 6 = ___",
+      "answer": "24",
+      "explanation": "4 groups of 6 equals 24.",
+      "points": 1
+    },
+    {
+      "number": 2,
+      "type": "multiple-choice",
+      "question": "What is 7 × 8?",
+      "options": ["A. 54", "B. 56", "C. 48", "D. 63"],
+      "answer": "B. 56",
+      "explanation": "7 × 8 = 56. You can think of it as 7 groups of 8.",
+      "points": 1
+    },
+    {
+      "number": 3,
+      "type": "true-false",
+      "question": "5 × 9 = 45",
+      "answer": "True",
+      "explanation": "5 × 9 = 45. Counting by 5s nine times: 5, 10, 15, 20, 25, 30, 35, 40, 45.",
+      "points": 1
+    },
+    {
+      "number": 4,
+      "type": "word-problem",
+      "question": "A baker makes 6 trays of cookies. Each tray holds 8 cookies. How many cookies does the baker make in all?",
+      "answer": "48",
+      "explanation": "6 trays × 8 cookies per tray = 48 cookies total.",
+      "points": 2
+    },
+    {
+      "number": 5,
+      "type": "show-your-work",
+      "question": "Solve: 9 × 7 = ___. Show your work.",
+      "answer": "63",
+      "explanation": "9 × 7 = 63. Skip counting by 9: 9, 18, 27, 36, 45, 54, 63.",
+      "points": 2
+    },
+    {
+      "number": 6,
+      "type": "fill-in-the-blank",
+      "question": "3 × ___ = 21",
+      "answer": "7",
+      "explanation": "3 × 7 = 21. Divide both sides: 21 ÷ 3 = 7.",
+      "points": 1
+    },
+    {
+      "number": 7,
+      "type": "multiple-choice",
+      "question": "Which multiplication fact equals 36?",
+      "options": ["A. 6 × 7", "B. 4 × 9", "C. 5 × 8", "D. 3 × 10"],
+      "answer": "B. 4 × 9",
+      "explanation": "4 × 9 = 36. The others equal 42, 40, and 30 respectively.",
+      "points": 1
+    },
+    {
+      "number": 8,
+      "type": "fill-in-the-blank",
+      "question": "10 × 10 = ___",
+      "answer": "100",
+      "explanation": "10 × 10 = 100. Ten groups of ten.",
+      "points": 1
+    },
+    {
+      "number": 9,
+      "type": "true-false",
+      "question": "2 × 6 = 14",
+      "answer": "False",
+      "explanation": "2 × 6 = 12, not 14.",
+      "points": 0
+    },
+    {
+      "number": 10,
+      "type": "word-problem",
+      "question": "A classroom has 5 rows of desks. Each row has 6 desks. How many desks are in the classroom?",
+      "answer": "30",
+      "explanation": "5 rows × 6 desks per row = 30 desks.",
+      "points": 0
+    }
+  ]
+}
