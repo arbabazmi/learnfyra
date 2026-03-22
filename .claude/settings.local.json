@@ -4,7 +4,10 @@
       "Bash(cd C:/arbab-github/edusheet-ai && npm install 2>&1)",
       "Bash(cd:*)",
       "Bash(cd C:/arbab-github/edusheet-ai && npm run test:unit 2>&1)",
-      "Bash(cd C:/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit 2>&1)"
+      "Bash(cd C:/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit 2>&1)",
+      "Bash(cd /c/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --testPathPattern=\"tests/unit\" --no-coverage 2>&1)",
+      "Bash(cd /c/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --testPathPattern=\"tests/integration\" --no-coverage 2>&1)",
+      "Bash(tail:*)"
     ]
   }
 }

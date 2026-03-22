@@ -1,64 +1,233 @@
 /**
  * @file src/templates/worksheet.html.js
- * @description HTML template builder for worksheets and answer keys
+ * @description HTML template builder for worksheets and answer keys.
+ *   Uses CSS class names from styles.css.js — no inline styles except
+ *   minor one-off layout tweaks that don't warrant a dedicated class.
  * @agent DEV
  */
 
 import { getStyles } from './styles.css.js';
 
+// ─── XSS helpers ──────────────────────────────────────────────────────────────
+
 /**
- * Renders a single question as HTML based on its type
- * @param {Object} q - Question object from worksheet JSON
- * @returns {string} HTML string for the question
+ * Escapes HTML special characters to prevent XSS in templates.
+ * @param {string} str
+ * @returns {string}
  */
-function renderQuestion(q) {
-  const typeBlock = (() => {
-    switch (q.type) {
-      case 'multiple-choice':
-        return `<div class="options">${(q.options || [])
-          .map((opt) => `<div class="option">${opt}</div>`)
-          .join('')}</div>`;
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-      case 'true-false':
-        return `<div class="true-false">
-          <span>○ True</span>
-          <span>○ False</span>
-        </div>`;
+// ─── School logo placeholder ──────────────────────────────────────────────────
 
-      case 'show-your-work':
-        return `<div class="work-area"></div>`;
-
-      case 'short-answer':
-        return `<div class="answer-line"></div><div class="answer-line" style="margin-top:6px"></div>`;
-
-      case 'matching':
-        return `<div class="answer-line" style="width:60px;display:inline-block;"></div>`;
-
-      default: // fill-in-the-blank, word-problem
-        return `<div class="answer-line"></div>`;
-    }
-  })();
-
+/**
+ * Renders the school logo placeholder column with an inline SVG school icon.
+ * Replace the SVG with an <img> tag once a real logo asset is available.
+ * @returns {string}
+ */
+function renderSchoolLogo() {
   return `
-    <div class="question">
-      <div class="question-header">
-        <span class="question-number">${q.number}.</span>
-        <span class="question-text">${escapeHtml(q.question)}</span>
-        <span class="question-points">(${q.points} pt${q.points !== 1 ? 's' : ''})</span>
+    <div class="school-logo-wrap">
+      <div class="school-logo-box" title="School logo — replace with your logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+             stroke="#1a3a6b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <path d="M3 21h18"/>
+          <path d="M5 21V7l7-4 7 4v14"/>
+          <path d="M9 21v-4h6v4"/>
+          <rect x="10" y="9" width="4" height="4"/>
+        </svg>
+        <span class="school-logo-label">School<br>Logo</span>
       </div>
-      ${typeBlock}
     </div>`;
 }
 
+// ─── Student fields ───────────────────────────────────────────────────────────
+
 /**
- * Builds the full worksheet HTML document
+ * Renders the student-fields grid: name, date, teacher, period, and score.
+ * @param {Object} worksheet - Parsed worksheet JSON (used for totalPoints)
+ * @returns {string}
+ */
+function renderStudentFields(worksheet) {
+  return `
+    <div class="student-fields">
+      <div class="sf-row">
+        <span class="sf-label">Name</span>
+        <div class="sf-line"></div>
+      </div>
+      <div class="sf-row">
+        <span class="sf-label">Date</span>
+        <div class="sf-line"></div>
+      </div>
+      <div class="sf-row">
+        <span class="sf-label">Teacher</span>
+        <div class="sf-line"></div>
+      </div>
+      <div class="sf-row">
+        <span class="sf-label">Period / Class</span>
+        <div class="sf-line"></div>
+      </div>
+      <div class="sf-row score">
+        <span class="sf-label">Score</span>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <div class="sf-score-val"></div>
+          <span style="font-size:9pt;color:#888;padding-bottom:2px;">/ ${worksheet.totalPoints} pts</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─── Info strip ───────────────────────────────────────────────────────────────
+
+/**
+ * Renders the info strip showing estimated time, difficulty, question count,
+ * and aligned standards.
+ * @param {Object} worksheet
+ * @returns {string}
+ */
+function renderInfoStrip(worksheet) {
+  const standards = (worksheet.standards || []).join(' &middot; ') || '&mdash;';
+  return `
+    <div class="info-strip">
+      <div class="info-strip-item">
+        <strong>Time:</strong> ${escapeHtml(worksheet.estimatedTime || 'N/A')}
+      </div>
+      <div class="info-strip-item">
+        <strong>Difficulty:</strong> ${escapeHtml(worksheet.difficulty)}
+      </div>
+      <div class="info-strip-item">
+        <strong>Questions:</strong> ${worksheet.questions.length}
+      </div>
+      <div class="info-strip-item">
+        <strong>Standards:</strong> ${standards}
+      </div>
+    </div>`;
+}
+
+// ─── Question rendering ───────────────────────────────────────────────────────
+
+/**
+ * Renders the answer / response area for a single question by type.
+ * @param {Object} q - Question object from worksheet JSON
+ * @returns {string}
+ */
+function renderAnswerArea(q) {
+  switch (q.type) {
+
+    case 'multiple-choice':
+      return `
+        <div class="mc-options">
+          ${(q.options || []).map((opt) => `
+          <div class="mc-option">
+            <span class="mc-bubble"></span>
+            <span>${escapeHtml(opt)}</span>
+          </div>`).join('')}
+        </div>`;
+
+    case 'true-false':
+      return `
+        <div class="tf-choices">
+          <div class="tf-option">
+            <span class="tf-bubble"></span>
+            <span>True</span>
+          </div>
+          <div class="tf-option">
+            <span class="tf-bubble"></span>
+            <span>False</span>
+          </div>
+        </div>`;
+
+    case 'fill-in-the-blank':
+      return `
+        <div class="answer-lines">
+          <div class="answer-line short"></div>
+        </div>`;
+
+    case 'short-answer':
+      return `
+        <div class="answer-lines">
+          <div class="answer-line"></div>
+          <div class="answer-line"></div>
+        </div>`;
+
+    case 'matching':
+      return `
+        <div class="matching-wrap">
+          <div class="matching-grid">
+            <span class="match-letter">Answer:</span>
+            <div class="match-blank"></div>
+          </div>
+        </div>`;
+
+    case 'show-your-work':
+      return `<div class="work-box"></div>`;
+
+    case 'word-problem':
+      return `
+        <div class="work-label">Show Your Work</div>
+        <div class="work-box"></div>`;
+
+    default:
+      return `
+        <div class="answer-lines">
+          <div class="answer-line"></div>
+        </div>`;
+  }
+}
+
+/**
+ * Renders a complete question block: stem + answer area.
+ * Word-problem questions receive a shaded stem box in place of inline text.
+ * @param {Object} q - Question object
+ * @returns {string}
+ */
+function renderQuestion(q) {
+  const pts = q.points === 1 ? '1 pt' : `${q.points} pts`;
+
+  if (q.type === 'word-problem') {
+    return `
+  <div class="question">
+    <div class="question-stem" style="margin-bottom:5px;">
+      <span class="q-num">${q.number}.</span>
+      <span class="q-text" style="font-style:italic;font-size:9.5pt;color:#888;">Word Problem</span>
+      <span class="q-pts">${pts}</span>
+    </div>
+    <div class="word-problem-stem">${escapeHtml(q.question)}</div>
+    ${renderAnswerArea(q)}
+  </div>`;
+  }
+
+  return `
+  <div class="question">
+    <div class="question-stem">
+      <span class="q-num">${q.number}.</span>
+      <span class="q-text">${escapeHtml(q.question)}</span>
+      <span class="q-pts">${pts}</span>
+    </div>
+    ${renderAnswerArea(q)}
+  </div>`;
+}
+
+// ─── Public exports ───────────────────────────────────────────────────────────
+
+/**
+ * Builds the full worksheet HTML document (student copy).
  * @param {Object} worksheet - Parsed worksheet JSON
- * @param {Object} options - Generation options (studentName, etc.)
- * @returns {string} Complete HTML document string
+ * @param {Object} [options={}] - Reserved for future per-export metadata
+ * @returns {string} Complete self-contained HTML document string
  */
 export function buildWorksheetHTML(worksheet, options = {}) {
-  const standards = (worksheet.standards || []).join(', ') || '—';
-  const studentName = options.studentName || '';
+  const year = new Date().getFullYear();
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -70,103 +239,120 @@ export function buildWorksheetHTML(worksheet, options = {}) {
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-left">
+  <!-- ── Page header: logo | title | student fields ── -->
+  <header class="page-header">
+    ${renderSchoolLogo()}
+    <div class="header-title-block">
       <h1>${escapeHtml(worksheet.title)}</h1>
-      <div class="meta">
-        Grade ${worksheet.grade} · ${worksheet.subject} · ${worksheet.topic} · ${worksheet.difficulty}
+      <div class="header-meta">
+        Grade ${worksheet.grade} &nbsp;&middot;&nbsp; ${escapeHtml(worksheet.subject)}
+        &nbsp;&middot;&nbsp; ${escapeHtml(worksheet.topic)}
       </div>
     </div>
-    <div class="header-right">
-      <div class="field">Name: ${escapeHtml(studentName)}_____________________</div>
-      <div class="field">Date: _____________________</div>
-      <div class="field">Score: _______ / ${worksheet.totalPoints}</div>
-    </div>
+    ${renderStudentFields(worksheet)}
+  </header>
+
+  <!-- ── Info strip ── -->
+  ${renderInfoStrip(worksheet)}
+
+  <!-- ── Instructions ── -->
+  <div class="instructions-box">
+    <strong>Instructions:</strong> ${escapeHtml(worksheet.instructions)}
   </div>
 
-  <div class="info-bar">
-    <span>⏱ ${worksheet.estimatedTime || 'N/A'}</span>
-    <span>📋 ${worksheet.questions.length} Questions</span>
-    <span>📐 Standards: ${escapeHtml(standards)}</span>
-  </div>
+  <!-- ── Questions ── -->
+  <div class="section-heading">Questions</div>
 
-  <div class="instructions">${escapeHtml(worksheet.instructions)}</div>
+  ${worksheet.questions.map(renderQuestion).join('\n')}
 
-  <div class="questions-section">
-    <h2>Questions</h2>
-    ${worksheet.questions.map(renderQuestion).join('')}
-  </div>
-
-  <div class="footer">
-    <span>EduSheet AI — Generated ${new Date().toLocaleDateString('en-US')}</span>
-    <span>Page 1</span>
-    <span>© ${new Date().getFullYear()} — For Educational Use</span>
-  </div>
+  <!-- ── Screen / print footer ── -->
+  <footer class="page-footer">
+    <span>EduSheet AI &mdash; ${dateStr}</span>
+    <span class="footer-center">
+      Grade ${worksheet.grade} &bull; ${escapeHtml(worksheet.subject)} &bull; ${escapeHtml(worksheet.difficulty)}
+    </span>
+    <span>&copy; ${year} &mdash; For Educational Use Only</span>
+  </footer>
 
 </body>
 </html>`;
 }
 
 /**
- * Builds the answer key HTML document
+ * Builds the answer key HTML document (teacher copy).
+ * Contains a full table with type badges, correct answers, explanations, and points.
  * @param {Object} worksheet - Parsed worksheet JSON
- * @returns {string} Complete HTML document string
+ * @returns {string} Complete self-contained HTML document string
  */
 export function buildAnswerKeyHTML(worksheet) {
-  const answerItems = worksheet.questions
-    .map(
-      (q) => `
-    <div class="answer-item">
-      <span class="num">${q.number}.</span>
-      <span class="ans">${escapeHtml(String(q.answer))}</span>
-      <span class="exp">${escapeHtml(q.explanation || '')}</span>
-    </div>`
-    )
-    .join('');
+  const year = new Date().getFullYear();
+  const standards = (worksheet.standards || []).join(' &middot; ') || '&mdash;';
+
+  const tableRows = worksheet.questions.map((q) => {
+    const pts = q.points === 1 ? '1 pt' : `${q.points} pts`;
+    return `
+      <tr>
+        <td class="ak-num">${q.number}.</td>
+        <td><span class="ak-type-badge">${escapeHtml(q.type)}</span></td>
+        <td class="ak-answer">${escapeHtml(String(q.answer))}</td>
+        <td class="ak-explanation">${escapeHtml(q.explanation || '')}</td>
+        <td class="ak-pts">${pts}</td>
+      </tr>`;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Answer Key — ${escapeHtml(worksheet.title)}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Answer Key &mdash; ${escapeHtml(worksheet.title)}</title>
   <style>${getStyles()}</style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-left">
-      <h1>ANSWER KEY</h1>
-      <div class="meta">${escapeHtml(worksheet.title)}</div>
-      <div class="meta">Grade ${worksheet.grade} · ${worksheet.subject} · ${worksheet.difficulty}</div>
-    </div>
-    <div class="header-right">
-      <div>Total Points: ${worksheet.totalPoints}</div>
-    </div>
+  <!-- ── Answer key banner ── -->
+  <div class="ak-banner">
+    <h1>Answer Key</h1>
+    <span class="ak-subtitle">Teacher Copy &mdash; Do Not Distribute to Students</span>
   </div>
 
-  <div class="answer-key-header">Answer Key — Teacher Copy</div>
-
-  ${answerItems}
-
-  <div class="footer">
-    <span>EduSheet AI — Answer Key</span>
-    <span>© ${new Date().getFullYear()} — Teacher Use Only</span>
+  <!-- ── Answer key metadata ── -->
+  <div class="ak-meta">
+    <span><strong>Worksheet:</strong> ${escapeHtml(worksheet.title)}</span>
+    <span><strong>Grade:</strong> ${worksheet.grade}</span>
+    <span><strong>Subject:</strong> ${escapeHtml(worksheet.subject)}</span>
+    <span><strong>Difficulty:</strong> ${escapeHtml(worksheet.difficulty)}</span>
+    <span><strong>Total Points:</strong> ${worksheet.totalPoints}</span>
+    <span><strong>Standards:</strong> ${standards}</span>
   </div>
+
+  <!-- ── Answer table ── -->
+  <table class="ak-table">
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th style="width:130px;">Type</th>
+        <th style="width:120px;">Answer</th>
+        <th>Explanation</th>
+        <th style="width:50px;">Pts</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows}
+      <tr class="ak-total-row">
+        <td colspan="4" style="text-align:right;padding-right:14px;">Total</td>
+        <td class="ak-pts">${worksheet.totalPoints}&nbsp;pts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── Footer ── -->
+  <footer class="page-footer">
+    <span>EduSheet AI &mdash; Answer Key</span>
+    <span class="footer-center">${escapeHtml(worksheet.title)}</span>
+    <span>&copy; ${year} &mdash; Teacher Use Only</span>
+  </footer>
 
 </body>
 </html>`;
-}
-
-/**
- * Escapes HTML special characters to prevent XSS in templates
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

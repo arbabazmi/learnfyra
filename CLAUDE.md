@@ -3,13 +3,19 @@
 # Claude Code reads this file automatically on every run.
 
 ## Project Context
-You are working on **EduSheet AI** — a Node.js CLI application that generates
+You are working on **EduSheet AI** — a full-stack web application that generates
 AI-powered, USA curriculum-aligned worksheets for Grades 1–10. The project uses
 the Anthropic Claude API to dynamically generate PDF, DOCX, and HTML worksheets
 with separate answer keys.
 
+The application is deployed on AWS:
+- **Frontend**: Static web app (HTML/CSS/JS or React) hosted on **Amazon S3**, served via **CloudFront**
+- **Backend**: REST API built with **AWS Lambda** + **API Gateway**
+- **Storage**: Generated worksheets stored in **S3**, delivered via pre-signed URLs
+- **CLI**: Legacy CLI tool still available for local/batch development use
+
 Repository: https://github.com/arbabazmi/edusheet-ai
-Stack: Node.js 18+, Anthropic SDK, Puppeteer, docx npm, Inquirer, Jest
+Stack: Node.js 18+, Anthropic SDK, Puppeteer, docx npm, AWS Lambda, API Gateway, S3, CloudFront, Jest
 
 ---
 
@@ -124,14 +130,27 @@ fix bug, refactor, add feature, install, configure, make it work
 **Project file structure to follow:**
 ```
 edusheet-ai/
-├── index.js                  ← CLI entry point only
+├── index.js                        ← CLI entry point (legacy/local use)
+├── frontend/                       ← Static web app (S3 hosted)
+│   ├── index.html                  ← Worksheet generation form
+│   ├── css/styles.css
+│   └── js/app.js                   ← API calls + download UI
+├── backend/                        ← AWS Lambda handlers
+│   ├── handlers/
+│   │   ├── generateHandler.js      ← POST /worksheets/generate
+│   │   └── downloadHandler.js      ← GET /worksheets/{jobId}/download
+│   └── middleware/
+│       └── validator.js            ← API input validation
+├── infra/                          ← Deployment config
+│   ├── template.yaml               ← AWS SAM or CloudFormation template
+│   └── deploy.sh                   ← Helper deploy script
 ├── src/
-│   ├── cli/prompts.js        ← Inquirer prompts
-│   ├── cli/validator.js      ← Input validation
-│   ├── ai/client.js          ← Anthropic SDK setup
-│   ├── ai/promptBuilder.js   ← System + user prompt templates
-│   ├── ai/generator.js       ← API call + JSON parse + retry
-│   ├── ai/topics.js          ← Grade/Subject/Topic mapping
+│   ├── cli/prompts.js              ← Inquirer prompts (CLI only)
+│   ├── cli/validator.js            ← Shared input validation
+│   ├── ai/client.js                ← Anthropic SDK setup
+│   ├── ai/promptBuilder.js         ← System + user prompt templates
+│   ├── ai/generator.js             ← API call + JSON parse + retry
+│   ├── ai/topics.js                ← Grade/Subject/Topic mapping
 │   ├── exporters/pdfExporter.js
 │   ├── exporters/docxExporter.js
 │   ├── exporters/htmlExporter.js
@@ -140,6 +159,7 @@ edusheet-ai/
 │   ├── templates/styles.css.js
 │   └── utils/
 │       ├── fileUtils.js
+│       ├── s3Utils.js              ← S3 upload + pre-signed URL generation
 │       ├── logger.js
 │       └── retryUtils.js
 └── tests/
@@ -150,11 +170,16 @@ edusheet-ai/
 **DEV rules:**
 - Always install packages with exact versions: `npm install package@x.y.z --save-exact`
 - Never hardcode API keys — always use `process.env.ANTHROPIC_API_KEY`
+- Never expose AWS credentials or API keys to the frontend
 - After writing a file, run `node --check src/yourfile.js` to verify syntax
 - If modifying an existing file, read it fully before editing
-- All exporters must return a `Buffer` or file path string (not void)
+- All exporters must return a `Buffer` (for Lambda streaming to S3) or file path string
 - PDF uses US Letter size (8.5" × 11") — enforce via Puppeteer page settings
 - DOCX uses US Letter in DXA units: width=12240, height=15840, margins=1440
+- Lambda handlers must follow API Gateway proxy integration format (event, context)
+- All S3 uploads use the key format: `worksheets/{grade}/{subject}/{timestamp}/{filename}`
+- Pre-signed download URLs must expire in 15 minutes
+- Lambda functions must declare a max timeout of 60 seconds (PDF generation via Puppeteer)
 
 ---
 
@@ -358,19 +383,44 @@ Test cases: valid config, missing fields, empty array, 20 items...
 
 ```
 Node.js: 18+
-API Key env var: ANTHROPIC_API_KEY
-Claude model: claude-sonnet-4-20250514
-Default output: ./worksheets/
+API Key env var:   ANTHROPIC_API_KEY
+Claude model:      claude-sonnet-4-20250514
+AWS region:        AWS_REGION (e.g. us-east-1)
+S3 bucket:         WORKSHEETS_BUCKET (for generated files)
+Frontend bucket:   FRONTEND_BUCKET (for static web app)
+CloudFront dist:   CLOUDFRONT_DISTRIBUTION_ID
+Default output:    ./worksheets/ (CLI only)
+Max retries:       MAX_RETRIES=3
+```
+
+## API Endpoints
+
+```
+POST /worksheets/generate        → Lambda: generateHandler.js
+GET  /worksheets/{jobId}         → Lambda: status check
+GET  /worksheets/{jobId}/download→ Lambda: downloadHandler.js (returns signed URLs)
 ```
 
 ## Quick Commands
 
 ```bash
-npm start                        # Interactive worksheet generation
-node index.js --batch config.json # Batch mode
-npm test                         # All tests
-npm run test:coverage            # Coverage report
-node --check src/file.js         # Syntax check only
+# Local CLI (legacy)
+npm start                              # Interactive worksheet generation
+node index.js --batch config.json      # Batch mode
+
+# Tests
+npm test                               # All tests
+npm run test:unit                      # Unit tests only
+npm run test:coverage                  # Coverage report
+node --check src/file.js               # Syntax check only
+
+# AWS Deployment
+cd infra && sam build                  # Build Lambda package
+sam deploy --guided                    # Deploy Lambda + API Gateway
+aws s3 sync frontend/ s3://$FRONTEND_BUCKET --delete   # Deploy frontend
+aws cloudfront create-invalidation \ 
+  --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
+  --paths "/*"                         # Bust CloudFront cache
 ```
 
 ---
