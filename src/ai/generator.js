@@ -1,104 +1,308 @@
 /**
  * @file src/ai/generator.js
- * @description Calls Anthropic Claude API, parses and validates JSON worksheet response
+ * @description Calls Anthropic Claude API, extracts and validates the worksheet JSON,
+ *   and retries with exponential backoff + escalating prompts on failure.
+ *
+ *   Retry strategy:
+ *     attempt 0  → normal prompt (buildUserPrompt)
+ *     attempt 1+ → strict prompt (buildStrictUserPrompt) with CRITICAL JSON warning
+ *
+ *   Validation pipeline per attempt:
+ *     1. extractJSON()           — finds outermost { … } block robustly
+ *     2. JSON.parse()            — throws on malformed JSON → retry
+ *     3. coerceTypes()           — normalizes grade/points to integers
+ *     4. validateTopLevel()      — checks required top-level fields
+ *     5. validateQuestions()     — checks each question object
+ *     6. validateQuestionCount() — exact count must match requested count
  * @agent DEV
  */
 
-import { anthropic, CLAUDE_MODEL } from './client.js';
-import { buildSystemPrompt, buildUserPrompt } from './promptBuilder.js';
+import { anthropic, CLAUDE_MODEL, MAX_TOKENS } from './client.js';
+import { buildSystemPrompt, buildUserPrompt, buildStrictUserPrompt } from './promptBuilder.js';
 import { withRetry } from '../utils/retryUtils.js';
 import { validateGrade, validateQuestionCount, validateSubject } from '../cli/validator.js';
 import { logger } from '../utils/logger.js';
 
-const REQUIRED_FIELDS = ['title', 'grade', 'subject', 'topic', 'difficulty', 'questions', 'totalPoints'];
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** All required top-level fields in the worksheet JSON */
+const REQUIRED_TOP_LEVEL = [
+  'title', 'grade', 'subject', 'topic', 'difficulty',
+  'instructions', 'totalPoints', 'questions',
+];
+
+/** All required fields on every question object */
+const REQUIRED_QUESTION_FIELDS = ['number', 'type', 'question', 'answer', 'points'];
+
+/** Valid question type values */
+const VALID_QUESTION_TYPES = new Set([
+  'multiple-choice',
+  'fill-in-the-blank',
+  'short-answer',
+  'true-false',
+  'matching',
+  'show-your-work',
+  'word-problem',
+]);
+
+// ─── JSON extraction ──────────────────────────────────────────────────────────
 
 /**
- * Validates the parsed worksheet JSON against the canonical schema
- * @param {Object} data - Parsed worksheet object
- * @param {number} expectedCount - Expected number of questions
- * @throws {Error} If required fields are missing or question count is wrong
+ * Robustly extracts a JSON object from a Claude response string.
+ *
+ * Handles:
+ *   - Bare JSON (ideal case)
+ *   - JSON wrapped in markdown fences (```json … ```)
+ *   - JSON preceded or followed by explanatory text
+ *   - Nested braces inside string values (tracked via depth counter)
+ *
+ * @param {string} rawText - Raw text from Claude API response
+ * @returns {string} The extracted JSON substring
+ * @throws {Error} If no valid JSON object boundary can be found
  */
-function validateWorksheetSchema(data, expectedCount) {
-  for (const field of REQUIRED_FIELDS) {
-    if (data[field] === undefined || data[field] === null) {
-      throw new Error(`Worksheet JSON missing required field: "${field}"`);
+export function extractJSON(rawText) {
+  const text = rawText.trim();
+
+  // Fast path: entire response is already valid JSON
+  if (text.startsWith('{')) {
+    return text;
+  }
+
+  // Strip markdown fences if present
+  const fenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  if (fenced.startsWith('{')) {
+    return fenced;
+  }
+
+  // Scan for the first { and track depth to find the matching }
+  let depth = 0;
+  let start = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        return text.slice(start, i + 1);
+      }
     }
   }
 
-  if (!Array.isArray(data.questions) || data.questions.length !== expectedCount) {
+  throw new Error(
+    'Claude response contained no JSON object. ' +
+    `Response preview: "${text.slice(0, 120).replace(/\n/g, ' ')}…"`
+  );
+}
+
+// ─── Type coercion ────────────────────────────────────────────────────────────
+
+/**
+ * Normalizes field types in the parsed worksheet object to match the canonical schema.
+ * Modifies the object in-place and returns it.
+ *
+ * @param {Object} data - Parsed worksheet object (mutated)
+ * @returns {Object} The same object with normalized types
+ */
+export function coerceTypes(data) {
+  // grade and totalPoints must be integers
+  if (data.grade !== undefined)       data.grade       = Number(data.grade);
+  if (data.totalPoints !== undefined) data.totalPoints = Number(data.totalPoints);
+
+  if (Array.isArray(data.questions)) {
+    for (const q of data.questions) {
+      if (q.number !== undefined) q.number = Number(q.number);
+      if (q.points !== undefined) q.points = Number(q.points);
+
+      // Ensure answer is always a string
+      if (q.answer !== undefined && typeof q.answer !== 'string') {
+        q.answer = String(q.answer);
+      }
+    }
+  }
+
+  return data;
+}
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+/**
+ * Validates required top-level fields of the worksheet JSON.
+ * @param {Object} data - Coerced worksheet object
+ * @throws {Error} If any required field is missing or the questions field is not an array
+ */
+function validateTopLevel(data) {
+  for (const field of REQUIRED_TOP_LEVEL) {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(`Worksheet JSON missing required top-level field: "${field}"`);
+    }
+  }
+
+  if (!Array.isArray(data.questions)) {
+    throw new Error('Worksheet JSON "questions" field must be an array');
+  }
+}
+
+/**
+ * Validates a single question object.
+ * @param {Object} q - Question object
+ * @param {number} idx - Zero-based index in questions array (for error messages)
+ * @throws {Error} If the question is invalid
+ */
+function validateQuestion(q, idx) {
+  const label = `Question at index ${idx}`;
+
+  for (const field of REQUIRED_QUESTION_FIELDS) {
+    if (q[field] === undefined || q[field] === null || q[field] === '') {
+      throw new Error(`${label} is missing required field: "${field}"`);
+    }
+  }
+
+  if (!VALID_QUESTION_TYPES.has(q.type)) {
     throw new Error(
-      `Expected ${expectedCount} questions, got ${data.questions?.length ?? 0}`
+      `${label} has invalid type "${q.type}". ` +
+      `Must be one of: ${[...VALID_QUESTION_TYPES].join(', ')}`
     );
   }
-}
 
-/**
- * Parses a raw Claude API text response into a worksheet JSON object
- * @param {string} rawText - Raw text from Claude API response
- * @returns {Object} Parsed worksheet object
- * @throws {Error} If text cannot be parsed as JSON
- */
-function parseWorksheetJSON(rawText) {
-  // Strip any accidental markdown fences Claude might include
-  const cleaned = rawText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
+  if (typeof q.question !== 'string' || !q.question.trim()) {
+    throw new Error(`${label} "question" must be a non-empty string`);
+  }
 
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error('Claude returned non-JSON response. Will retry with stricter prompt.');
+  if (isNaN(q.number) || q.number < 1) {
+    throw new Error(`${label} "number" must be a positive integer, got: ${q.number}`);
+  }
+
+  if (isNaN(q.points) || q.points < 0) {
+    throw new Error(`${label} "points" must be a non-negative integer, got: ${q.points}`);
+  }
+
+  // Multiple-choice must have exactly 4 options labeled A/B/C/D
+  if (q.type === 'multiple-choice') {
+    if (!Array.isArray(q.options) || q.options.length !== 4) {
+      throw new Error(
+        `${label} is type "multiple-choice" but "options" must be an array of exactly 4 strings`
+      );
+    }
+  } else if (q.options !== undefined) {
+    // Non-multiple-choice questions must not have options
+    // (treat as a warning — delete the field rather than failing)
+    delete q.options;
   }
 }
 
 /**
- * Generates a worksheet by calling the Claude API
+ * Validates all questions and the exact count match.
+ * @param {Object} data - Coerced worksheet object
+ * @param {number} expectedCount - Expected number of questions
+ * @throws {Error} If any question is invalid or count does not match
+ */
+function validateQuestions(data, expectedCount) {
+  if (data.questions.length !== expectedCount) {
+    throw new Error(
+      `Expected exactly ${expectedCount} questions, got ${data.questions.length}. ` +
+      'Claude must return the exact requested count.'
+    );
+  }
+
+  for (let i = 0; i < data.questions.length; i++) {
+    validateQuestion(data.questions[i], i);
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Generates a worksheet by calling the Claude API with retry and escalating prompts.
+ *
  * @param {Object} options - Worksheet generation options
- * @param {number} options.grade - Grade level 1–10
- * @param {string} options.subject - Subject name
- * @param {string} options.topic - Specific topic
- * @param {string} options.difficulty - Easy | Medium | Hard | Mixed
- * @param {number} options.questionCount - Number of questions (5–30)
- * @returns {Promise<Object>} Parsed and validated worksheet JSON object
+ * @param {number}  options.grade         - Grade level 1–10
+ * @param {string}  options.subject       - Subject name (Math | ELA | Science | Social Studies | Health)
+ * @param {string}  options.topic         - Specific topic within subject
+ * @param {string}  options.difficulty    - Easy | Medium | Hard | Mixed
+ * @param {number}  options.questionCount - Number of questions (5–30)
+ * @returns {Promise<Object>} Parsed, coerced, and validated worksheet object
+ * @throws {Error} If validation fails after all retry attempts
  */
 export async function generateWorksheet(options) {
-  const { grade, subject, topic, difficulty, questionCount } = options;
+  const { grade, subject, questionCount } = options;
 
-  // Validate inputs before making the API call
+  // Validate inputs before touching the API
   validateGrade(grade);
   validateSubject(subject);
   validateQuestionCount(questionCount);
 
   const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildUserPrompt(options);
+  let attemptNumber = 0;
 
   const callClaude = async () => {
-    logger.debug('Calling Claude API...');
+    // Escalate to the strict prompt after the first failure
+    const userPrompt = attemptNumber === 0
+      ? buildUserPrompt(options)
+      : buildStrictUserPrompt(options);
+
+    logger.debug(`Claude API call (attempt ${attemptNumber + 1})…`);
 
     const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: userPrompt }],
-      system: systemPrompt,
+      model:      CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: userPrompt }],
     });
 
-    const rawText = message.content[0]?.text;
-    if (!rawText) {
+    // Check for truncated response (max_tokens hit mid-JSON)
+    if (message.stop_reason === 'max_tokens') {
+      throw new Error(
+        `Claude response was truncated (hit max_tokens=${MAX_TOKENS}). ` +
+        'Try reducing the question count.'
+      );
+    }
+
+    const rawText = message.content[0]?.text ?? '';
+
+    if (!rawText.trim()) {
       throw new Error('Claude API returned an empty response.');
     }
 
-    const worksheetData = parseWorksheetJSON(rawText);
-    validateWorksheetSchema(worksheetData, questionCount);
+    // Detect safety refusals before attempting JSON parse
+    if (
+      rawText.length < 200 &&
+      /\b(cannot|can't|sorry|unable|inappropriate|policy)\b/i.test(rawText)
+    ) {
+      throw new Error(
+        `Claude refused to generate content: "${rawText.trim().slice(0, 120)}". ` +
+        'Try a different topic or rephrase.'
+      );
+    }
 
-    return worksheetData;
+    // Extract, parse, coerce, and validate
+    const jsonStr     = extractJSON(rawText);
+    const parsed      = JSON.parse(jsonStr);     // throws SyntaxError → retry
+    const coerced     = coerceTypes(parsed);
+
+    validateTopLevel(coerced);
+    validateQuestions(coerced, questionCount);
+
+    return coerced;
   };
 
-  return withRetry(callClaude, {
-    maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
-    onRetry: (attempt, err) => {
-      logger.warn(`Retry ${attempt}: ${err.message}`);
+  return withRetry(
+    async () => {
+      try {
+        return await callClaude();
+      } finally {
+        attemptNumber++;
+      }
     },
-  });
+    {
+      maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
+      baseDelayMs: 1000,
+      onRetry: (attempt, err) => {
+        logger.warn(`Retry ${attempt}: ${err.message}`);
+      },
+    }
+  );
 }
