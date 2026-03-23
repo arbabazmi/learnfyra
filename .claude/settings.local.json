@@ -1,10 +1,25 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(cd C:/arbab-github/edusheet-ai && npm install 2>&1)",
       "Bash(cd:*)",
       "Bash(cd C:/arbab-github/edusheet-ai && npm run test:unit 2>&1)",
-      "Bash(cd C:/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit 2>&1)"
+      "Bash(cd C:/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit 2>&1)",
+      "Bash(cd /c/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --testPathPattern=\"tests/unit\" --no-coverage 2>&1)",
+      "Bash(cd /c/arbab-github/edusheet-ai && node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --testPathPattern=\"tests/integration\" --no-coverage 2>&1)",
+      "Bash(tail:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/retryUtils.test.js --no-coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/logger.test.js tests/unit/topics.test.js --no-coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/answerKey.test.js tests/unit/exporterIndex.test.js --no-coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/htmlExporterHelpers.test.js --no-coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/batchRunner.test.js --no-coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage --coverageThreshold='{\"\"\"\"global\"\"\"\":{\"\"\"\"lines\"\"\"\":80,\"\"\"\"statements\"\"\"\":80,\"\"\"\"branches\"\"\"\":80,\"\"\"\"functions\"\"\"\":80}}')"
     ]
   }
 }

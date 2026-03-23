@@ -3,6 +3,25 @@
 
 ---
 
+## ✅ New Product Direction (Web App on AWS)
+
+You can still use the CLI, but the next phase is a full web app:
+
+- **Frontend**: static web app hosted on **Amazon S3** (optionally behind CloudFront)
+- **Backend**: API built with **AWS Lambda** + API Gateway
+- **Output files**: worksheets stored in **S3** and downloaded via signed URLs
+
+### Target User Flow
+
+1. User opens the web app and fills worksheet inputs (grade, subject, topic, difficulty, count, format).
+2. Frontend sends request to Lambda API.
+3. Lambda generates worksheet + answer key using Anthropic + exporters.
+4. Lambda saves generated files to S3.
+5. Lambda returns secure download links.
+6. User clicks and downloads worksheet files.
+
+---
+
 ## What is Claude Code?
 
 Claude Code is a command-line tool where Claude acts as your AI developer.
@@ -102,6 +121,66 @@ You're now talking directly to Claude as your AI agent team! 🎉
 
 Copy and paste these commands ONE AT A TIME. Wait for Claude to finish
 each one before sending the next.
+
+## 🌐 Web App Build Commands (Use These Next)
+
+Use these prompts in Claude Code to transition this project into a complete web app.
+
+### Command A — Web app feature specification
+```
+Act as the BA agent. Write a complete feature spec for converting EduSheet AI
+from CLI to a web app with S3-hosted frontend and Lambda backend. Include user
+stories, acceptance criteria (Given/When/Then), scope, edge cases, and non-functional
+requirements (latency, security, file retention, and cost constraints).
+```
+
+### Command B — API + data contracts
+```
+Act as the DBA agent. Define the API request/response JSON schemas for:
+POST /worksheets/generate and GET /worksheets/{jobId}/download.
+Include validation rules, error response schema, and S3 object key naming convention.
+```
+
+### Command C — Build Lambda backend
+```
+Act as the DEV agent. Build a Lambda-based backend in a new backend/ folder.
+Use API Gateway-compatible handlers, reuse existing worksheet generator/exporters,
+save generated files to S3, and return pre-signed download URLs.
+Add robust error handling and structured logs.
+```
+
+### Command D — Build web frontend
+```
+Act as the DEV agent. Build a frontend in a new frontend/ folder (HTML/CSS/JS or React).
+Create a worksheet form with grade, subject, topic, difficulty, count, format, answer key,
+student name, and output options. Call the Lambda API and render download buttons.
+Prepare static build output for S3 hosting.
+```
+
+### Command E — AWS deployment setup
+```
+Act as the DEV agent. Add deployment infrastructure for AWS:
+- S3 bucket config for frontend hosting
+- Lambda + API Gateway deployment config
+- IAM least-privilege policies
+- environment variable config (ANTHROPIC_API_KEY, bucket names, model)
+Provide step-by-step deploy commands.
+```
+
+### Command F — End-to-end QA
+```
+Act as the QA agent. Add unit/integration tests for API handlers and frontend API flow.
+Validate end-to-end generation and download. Add regression tests for invalid input,
+Lambda timeout behavior, and expired/invalid signed URL handling.
+```
+
+### Command G — Production readiness checklist
+```
+Act as QA + BA. Provide a production readiness checklist for this AWS web app:
+security, observability, scaling, cost controls, retries, and rollback strategy.
+```
+
+---
 
 ### Command 1 — Set up the project
 ```
@@ -295,6 +374,46 @@ https://github.com/arbabazmi/edusheet-ai
 
 ---
 
+## AWS Deployment Notes (Web App)
+
+### Recommended Architecture
+
+- `frontend/` static app → S3 static hosting (+ CloudFront recommended)
+- `backend/` Lambda handlers → API Gateway routes
+- `worksheets` bucket for generated files
+- Signed S3 URLs for secure downloads
+
+### Suggested API Endpoints
+
+- `POST /worksheets/generate`
+	- Input: grade, subject, topic, difficulty, questionCount, format, includeAnswerKey, studentName
+	- Output: `jobId`, `status`, `downloadUrls[]` (if sync)
+
+- `GET /worksheets/{jobId}`
+	- Output: generation status + file metadata
+
+- `GET /worksheets/{jobId}/download`
+	- Output: pre-signed URLs for worksheet and answer key
+
+### Environment Variables (Backend)
+
+- `ANTHROPIC_API_KEY`
+- `CLAUDE_MODEL`
+- `WORKSHEETS_BUCKET`
+- `MAX_RETRIES`
+- `DEFAULT_FORMAT`
+- `AWS_REGION`
+
+### Security Essentials
+
+- Never expose `ANTHROPIC_API_KEY` to frontend code.
+- Use IAM least privilege for Lambda (`s3:PutObject`, `s3:GetObject` only where needed).
+- Use API request validation and rate limiting.
+- Set S3 lifecycle rules to auto-delete old generated worksheets.
+- Use CloudWatch logs + alarms for failures and latency.
+
+---
+
 ## Quick Reference Card
 
 | I want to...             | Say to Claude Code...                                    |
@@ -322,6 +441,17 @@ edusheet-ai/
 ├── .gitignore          ← Created by Claude Code
 ├── README.md           ← Created by Claude Code (Command 9)
 └── src/                ← Created by Claude Code (Commands 2-7)
+```
+
+For the web app phase, extend it to:
+
+```
+edusheet-ai/
+├── frontend/           ← Web UI hosted on S3
+├── backend/            ← Lambda handlers + API logic
+├── infra/              ← Deployment config (SAM/CDK/Serverless)
+├── src/                ← Shared worksheet generation/export logic
+└── tests/              ← Unit + integration + e2e tests
 ```
 
 ---
