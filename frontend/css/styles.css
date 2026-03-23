@@ -1,0 +1,555 @@
+/* =============================================================
+   EduSheet AI — Frontend Styles
+   File: frontend/css/styles.css
+   ============================================================= */
+
+/* ---------------------------------------------------------------
+   Custom Properties
+   --------------------------------------------------------------- */
+:root {
+  --primary:       #4F46E5;
+  --primary-dark:  #3730A3;
+  --primary-light: #EEF2FF;
+  --bg:            #F9FAFB;
+  --surface:       #FFFFFF;
+  --text:          #111827;
+  --text-muted:    #6B7280;
+  --border:        #E5E7EB;
+  --error:         #DC2626;
+  --error-bg:      #FEF2F2;
+  --error-border:  #FECACA;
+  --success:       #059669;
+  --success-bg:    #ECFDF5;
+  --btn-pdf:       #DC2626;
+  --btn-pdf-dark:  #B91C1C;
+  --btn-docx:      #2563EB;
+  --btn-docx-dark: #1D4ED8;
+  --btn-html:      #059669;
+  --btn-html-dark: #047857;
+  --btn-key:       #D97706;
+  --btn-key-dark:  #B45309;
+  --radius:        6px;
+  --radius-lg:     10px;
+  --shadow-sm:     0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow:        0 4px 12px 0 rgb(0 0 0 / 0.10);
+  --transition:    150ms ease;
+  --font:          'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ---------------------------------------------------------------
+   Reset & Base
+   --------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------
+   Layout
+   --------------------------------------------------------------- */
+.container {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem 0 3rem;
+}
+
+/* ---------------------------------------------------------------
+   Header
+   --------------------------------------------------------------- */
+.site-header {
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 1.125rem 0;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-icon {
+  font-size: 1.5rem;
+  color: var(--primary);
+}
+
+.logo-text {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.logo-accent {
+  color: var(--primary);
+}
+
+.header-tagline {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border);
+  padding-left: 1.5rem;
+}
+
+/* ---------------------------------------------------------------
+   Card
+   --------------------------------------------------------------- */
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.card--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3.5rem 2rem;
+  text-align: center;
+}
+
+.card-header {
+  margin-bottom: 1.75rem;
+}
+
+.card-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 0.375rem;
+}
+
+.card-subtitle {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------
+   Form Grid
+   --------------------------------------------------------------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-group--full {
+  grid-column: 1 / -1;
+}
+
+/* ---------------------------------------------------------------
+   Labels & Selects
+   --------------------------------------------------------------- */
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.required {
+  color: var(--error);
+  margin-left: 0.125rem;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(79 70 229 / 0.15);
+}
+
+.form-select:disabled {
+  background-color: var(--bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.form-select.is-invalid {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgb(220 38 38 / 0.12);
+}
+
+/* ---------------------------------------------------------------
+   Field Errors
+   --------------------------------------------------------------- */
+.field-error {
+  font-size: 0.8125rem;
+  color: var(--error);
+  font-weight: 500;
+  min-height: 1rem;
+  display: block;
+}
+
+/* ---------------------------------------------------------------
+   Checkbox
+   --------------------------------------------------------------- */
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.checkbox-custom {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.checkbox-input:checked + .checkbox-custom {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox-input:checked + .checkbox-custom::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.checkbox-input:focus-visible + .checkbox-custom {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.checkbox-text {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------
+   Form Actions
+   --------------------------------------------------------------- */
+.form-actions {
+  margin-top: 1.75rem;
+  display: flex;
+  gap: 0.875rem;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6875rem 1.5rem;
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--transition), opacity var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+
+.btn--primary {
+  background-color: var(--primary);
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background-color: var(--primary-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--secondary {
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn--secondary:hover {
+  background-color: var(--bg);
+}
+
+.btn--pdf {
+  background-color: var(--btn-pdf);
+  color: #fff;
+}
+
+.btn--pdf:hover {
+  background-color: var(--btn-pdf-dark);
+}
+
+.btn--docx {
+  background-color: var(--btn-docx);
+  color: #fff;
+}
+
+.btn--docx:hover {
+  background-color: var(--btn-docx-dark);
+}
+
+.btn--html {
+  background-color: var(--btn-html);
+  color: #fff;
+}
+
+.btn--html:hover {
+  background-color: var(--btn-html-dark);
+}
+
+.btn--key {
+  background-color: var(--btn-key);
+  color: #fff;
+}
+
+.btn--key:hover {
+  background-color: var(--btn-key-dark);
+}
+
+/* ---------------------------------------------------------------
+   Loading Spinner
+   --------------------------------------------------------------- */
+.spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 4px solid var(--primary-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.loading-subtext {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------
+   Results Section
+   --------------------------------------------------------------- */
+.results-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.success-badge {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: var(--success-bg);
+  color: var(--success);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 0.125rem;
+}
+
+.download-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.download-btn {
+  font-size: 0.9375rem;
+}
+
+/* ---------------------------------------------------------------
+   Error Box
+   --------------------------------------------------------------- */
+.error-box {
+  background-color: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-left: 4px solid var(--error);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.error-box__inner {
+  margin-bottom: 0.75rem;
+}
+
+.error-box__title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--error);
+  margin-bottom: 0.375rem;
+}
+
+.error-box__message {
+  font-size: 0.9375rem;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------
+   Footer
+   --------------------------------------------------------------- */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 1.25rem 0;
+  background-color: var(--surface);
+  margin-top: auto;
+}
+
+.footer-text {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------
+   Utility: hidden
+   --------------------------------------------------------------- */
+[hidden] {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------
+   Responsive — Tablet and below
+   --------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-group--full {
+    grid-column: 1;
+  }
+
+  .header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .header-tagline {
+    border-left: none;
+    padding-left: 0;
+    font-size: 0.8125rem;
+  }
+
+  .card {
+    padding: 1.375rem;
+  }
+
+  .results-header {
+    flex-direction: column;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .download-grid {
+    flex-direction: column;
+  }
+}

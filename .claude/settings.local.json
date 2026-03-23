@@ -19,7 +19,9 @@
       "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/htmlExporterHelpers.test.js --no-coverage)",
       "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/batchRunner.test.js --no-coverage)",
       "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage)",
-      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage --coverageThreshold='{\"\"\"\"global\"\"\"\":{\"\"\"\"lines\"\"\"\":80,\"\"\"\"statements\"\"\"\":80,\"\"\"\"branches\"\"\"\":80,\"\"\"\"functions\"\"\"\":80}}')"
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage --coverageThreshold='{\"\"\"\"global\"\"\"\":{\"\"\"\"lines\"\"\"\":80,\"\"\"\"statements\"\"\"\":80,\"\"\"\"branches\"\"\"\":80,\"\"\"\"functions\"\"\"\":80}}')",
+      "Bash(node --check /c/arbab-github/edusheet-ai/frontend/js/app.js)",
+      "Bash(node --check C:/arbab-github/edusheet-ai/frontend/js/app.js)"
     ]
   }
 }
