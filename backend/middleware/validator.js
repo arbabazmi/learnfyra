@@ -8,6 +8,39 @@ const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Mixed'];
 const VALID_FORMATS = ['PDF', 'Word (.docx)', 'HTML'];
 
 /**
+ * Returns a trimmed string when input is a string, otherwise empty.
+ * @param {unknown} value
+ * @param {number} maxLen
+ * @returns {string}
+ */
+function normalizeOptionalString(value, maxLen = 80) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, maxLen);
+}
+
+/**
+ * Returns YYYY-MM-DD when input is a valid date string in that format.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function normalizeOptionalDate(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error('worksheetDate must be in YYYY-MM-DD format.');
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('worksheetDate must be a valid date.');
+  }
+
+  return trimmed;
+}
+
+/**
  * Validates and normalises the parsed request body for POST /api/generate.
  * Throws a descriptive Error with a user-facing message on any violation.
  * @param {Object} body - Parsed JSON body from the Lambda event
@@ -53,6 +86,12 @@ export function validateGenerateBody(body) {
   // includeAnswerKey: optional boolean, defaults to true
   const includeAnswerKey = body.includeAnswerKey !== false;
 
+  const studentName = normalizeOptionalString(body.studentName, 80);
+  const teacherName = normalizeOptionalString(body.teacherName, 80);
+  const period = normalizeOptionalString(body.period, 40);
+  const className = normalizeOptionalString(body.className, 80);
+  const worksheetDate = normalizeOptionalDate(body.worksheetDate);
+
   return {
     grade,
     subject: body.subject,
@@ -61,5 +100,10 @@ export function validateGenerateBody(body) {
     questionCount,
     format: body.format,
     includeAnswerKey,
+    studentName,
+    worksheetDate,
+    teacherName,
+    period,
+    className,
   };
 }

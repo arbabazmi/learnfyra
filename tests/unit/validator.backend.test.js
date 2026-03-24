@@ -73,6 +73,38 @@ describe('validateGenerateBody() — happy path', () => {
     expect(result.includeAnswerKey).toBe(true);
   });
 
+  it('normalises optional student and class fields when provided', () => {
+    const result = validateGenerateBody(validBody({
+      studentName: '  Ava Johnson  ',
+      worksheetDate: '2026-03-24',
+      teacherName: '  Ms. Carter ',
+      period: ' 2nd ',
+      className: ' Algebra Readiness ',
+    }));
+
+    expect(result.studentName).toBe('Ava Johnson');
+    expect(result.worksheetDate).toBe('2026-03-24');
+    expect(result.teacherName).toBe('Ms. Carter');
+    expect(result.period).toBe('2nd');
+    expect(result.className).toBe('Algebra Readiness');
+  });
+
+  it('defaults optional student and class fields to empty strings', () => {
+    const result = validateGenerateBody(validBody());
+
+    expect(result.studentName).toBe('');
+    expect(result.worksheetDate).toBe('');
+    expect(result.teacherName).toBe('');
+    expect(result.period).toBe('');
+    expect(result.className).toBe('');
+  });
+
+  it('throws for invalid worksheetDate format', () => {
+    expect(() => validateGenerateBody(validBody({ worksheetDate: '03/24/2026' }))).toThrow(
+      'worksheetDate must be in YYYY-MM-DD format.'
+    );
+  });
+
 });
 
 // ─── Grade boundary values ────────────────────────────────────────────────────

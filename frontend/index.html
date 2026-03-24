@@ -6,10 +6,13 @@
   <title>EduSheet AI — Worksheet Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+
+  <div class="bg-orb bg-orb--one" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb--two" aria-hidden="true"></div>
 
   <header class="site-header">
     <div class="container">
@@ -18,7 +21,7 @@
           <span class="logo-icon" aria-hidden="true">&#9998;</span>
           <span class="logo-text">EduSheet <span class="logo-accent">AI</span></span>
         </div>
-        <p class="header-tagline">USA curriculum-aligned worksheets for Grades 1–10</p>
+        <p class="header-tagline">USA curriculum-aligned worksheets for Grades 1-10</p>
       </div>
     </div>
   </header>
@@ -26,14 +29,21 @@
   <main class="main-content">
     <div class="container">
 
+      <section class="hero" aria-label="Product introduction">
+        <p class="hero-kicker">Built for Teachers and Tutors</p>
+        <h1 class="hero-title">Create polished classroom worksheets in under a minute</h1>
+        <p class="hero-subtitle">Choose grade, subject, and topic, then personalize the worksheet with optional student and class details before downloading.</p>
+      </section>
+
       <!-- Form Section -->
-      <section id="formSection" class="card" aria-label="Worksheet generator form">
+      <section id="formSection" class="card reveal" aria-label="Worksheet generator form">
         <div class="card-header">
-          <h1 class="card-title">Generate a Worksheet</h1>
-          <p class="card-subtitle">Fill in the options below and get a print-ready worksheet in seconds.</p>
+          <h2 class="card-title">Generate a Worksheet</h2>
+          <p class="card-subtitle">Required fields define the worksheet. Student and class details are optional and prefill the worksheet header.</p>
         </div>
 
         <form id="worksheetForm" novalidate>
+          <h3 class="form-section-title">Worksheet Setup</h3>
           <div class="form-grid">
 
             <!-- Grade -->
@@ -120,6 +130,38 @@
 
           </div><!-- /.form-grid -->
 
+          <h3 class="form-section-title">Student and Class Details (Optional)</h3>
+          <div class="form-grid">
+
+            <div class="form-group">
+              <label class="form-label" for="studentName">Student Name <span class="optional-badge">optional</span></label>
+              <input id="studentName" name="studentName" type="text" class="form-input" autocomplete="name" placeholder="e.g., Ava Johnson" maxlength="80" />
+              <span class="field-hint">Prefills the Name field on the printed worksheet.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="worksheetDate">Date <span class="optional-badge">optional</span></label>
+              <input id="worksheetDate" name="worksheetDate" type="date" class="form-input" />
+              <span class="field-hint">Defaults to today. Shown in the worksheet header.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="teacherName">Teacher <span class="optional-badge">optional</span></label>
+              <input id="teacherName" name="teacherName" type="text" class="form-input" autocomplete="name" placeholder="e.g., Ms. Carter" maxlength="80" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="period">Period <span class="optional-badge">optional</span></label>
+              <input id="period" name="period" type="text" class="form-input" placeholder="e.g., 2nd" maxlength="40" />
+            </div>
+
+            <div class="form-group form-group--full">
+              <label class="form-label" for="className">Class <span class="optional-badge">optional</span></label>
+              <input id="className" name="className" type="text" class="form-input" placeholder="e.g., Algebra Readiness" maxlength="80" />
+            </div>
+
+          </div>
+
           <div class="form-actions">
             <button type="submit" id="generateBtn" class="btn btn--primary" disabled>
               Generate Worksheet
@@ -130,14 +172,14 @@
       </section>
 
       <!-- Loading Section -->
-      <section id="loadingSection" class="card card--center" hidden aria-live="polite" aria-label="Generating worksheet">
+      <section id="loadingSection" class="card card--center reveal" hidden aria-live="polite" aria-label="Generating worksheet">
         <div class="spinner" aria-hidden="true"></div>
         <p class="loading-text">Generating your worksheet&hellip;</p>
         <p class="loading-subtext">This usually takes 10–20 seconds.</p>
       </section>
 
       <!-- Results Section -->
-      <section id="resultsSection" class="card" hidden aria-label="Worksheet ready for download">
+      <section id="resultsSection" class="card reveal" hidden aria-label="Worksheet ready for download">
         <div class="card-header results-header">
           <div class="success-badge" aria-hidden="true">&#10003;</div>
           <div>
@@ -158,7 +200,7 @@
       </section>
 
       <!-- Error Section -->
-      <section id="errorSection" class="error-box" hidden role="alert" aria-live="assertive" aria-label="Error">
+      <section id="errorSection" class="error-box reveal" hidden role="alert" aria-live="assertive" aria-label="Error">
         <div class="error-box__inner">
           <strong class="error-box__title">Something went wrong</strong>
           <p class="error-box__message" id="errorMessage"></p>

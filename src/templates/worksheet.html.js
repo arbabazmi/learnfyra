@@ -24,6 +24,19 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Formats an ISO date (YYYY-MM-DD) as MM/DD/YYYY.
+ * @param {string} value
+ * @returns {string}
+ */
+function formatHeaderDate(value) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return '';
+  }
+  const [year, month, day] = value.split('-');
+  return `${month}/${day}/${year}`;
+}
+
 // ─── School logo placeholder ──────────────────────────────────────────────────
 
 /**
@@ -51,28 +64,39 @@ function renderSchoolLogo() {
 // ─── Student fields ───────────────────────────────────────────────────────────
 
 /**
- * Renders the student-fields grid: name, date, teacher, period, and score.
+ * Renders the student-fields grid with optional prefilled values.
  * @param {Object} worksheet - Parsed worksheet JSON (used for totalPoints)
+ * @param {Object} options - Optional display metadata
  * @returns {string}
  */
-function renderStudentFields(worksheet) {
+function renderStudentFields(worksheet, options = {}) {
+  const studentName = escapeHtml(options.studentName || '');
+  const teacherName = escapeHtml(options.teacherName || '');
+  const period = escapeHtml(options.period || '');
+  const className = escapeHtml(options.className || '');
+  const dateValue = escapeHtml(formatHeaderDate(options.worksheetDate));
+
   return `
     <div class="student-fields">
       <div class="sf-row">
         <span class="sf-label">Name</span>
-        <div class="sf-line"></div>
+        <div class="sf-line">${studentName}</div>
       </div>
       <div class="sf-row">
         <span class="sf-label">Date</span>
-        <div class="sf-line"></div>
+        <div class="sf-line">${dateValue}</div>
       </div>
       <div class="sf-row">
         <span class="sf-label">Teacher</span>
-        <div class="sf-line"></div>
+        <div class="sf-line">${teacherName}</div>
       </div>
       <div class="sf-row">
-        <span class="sf-label">Period / Class</span>
-        <div class="sf-line"></div>
+        <span class="sf-label">Period</span>
+        <div class="sf-line">${period}</div>
+      </div>
+      <div class="sf-row">
+        <span class="sf-label">Class</span>
+        <div class="sf-line">${className}</div>
       </div>
       <div class="sf-row score">
         <span class="sf-label">Score</span>
@@ -249,7 +273,7 @@ export function buildWorksheetHTML(worksheet, options = {}) {
         &nbsp;&middot;&nbsp; ${escapeHtml(worksheet.topic)}
       </div>
     </div>
-    ${renderStudentFields(worksheet)}
+    ${renderStudentFields(worksheet, options)}
   </header>
 
   <!-- ── Info strip ── -->

@@ -25,6 +25,19 @@ const PAGE_SETTINGS = {
 };
 
 /**
+ * Formats YYYY-MM-DD date into MM/DD/YYYY for worksheet headers.
+ * @param {string} value
+ * @returns {string}
+ */
+function formatHeaderDate(value) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return '';
+  }
+  const [year, month, day] = value.split('-');
+  return `${month}/${day}/${year}`;
+}
+
+/**
  * Builds Paragraph nodes for a single question
  * @param {Object} q - Question object
  * @returns {Paragraph[]} Array of docx Paragraph objects
@@ -86,6 +99,10 @@ function buildQuestionParagraphs(q) {
  */
 export async function exportDOCX(worksheet, options) {
   const studentName = options.studentName || '';
+  const worksheetDate = formatHeaderDate(options.worksheetDate || '');
+  const teacherName = options.teacherName || '';
+  const period = options.period || '';
+  const className = options.className || '';
 
   const doc = new Document({
     ...PAGE_SETTINGS,
@@ -107,7 +124,14 @@ export async function exportDOCX(worksheet, options) {
           }),
           new Paragraph({
             children: [
-              new TextRun({ text: `Name: ${studentName}_______________________   Date: _______________________   Score: _______ / ${worksheet.totalPoints}`, font: 'Arial', size: 22 }),
+              new TextRun({ text: `Name: ${studentName}_______________________   Date: ${worksheetDate}_____________________   Score: _______ / ${worksheet.totalPoints}`, font: 'Arial', size: 22 }),
+            ],
+            border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
+            spacing: { after: 140 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Teacher: ${teacherName}_______________________   Period: ${period}_______________________   Class: ${className}`, font: 'Arial', size: 22 }),
             ],
             border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
             spacing: { after: 200 },

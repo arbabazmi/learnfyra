@@ -64,20 +64,28 @@ app.post('/api/generate', async (req, res) => {
       return res.status(400).json({ success: false, error: err.message });
     }
 
-    const { grade, subject, topic, difficulty, questionCount, format, includeAnswerKey } = validated;
+    const {
+      grade, subject, topic, difficulty, questionCount, format, includeAnswerKey,
+      studentName, worksheetDate, teacherName, period, className,
+    } = validated;
     const ext = FORMAT_EXT[format];
     const uuid = randomUUID();
     const outputDir = LOCAL_FILES_DIR;
+
+    // Shared export options (including optional student details)
+    const exportOpts = {
+      grade, subject, topic, difficulty, format,
+      studentName, worksheetDate, teacherName, period, className,
+      outputDir,
+    };
 
     // Generate worksheet JSON via Claude API
     const worksheet = await generateWorksheet({ grade, subject, topic, difficulty, questionCount });
 
     // Export worksheet file to worksheets-local/
     const worksheetPaths = await exportWorksheet(worksheet, {
-      grade, subject, topic, difficulty,
-      format,
+      ...exportOpts,
       includeAnswerKey: false,
-      outputDir,
     });
     const worksheetFilename = worksheetPaths[0].split(/[\\/]/).pop();
     const worksheetKey = `local/${worksheetFilename}`;
@@ -85,11 +93,7 @@ app.post('/api/generate', async (req, res) => {
     // Export answer key if requested
     let answerKeyKey = null;
     if (includeAnswerKey) {
-      const answerKeyPaths = await exportAnswerKey(worksheet, {
-        grade, subject, topic, difficulty,
-        format,
-        outputDir,
-      });
+      const answerKeyPaths = await exportAnswerKey(worksheet, exportOpts);
       if (answerKeyPaths.length > 0) {
         const answerKeyFilename = answerKeyPaths[0].split(/[\\/]/).pop();
         answerKeyKey = `local/${answerKeyFilename}`;

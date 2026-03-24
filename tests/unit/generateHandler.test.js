@@ -78,6 +78,11 @@ const validBody = {
   questionCount: 10,
   format: 'PDF',
   includeAnswerKey: true,
+  studentName: 'Ava Johnson',
+  worksheetDate: '2026-03-24',
+  teacherName: 'Ms. Carter',
+  period: '2nd',
+  className: 'Algebra Readiness',
 };
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -212,9 +217,35 @@ describe('generateHandler — valid request', () => {
     expect(metadata.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it('metadata contains optional student details object', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    const { metadata } = JSON.parse(result.body);
+    expect(metadata.studentDetails).toMatchObject({
+      studentName: 'Ava Johnson',
+      worksheetDate: '2026-03-24',
+      teacherName: 'Ms. Carter',
+      period: '2nd',
+      className: 'Algebra Readiness',
+    });
+  });
+
   it('CORS headers present on 200 response', async () => {
     const result = await handler(mockEvent(validBody), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('passes optional student details into worksheet export options', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    expect(exportWorksheet).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        studentName: 'Ava Johnson',
+        worksheetDate: '2026-03-24',
+        teacherName: 'Ms. Carter',
+        period: '2nd',
+        className: 'Algebra Readiness',
+      })
+    );
   });
 
 });

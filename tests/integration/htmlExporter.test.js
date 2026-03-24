@@ -23,6 +23,11 @@ const options = {
   subject: 'Math',
   topic: 'Multiplication Facts (1–10)',
   difficulty: 'Medium',
+  studentName: 'Ava Johnson',
+  worksheetDate: '2026-03-24',
+  teacherName: 'Ms. Carter',
+  period: '2nd',
+  className: 'Algebra Readiness',
   outputDir: testOutputDir,
 };
 
@@ -74,6 +79,18 @@ describe('htmlExporter', () => {
     sampleWorksheet.questions.forEach((q) => {
       expect(content).toContain(`${q.number}.`);
     });
+  });
+
+  it('generated HTML pre-fills optional student and class details', async () => {
+    const filePath = await exportHTML(sampleWorksheet, options);
+    generatedFiles.push(filePath);
+    const content = readFileSync(filePath, 'utf-8');
+
+    expect(content).toContain('Ava Johnson');
+    expect(content).toContain('03/24/2026');
+    expect(content).toContain('Ms. Carter');
+    expect(content).toContain('2nd');
+    expect(content).toContain('Algebra Readiness');
   });
 
   it('creates a separate answer key HTML file', async () => {

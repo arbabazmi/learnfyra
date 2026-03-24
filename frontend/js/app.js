@@ -90,6 +90,11 @@ const difficultySelect   = document.getElementById('difficulty');
 const questionCountSelect= document.getElementById('questionCount');
 const formatSelect       = document.getElementById('format');
 const includeAnswerKey   = document.getElementById('includeAnswerKey');
+const studentNameInput   = document.getElementById('studentName');
+const worksheetDateInput = document.getElementById('worksheetDate');
+const teacherNameInput   = document.getElementById('teacherName');
+const periodInput        = document.getElementById('period');
+const classNameInput     = document.getElementById('className');
 const generateBtn        = document.getElementById('generateBtn');
 const worksheetForm      = document.getElementById('worksheetForm');
 
@@ -333,6 +338,12 @@ const FORMAT_BUTTON_META = {
   html: { label: 'Download HTML',      modifier: 'html' },
 };
 
+const FORMAT_TO_EXTENSION = {
+  'PDF': 'pdf',
+  'Word (.docx)': 'docx',
+  'HTML': 'html',
+};
+
 /**
  * Creates the worksheet download button element.
  *
@@ -341,7 +352,8 @@ const FORMAT_BUTTON_META = {
  * @returns {HTMLButtonElement}
  */
 function buildDownloadButton(format, s3Key) {
-  const meta = FORMAT_BUTTON_META[format] || { label: 'Download Worksheet', modifier: 'pdf' };
+  const normalizedFormat = FORMAT_TO_EXTENSION[format] || String(format || '').toLowerCase();
+  const meta = FORMAT_BUTTON_META[normalizedFormat] || { label: 'Download Worksheet', modifier: 'pdf' };
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = `btn btn--${meta.modifier} download-btn`;
@@ -449,6 +461,11 @@ async function handleFormSubmit(event) {
   const questionCount   = Number(questionCountSelect.value);
   const format          = formatSelect.value;
   const wantsAnswerKey  = includeAnswerKey.checked;
+  const studentName     = studentNameInput.value.trim();
+  const worksheetDate   = worksheetDateInput.value;
+  const teacherName     = teacherNameInput.value.trim();
+  const period          = periodInput.value.trim();
+  const className       = classNameInput.value.trim();
 
   const payload = {
     grade,
@@ -458,6 +475,11 @@ async function handleFormSubmit(event) {
     questionCount,
     format,
     includeAnswerKey: wantsAnswerKey,
+    studentName,
+    worksheetDate,
+    teacherName,
+    period,
+    className,
   };
 
   showLoading();
@@ -520,8 +542,9 @@ subjectSelect.addEventListener('change', () => {
 /* Form submit */
 worksheetForm.addEventListener('submit', handleFormSubmit);
 
-/* "Generate Another" — show form without resetting selections */
+/* "Generate Another" — show form, preserving all field values */
 generateAnotherBtn.addEventListener('click', () => {
+  syncGenerateButton();
   showForm();
 });
 
@@ -535,6 +558,11 @@ dismissErrorBtn.addEventListener('click', () => {
    ============================================================= */
 
 (function init() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  worksheetDateInput.value = `${today.getFullYear()}-${month}-${day}`;
+
   /* Populate Grade dropdown */
   for (let g = 1; g <= 10; g++) {
     const opt = document.createElement('option');

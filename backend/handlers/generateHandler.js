@@ -170,7 +170,20 @@ export const handler = async (event, context) => {
       };
     }
 
-    const { grade, subject, topic, difficulty, questionCount, format, includeAnswerKey } = validated;
+    const {
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      format,
+      includeAnswerKey,
+      studentName,
+      worksheetDate,
+      teacherName,
+      period,
+      className,
+    } = validated;
     const ext = FORMAT_EXT[format];
     const uuid = randomUUID();
     const now = new Date();
@@ -188,6 +201,11 @@ export const handler = async (event, context) => {
       grade, subject, topic, difficulty,
       format,
       includeAnswerKey: false, // answer key handled separately below
+      studentName,
+      worksheetDate,
+      teacherName,
+      period,
+      className,
       outputDir,
     });
     const worksheetLocalPath = worksheetPaths[0];
@@ -203,6 +221,11 @@ export const handler = async (event, context) => {
       const answerKeyPaths = await exportAnswerKey(worksheet, {
         grade, subject, topic, difficulty,
         format,
+        studentName,
+        worksheetDate,
+        teacherName,
+        period,
+        className,
         outputDir,
       });
       if (answerKeyPaths.length > 0) {
@@ -221,6 +244,13 @@ export const handler = async (event, context) => {
       difficulty,
       questionCount,
       format,
+      studentDetails: {
+        studentName,
+        worksheetDate,
+        teacherName,
+        period,
+        className,
+      },
       expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
