@@ -34,7 +34,8 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(node -e \"const origins = require\\(''aws-cdk-lib/aws-cloudfront-origins''\\); console.log\\(Object.keys\\(origins\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''s3''\\)\\)\\)\")",
       "Bash(echo SYNTH_EXIT:$?)",
-      "Bash(\"C:/arbab-github/edusheet-ai/DEPLOY.md\":*)"
+      "Bash(\"C:/arbab-github/edusheet-ai/DEPLOY.md\":*)",
+      "Bash(python3:*)"
     ]
   }
 }

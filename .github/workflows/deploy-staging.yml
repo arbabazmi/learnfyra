@@ -4,6 +4,10 @@ on:
   push:
     branches: [staging]
 
+permissions:
+  id-token: write   # required for OIDC token request
+  contents: read
+
 jobs:
   test:
     name: Tests (must pass before deploy)
@@ -41,12 +45,11 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Write Anthropic API key to SSM
         run: |
@@ -55,10 +58,20 @@ jobs:
             --value "${{ secrets.ANTHROPIC_API_KEY_STAGING }}" \
             --type SecureString \
             --overwrite \
-            --region ${{ secrets.AWS_REGION }}
+            --region ${{ vars.AWS_REGION }}
 
       - name: Install CDK dependencies
         run: cd infra/cdk && npm ci
+
+      - name: CDK Bootstrap (safe to re-run)
+        run: |
+          cd infra/cdk
+          npx cdk bootstrap \
+            aws://${{ vars.AWS_ACCOUNT_ID }}/${{ vars.AWS_REGION }} \
+            --context env=staging
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ vars.AWS_REGION }}
 
       - name: Deploy CDK stack — staging
         run: |
@@ -67,7 +80,8 @@ jobs:
             --require-approval never \
             --outputs-file cdk-outputs.json
         env:
-          CDK_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ vars.AWS_REGION }}
 
       - name: Extract CDK outputs
         id: cdk-outputs
@@ -83,7 +97,7 @@ jobs:
         run: |
           aws s3 sync frontend/ s3://${{ steps.cdk-outputs.outputs.frontend_bucket }}/ \
             --delete \
-            --region ${{ secrets.AWS_REGION }}
+            --region ${{ vars.AWS_REGION }}
 
       - name: Invalidate CloudFront cache
         run: |
