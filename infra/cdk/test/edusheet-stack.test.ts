@@ -58,7 +58,7 @@ describe('EduSheetAiStack (dev)', () => {
       FunctionName: 'edusheet-dev-lambda-generate',
       MemorySize: 1024,
       Architectures: ['arm64'],
-      Runtime: 'nodejs18.x',
+      Runtime: 'nodejs20.x',
     });
   });
 
@@ -74,7 +74,7 @@ describe('EduSheetAiStack (dev)', () => {
       FunctionName: 'edusheet-dev-lambda-download',
       MemorySize: 256,
       Architectures: ['arm64'],
-      Runtime: 'nodejs18.x',
+      Runtime: 'nodejs20.x',
     });
   });
 

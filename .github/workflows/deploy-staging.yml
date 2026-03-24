@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -42,7 +42,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Configure AWS credentials (OIDC)
@@ -59,6 +59,9 @@ jobs:
             --type SecureString \
             --overwrite \
             --region ${{ vars.AWS_REGION }}
+
+      - name: Install app dependencies (needed by esbuild when bundling Lambdas)
+        run: npm ci
 
       - name: Install CDK dependencies
         run: cd infra/cdk && npm ci
@@ -88,10 +91,10 @@ jobs:
         run: |
           FRONTEND_BUCKET=$(jq -r '.["EduSheetAiStack-staging"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
           DIST_ID=$(jq -r '.["EduSheetAiStack-staging"]["DistributionId"]' infra/cdk/cdk-outputs.json)
-          CLOUDFRONT_URL=$(jq -r '.["EduSheetAiStack-staging"]["CloudFrontUrl"]' infra/cdk/cdk-outputs.json)
+          FRONTEND_URL=$(jq -r '.["EduSheetAiStack-staging"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "dist_id=$DIST_ID" >> $GITHUB_OUTPUT
-          echo "cloudfront_url=$CLOUDFRONT_URL" >> $GITHUB_OUTPUT
+          echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
         run: |
@@ -106,4 +109,4 @@ jobs:
             --paths "/*"
 
       - name: Print staging URL
-        run: echo "Staging deployed at ${{ steps.cdk-outputs.outputs.cloudfront_url }}"
+        run: echo "Staging deployed at ${{ steps.cdk-outputs.outputs.frontend_url }}"

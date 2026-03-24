@@ -73,7 +73,7 @@ export class EduSheetAiStack extends cdk.Stack {
     // that occurs when Lambda receives an unbundled ESM file without package.json.
     const bundling = {
       format: OutputFormat.CJS,
-      target: 'node18',
+      target: 'node20',
       externalModules: ['@aws-sdk/*', 'typescript', 'puppeteer'],
       minify: true,
       sourceMap: false,
@@ -82,7 +82,7 @@ export class EduSheetAiStack extends cdk.Stack {
     // ── Lambda: Generate handler ───────────────────────────────────────────────
     const generateFn = new NodejsFunction(this, 'GenerateFunction', {
       functionName: `edusheet-${appEnv}-lambda-generate`,
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       entry: path.join(__dirname, '../../../backend/handlers/generateHandler.js'),
       handler: 'handler',
@@ -106,7 +106,7 @@ export class EduSheetAiStack extends cdk.Stack {
     // ── Lambda: Download handler ───────────────────────────────────────────────
     const downloadFn = new NodejsFunction(this, 'DownloadFunction', {
       functionName: `edusheet-${appEnv}-lambda-download`,
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       entry: path.join(__dirname, '../../../backend/handlers/downloadHandler.js'),
       handler: 'handler',

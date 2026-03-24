@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -37,7 +37,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Configure AWS credentials (OIDC)
@@ -54,6 +54,9 @@ jobs:
             --type SecureString \
             --overwrite \
             --region ${{ vars.AWS_REGION }}
+
+      - name: Install app dependencies (needed by esbuild when bundling Lambdas)
+        run: npm ci
 
       - name: Install CDK dependencies
         run: cd infra/cdk && npm ci
