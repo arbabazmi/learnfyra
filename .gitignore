@@ -6,6 +6,7 @@ node_modules/
 
 # Generated worksheets
 worksheets/
+worksheets-local/
 
 # Coverage reports
 coverage/

@@ -1,11 +1,12 @@
 # EduSheet AI — Agent Teams System Prompt
 # File: CLAUDE.md (project root)
-# Version: 2.0 — Agent Teams Edition with AWS Deployment
+# Version: 3.0 — Online Solve & Answer Validation Edition
 # Updated: March 2026
 
 ## Project Overview
 EduSheet AI generates AI-powered, USA curriculum-aligned worksheets for Grades 1–10.
 It runs as both a local CLI and a serverless web app deployed on AWS.
+**Students can now solve worksheets online, get instant scoring, and review answers — with optional timed mode.**
 
 Repository: https://github.com/arbabazmi/edusheet-ai
 Stack: Node.js 18+, Anthropic Claude API, Puppeteer, docx npm, Inquirer, Jest
@@ -24,22 +25,248 @@ CI/CD: GitHub Actions
 - src/templates/    → worksheet.html.js, styles.css.js
 - src/utils/        → fileUtils.js, logger.js, retryUtils.js
 - tests/            → unit/ and integration/ with fixtures
-- frontend/         → index.html, css/styles.css, js/app.js
+- frontend/         → index.html, css/styles.css, js/app.js (modern teal/orange UI)
 - backend/handlers/ → generateHandler.js, downloadHandler.js
-- backend/middleware/→ validator.js
-- infra/template.yaml → SAM format, MUST be migrated to CDK (do not extend)
+- backend/middleware/→ validator.js (with optional student/class field validation)
+- server.js         → local Express dev server with full field passthrough
+- infra/cdk/        → AWS CDK stack (TypeScript)
+- .github/workflows/→ CI/CD pipelines (ci, deploy-dev, deploy-staging, deploy-prod)
 
 ### NEEDS WORK
-- infra/            → migrate from SAM template.yaml to AWS CDK TypeScript
-- backend/handlers/ → make fully Lambda-compatible (cold start optimized)
-- frontend/         → configure for S3 static hosting + CloudFront URLs
+- frontend/         → configure for S3 static hosting + CloudFront URLs (local dev works via server.js)
 
-### NOT YET BUILT
-- infra/cdk/                   → AWS CDK stack (IaC agent owns this)
-- .github/workflows/           → CI/CD pipelines (DevOps agent owns this)
-- AWS Secrets Manager integration
-- CloudFront distribution
-- Agent Teams subagent files in .claude/agents/
+### NOT YET BUILT — Online Solve & Answer Validation (feature/online-solve)
+- frontend/solve.html              → Interactive solve page (renders questions, timer, input fields)
+- frontend/js/solve.js             → Solve page logic (timer, answer capture, submit, scoring)
+- frontend/css/solve.css           → Solve page styles (or extend styles.css)
+- backend/handlers/submitHandler.js→ POST /api/submit — validates student answers against answer key
+- backend/handlers/solveHandler.js → GET /api/solve/{id} — returns worksheet questions (no answers)
+- src/solve/                       → scoring engine, answer comparator, result builder
+- src/solve/scorer.js              → compares student answers to correct answers, calculates score
+- src/solve/resultBuilder.js       → builds result HTML/JSON with score, correct/incorrect breakdown
+- Worksheet JSON storage: S3 solve-data.json (prod) / local worksheets-local/{uuid}/solve-data.json (dev)
+  → JSON chosen over DynamoDB: write-once-read-many, small per worksheet, no extra AWS service cost,
+    native to Node.js, works with S3 lifecycle rules, no cross-worksheet querying needed
+- tests/unit/scorer.test.js        → scoring engine tests
+- tests/unit/submitHandler.test.js → submit handler tests
+- tests/integration/solve.test.js  → end-to-end solve flow tests
+
+---
+
+## Feature: Online Solve & Answer Validation (v3.0)
+
+### User Stories
+1. As a **student**, I want to solve a worksheet online so that I don't need to print it.
+2. As a **student**, I want to choose timed or untimed mode so that I can practice under test conditions or at my own pace.
+3. As a **student**, I want to see my score and which answers were correct/incorrect after submitting so I can learn from my mistakes.
+4. As a **teacher**, I want students to get instant feedback with explanations so they can self-study.
+
+### Flow — How Online Solve Works
+```
+┌─────────────────────────────────────────────────────────────┐
+│ GENERATE FLOW (existing)                                     │
+│                                                              │
+│  Teacher fills form → POST /api/generate → Claude AI         │
+│  → worksheet JSON (questions + answers) saved to storage     │
+│  → returns worksheetId + download links + "Solve Online" btn │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ SOLVE FLOW (NEW)                                             │
+│                                                              │
+│  Student clicks "Solve Online" → GET /api/solve/{id}         │
+│  → returns questions ONLY (no answers, no explanations)      │
+│  → renders solve.html with interactive form                  │
+│                                                              │
+│  Student chooses:                                            │
+│    ☐ Timed mode (countdown from estimatedTime)               │
+│    ☐ Untimed mode (no timer, solve at own pace)              │
+│                                                              │
+│  Student fills answers → clicks "Submit"                     │
+│  → POST /api/submit { worksheetId, answers[], timeTaken }    │
+│  → server compares answers against stored answer key         │
+│  → returns score + per-question breakdown                    │
+│                                                              │
+│  Results page shows:                                         │
+│    ✓ Total score (e.g. 8/10 — 80%)                          │
+│    ✓ Per-question: correct ✅ / incorrect ❌ + explanation   │
+│    ✓ Time taken                                              │
+│    ✓ "Try Again" / "Generate New" buttons                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Acceptance Criteria
+```
+Given a generated worksheet exists in storage
+When the student clicks "Solve Online"
+Then they see the questions rendered as interactive form inputs (no answers visible)
+
+Given the student is on the solve page
+When they select "Timed Mode"
+Then a countdown timer starts from the worksheet's estimatedTime
+And the worksheet auto-submits when time runs out
+
+Given the student is on the solve page
+When they select "Untimed Mode"
+Then no timer is shown and they can submit whenever ready
+
+Given the student has filled in answers
+When they click "Submit" (or timer expires)
+Then POST /api/submit is called with their answers
+And the response includes total score, per-question results, and explanations
+
+Given the student views results
+When they see the score breakdown
+Then correct answers show ✅ with points earned
+And incorrect answers show ❌ with the correct answer + explanation
+And the total score and percentage are displayed prominently
+
+Given a worksheet is generated
+When the system stores it
+Then questions AND answers are saved as JSON to S3 (prod) or local file (dev)
+And the worksheetId is a UUID that maps to the stored JSON
+```
+
+### Question Type → Input Mapping
+| Question Type       | Solve UI Input                              | Scoring Rule                        |
+|--------------------|--------------------------------------------|-------------------------------------|
+| multiple-choice    | Radio buttons (A/B/C/D)                     | Exact match on option letter        |
+| true-false         | Radio buttons (True/False)                  | Exact match                         |
+| fill-in-the-blank  | Text input                                  | Case-insensitive, trimmed match     |
+| short-answer       | Textarea                                    | Case-insensitive keyword match      |
+| matching           | Dropdown selects for each pair              | Exact match per pair                |
+| show-your-work     | Textarea + final answer input               | Score final answer only             |
+| word-problem       | Textarea + final answer input               | Score final answer only             |
+
+### Worksheet Storage Schema (extends existing)
+```json
+{
+  "worksheetId": "uuid-v4",
+  "generatedAt": "ISO-8601",
+  "grade": 3,
+  "subject": "Math",
+  "topic": "Multiplication",
+  "difficulty": "Medium",
+  "estimatedTime": "20 minutes",
+  "timerSeconds": 1200,
+  "totalPoints": 10,
+  "questions": [
+    {
+      "number": 1,
+      "type": "multiple-choice",
+      "question": "What is 6 × 7?",
+      "options": ["A. 36", "B. 42", "C. 48", "D. 54"],
+      "answer": "B",
+      "explanation": "6 × 7 = 42",
+      "points": 1
+    }
+  ]
+}
+```
+
+### Submit Request / Response Schema
+```json
+// POST /api/submit
+// Request:
+{
+  "worksheetId": "uuid-v4",
+  "studentName": "optional string",
+  "answers": [
+    { "number": 1, "answer": "B" },
+    { "number": 2, "answer": "True" },
+    { "number": 3, "answer": "42" }
+  ],
+  "timeTaken": 845,
+  "timed": true
+}
+
+// Response:
+{
+  "worksheetId": "uuid-v4",
+  "totalScore": 8,
+  "totalPoints": 10,
+  "percentage": 80,
+  "timeTaken": 845,
+  "timed": true,
+  "results": [
+    {
+      "number": 1,
+      "correct": true,
+      "studentAnswer": "B",
+      "correctAnswer": "B",
+      "explanation": "6 × 7 = 42",
+      "pointsEarned": 1,
+      "pointsPossible": 1
+    },
+    {
+      "number": 2,
+      "correct": false,
+      "studentAnswer": "True",
+      "correctAnswer": "False",
+      "explanation": "The Sun is a star, not a planet.",
+      "pointsEarned": 0,
+      "pointsPossible": 1
+    }
+  ]
+}
+```
+
+### S3 Key Structure for Solve Data
+```
+edusheet-ai-worksheets-{env}/
+  worksheets/{year}/{month}/{day}/{uuid}/
+    worksheet.pdf
+    worksheet.docx
+    worksheet.html
+    answer-key.pdf
+    answer-key.docx
+    metadata.json
+    solve-data.json          ← NEW: full worksheet JSON with answers for scoring
+```
+
+Local storage (dev mode):
+```
+worksheets-local/{uuid}/
+  solve-data.json
+  worksheet.html
+  answer-key.html
+```
+
+### New API Endpoints
+```
+GET  /api/solve/{worksheetId}     → returns questions only (no answers)
+POST /api/submit                  → validates answers, returns score
+```
+
+### New Lambda Functions (IaC agent adds to CDK)
+```
+edusheet-solve    GET  /api/solve/{id}  10s  128MB
+edusheet-submit   POST /api/submit      15s  256MB
+```
+
+### File Structure for Online Solve
+```
+frontend/
+  solve.html                  ← solve page (standalone HTML served by CloudFront/Express)
+  js/solve.js                 ← timer, answer capture, submit, results rendering
+  css/solve.css               ← solve page styles (matches main theme)
+
+backend/handlers/
+  solveHandler.js             ← GET /api/solve/{id} — reads solve-data.json, strips answers
+  submitHandler.js            ← POST /api/submit — reads solve-data.json, scores answers
+
+src/solve/
+  scorer.js                   ← answer comparison logic per question type
+  resultBuilder.js            ← builds score summary + per-question breakdown
+
+tests/unit/
+  scorer.test.js              ← scoring engine unit tests
+  submitHandler.test.js       ← submit handler tests
+  solveHandler.test.js        ← solve handler tests
+tests/integration/
+  solve.test.js               ← full solve flow integration test
+```
 
 ---
 
@@ -84,7 +311,10 @@ Responsibilities:
 - Write feature specs BEFORE any code or infrastructure is created
 - Define acceptance criteria in Given/When/Then format
 - Identify AWS-specific considerations (which services, data flow, costs)
+- **Advise DEV agent** on exactly what to build, which files, function signatures
+- **Advise QA agent** on what to test, boundary values, edge cases
 - Never write code or CDK — only specs and documentation
+- Track feature completion: review QA results, confirm "done" or request fixes
 
 Output format every time:
 ```
@@ -279,11 +509,15 @@ edusheet-ai-worksheets-{env}/
     answer-key.pdf
     answer-key.docx
     metadata.json
+    solve-data.json          ← worksheet JSON with answers for online scoring
 
 edusheet-ai-frontend-{env}/
   index.html
+  solve.html
   css/styles.css
+  css/solve.css
   js/app.js
+  js/solve.js
 
 edusheet-ai-logs-{env}/
   access-logs/
@@ -336,6 +570,8 @@ Lambda Functions:
   edusheet-generate  POST /api/generate   60s  1024MB
   edusheet-download  GET  /api/download   30s   256MB
   edusheet-list      GET  /api/worksheets 10s   128MB
+  edusheet-solve     GET  /api/solve/{id} 10s   128MB
+  edusheet-submit    POST /api/submit     15s   256MB
 
 S3 Buckets:
   edusheet-ai-worksheets-{env}  private, presigned URLs, 7-day lifecycle
@@ -550,26 +786,78 @@ IaC rules:
 
 ## Agent Collaboration Map
 
-| Task | Lead Agent | Parallel With | After |
-|---|---|---|---|
-| New feature | BA | — | DBA if schema changes |
-| Lambda handler | DEV | IaC (CDK route) | QA |
-| CDK construct | IaC | DEV (handler) | QA (CDK tests) |
-| GitHub Actions | DevOps | — | QA (verify pipeline) |
-| Schema change | DBA | DEV + IaC | QA |
-| Bug fix | QA writes test, DEV fixes | — | QA verifies |
-| Deploy to prod | DevOps | — | QA smoke tests |
-
-### Agent Teams parallel example — new Lambda endpoint:
+### Collaboration Rules — BA Advises DEV and QA
 ```
-Orchestrator: "Add GET /api/worksheets endpoint"
-  BA   → spec + acceptance criteria
-  DBA  → confirms S3 key structure, metadata schema
-  DEV + IaC running in parallel:
-    DEV: backend/handlers/listHandler.js
-    IaC: add Lambda + API Gateway GET route to CDK stack
-  QA   → tests for handler + CDK assertions
-  DevOps → confirms IAM permissions and CloudWatch alarm
+IMPORTANT: BA agent drives all feature work. The flow MUST be:
+
+1. BA writes the spec + acceptance criteria FIRST
+2. BA hands spec to DEV with clear implementation instructions
+3. DEV builds the code following BA's spec
+4. BA hands acceptance criteria to QA
+5. QA writes tests that validate BA's acceptance criteria
+6. QA runs tests and reports back to BA
+7. BA confirms feature is complete when all criteria pass
+
+BA ↔ DEV communication:
+  - BA tells DEV exactly which files to create/modify
+  - BA specifies function signatures, input/output formats
+  - DEV asks BA for clarification, never guesses
+  - DEV reports back to BA when implementation is done
+
+BA ↔ QA communication:
+  - BA gives QA the acceptance criteria as test cases
+  - BA specifies boundary values and edge cases to test
+  - QA reports test results back to BA
+  - BA decides if the feature is "done" based on QA results
+
+DEV ↔ QA:
+  - QA can ask DEV for implementation details (mocking, test setup)
+  - DEV fixes bugs found by QA, then QA re-verifies
+```
+
+### Task Routing Table
+
+| Task | Lead Agent | Advises | Parallel With | After |
+|---|---|---|---|---|
+| New feature | BA | DEV + QA | DBA if schema changes | DEV implements → QA verifies |
+| Online solve page | BA | DEV | DBA (storage schema) | QA (scoring tests) |
+| Scoring engine | BA (defines rules) | DEV | — | QA (unit tests per question type) |
+| Submit handler | BA (defines API) | DEV | IaC (CDK route) | QA (handler tests) |
+| Lambda handler | BA (spec) | DEV | IaC (CDK route) | QA |
+| CDK construct | IaC | — | DEV (handler) | QA (CDK tests) |
+| GitHub Actions | DevOps | — | — | QA (verify pipeline) |
+| Schema change | DBA | DEV + IaC | — | QA |
+| Bug fix | QA writes failing test | DEV fixes | — | QA verifies |
+| Deploy to prod | DevOps | — | — | QA smoke tests |
+
+### Agent Teams Workflow — Online Solve Feature:
+```
+Orchestrator: "Build online solve & scoring feature"
+
+Phase 1 — Spec (BA leads):
+  BA   → writes full feature spec, acceptance criteria, scoring rules
+  DBA  → confirms worksheet storage schema, solve-data.json format
+
+Phase 2 — Build (BA advises DEV, parallel tracks):
+  BA tells DEV:
+    Track A: "Build src/solve/scorer.js and resultBuilder.js per this spec"
+    Track B: "Build backend/handlers/solveHandler.js and submitHandler.js"
+    Track C: "Build frontend/solve.html, js/solve.js, css/solve.css"
+  BA tells IaC:
+    "Add GET /api/solve/{id} and POST /api/submit routes to CDK stack"
+  DEV + IaC work in parallel
+
+Phase 3 — Verify (BA advises QA):
+  BA tells QA:
+    "Test these acceptance criteria: [list from Phase 1]"
+    "Test scoring for every question type"
+    "Test timed mode auto-submit"
+    "Test boundary: 0 answers, all correct, all wrong"
+  QA writes and runs tests, reports results to BA
+
+Phase 4 — Ship:
+  BA reviews QA results → confirms "done" or sends DEV back to fix
+  DevOps → deploys to dev, QA runs smoke tests
 ```
 
 ---
