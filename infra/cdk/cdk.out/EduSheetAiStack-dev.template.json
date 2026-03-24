@@ -162,7 +162,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-796929287685-us-east-1",
-     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+     "S3Key": "b7f33614a69548d6bafe224d751a7ef238cde19097415e553fe8b63a4c8fd8a6.zip"
     },
     "Timeout": 900,
     "MemorySize": 128,
@@ -173,7 +173,7 @@
       "Arn"
      ]
     },
-    "Runtime": "nodejs22.x",
+    "Runtime": "nodejs18.x",
     "Description": {
      "Fn::Join": [
       "",
@@ -192,7 +192,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "EduSheetAiStack-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
-    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:path": "asset.b7f33614a69548d6bafe224d751a7ef238cde19097415e553fe8b63a4c8fd8a6",
     "aws:asset:property": "Code"
    }
   },
@@ -223,11 +223,7 @@
       "Key": "Project",
       "Value": "edusheet"
      }
-    ],
-    "WebsiteConfiguration": {
-     "ErrorDocument": "index.html",
-     "IndexDocument": "index.html"
-    }
+    ]
    },
    "UpdateReplacePolicy": "Delete",
    "DeletionPolicy": "Delete",
@@ -283,33 +279,53 @@
        ]
       },
       {
-       "Action": "s3:GetObject",
-       "Condition": {
-        "StringEquals": {
-         "AWS:SourceArn": {
-          "Fn::Join": [
-           "",
-           [
-            "arn:",
-            {
-             "Ref": "AWS::Partition"
-            },
-            ":cloudfront::",
-            {
-             "Ref": "AWS::AccountId"
-            },
-            ":distribution/",
-            {
-             "Ref": "CloudFrontDistributionBA64CE3A"
-            }
-           ]
-          ]
-         }
-        }
-       },
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
        "Effect": "Allow",
        "Principal": {
-        "Service": "cloudfront.amazonaws.com"
+        "CanonicalUser": {
+         "Fn::GetAtt": [
+          "FrontendOAIF4D25B13",
+          "S3CanonicalUserId"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "FrontendBucketEFE2E19C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "FrontendBucketEFE2E19C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Principal": {
+        "CanonicalUser": {
+         "Fn::GetAtt": [
+          "FrontendOAIF4D25B13",
+          "S3CanonicalUserId"
+         ]
+        }
        },
        "Resource": {
         "Fn::Join": [
@@ -354,6 +370,17 @@
    "DeletionPolicy": "Delete",
    "Metadata": {
     "aws:cdk:path": "EduSheetAiStack-dev/FrontendBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "FrontendOAIF4D25B13": {
+   "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+   "Properties": {
+    "CloudFrontOriginAccessIdentityConfig": {
+     "Comment": "OAI for edusheet-dev-s3-frontend"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/FrontendOAI/Resource"
    }
   },
   "GenerateFunctionServiceRole1CC0749E": {
@@ -841,8 +868,7 @@
     "ApiGatewayOPTIONSFAD6DF6F"
    ],
    "Metadata": {
-    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Deployment/Resource",
-    "aws:cdk:do-not-refactor": true
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Deployment/Resource"
    }
   },
   "ApiGatewayDeploymentStagedev5A0070C9": {
@@ -1327,20 +1353,6 @@
     "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/GET/Resource"
    }
   },
-  "CloudFrontDistributionOrigin1S3OriginAccessControlD0BFFDCA": {
-   "Type": "AWS::CloudFront::OriginAccessControl",
-   "Properties": {
-    "OriginAccessControlConfig": {
-     "Name": "EduSheetAiStackdevCloudFrontOrigin1S3OriginAccessControl04724FB8",
-     "OriginAccessControlOriginType": "s3",
-     "SigningBehavior": "always",
-     "SigningProtocol": "sigv4"
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "EduSheetAiStack-dev/CloudFrontDistribution/Origin1/S3OriginAccessControl/Resource"
-   }
-  },
   "CloudFrontDistributionBA64CE3A": {
    "Type": "AWS::CloudFront::Distribution",
    "Properties": {
@@ -1407,14 +1419,18 @@
         ]
        },
        "Id": "EduSheetAiStackdevCloudFrontDistributionOrigin127CE0413",
-       "OriginAccessControlId": {
-        "Fn::GetAtt": [
-         "CloudFrontDistributionOrigin1S3OriginAccessControlD0BFFDCA",
-         "Id"
-        ]
-       },
        "S3OriginConfig": {
-        "OriginAccessIdentity": ""
+        "OriginAccessIdentity": {
+         "Fn::Join": [
+          "",
+          [
+           "origin-access-identity/cloudfront/",
+           {
+            "Ref": "FrontendOAIF4D25B13"
+           }
+          ]
+         ]
+        }
        }
       },
       {
@@ -1462,7 +1478,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/6WST2/CMAzFP8t6DtnWctqtgHabQO1xmlCaGmZokyp2YKjqd5/Sguj+HdBOfvHLk3+OEst4OpUPd+pIE13uJxUWss1Z6b1QR1q3lMh25vUeWMw3ZlCvbVTjB5roKRrHwn1KZG+RHK6mnu0CKmBYFjvQTFEn/pV+E4O1shXq05VpON9ANgRyVgw1mBvBfoYvXDNF0IlK1UWpZPvsjWa0JnCO9QpcjURoTSdQ1bLNbAXB6Ot1t0F1gpK1IgImmYYiVINbxXBUJ9lmQJw22KevMtXaesNiAU1lTwEydEennNW2HzmIDMh6pyHwixfgd1sG86wu7nlIrzuhK+vLjbOGZbtAYoeF7zfMk6XDLQYIIJpbw85WIftHexzuOjH3xLb+beY3a+XsAUtwPXT/MmEZNNsvwEvPjedOGFuC3NH9IY7lY/jzO0KcOG8Ya5DZUD8BfDrORRADAAA="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/21QW47CMAw8C/8hy2MvUEBI+7EClQOgkJiuaZtUsQNCUe++SloEu+JrZjxjW/ZCzpczOZuoG021qacNnmQ8sNK1UDc6RlrKuAq6Bhbrsx3ZAHvXoL4/y6MexEoR9EI3Lpizd5Zl3Hms0BZaA9GXAcvIuXmdMtuUeZvYILHHU2B0NsVfdS8a1Z6MknEbrH4kXvkefItEOYuqlbF0DSQj4/OCgfWClkdFBEyySCBUh5ViuKm7jCUQFx3m7icttHbBsthA17h7CzY/6kUdWFV55UBKIBe8hvQg8Q3840wyR/ZwxyWZ971YB2LXvjP/WXvvrmjA5+n5hLQVbfVn8i5wF7gX1hmQF/q4LhZy/ilnkwshTn2wjC3IcsBfR7SiiCICAAA="
    },
    "Metadata": {
     "aws:cdk:path": "EduSheetAiStack-dev/CDKMetadata/Default"

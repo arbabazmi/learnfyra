@@ -45,15 +45,19 @@ export class EduSheetAiStack extends cdk.Stack {
       ],
     });
 
-    // ── S3: Frontend bucket (public static site via CloudFront) ──────────────
+    // ── S3: Frontend bucket (private, accessed via CloudFront OAI) ───────────
     const frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
       bucketName: `edusheet-${appEnv}-s3-frontend`,
       removalPolicy,
       autoDeleteObjects: !isProd,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      websiteIndexDocument: 'index.html',
-      websiteErrorDocument: 'index.html',
     });
+
+    // Origin Access Identity — grants CloudFront read access to the private bucket
+    const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
+      comment: `OAI for edusheet-${appEnv}-s3-frontend`,
+    });
+    frontendBucket.grantRead(oai);
 
     // ── SSM: Anthropic API key (pre-created manually as SecureString) ─────────
     const anthropicKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
@@ -162,7 +166,7 @@ export class EduSheetAiStack extends cdk.Stack {
       comment: `edusheet-${appEnv}-cloudfront`,
       defaultRootObject: 'index.html',
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
+        origin: new origins.S3Origin(frontendBucket, { originAccessIdentity: oai }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
