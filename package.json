@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
     "@aws-sdk/client-s3": "^3.1014.0",
+    "@aws-sdk/client-ssm": "^3.1015.0",
     "@aws-sdk/s3-request-presigner": "^3.1014.0",
     "docx": "8.5.0",
     "dotenv": "16.4.5",

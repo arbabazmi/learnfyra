@@ -9,6 +9,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { mockClient } from 'aws-sdk-client-mock';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
@@ -20,9 +21,10 @@ const sampleWorksheet = JSON.parse(
   readFileSync(join(__dirname, '../fixtures/sampleWorksheet.json'), 'utf-8')
 );
 
-// ─── S3 mock ──────────────────────────────────────────────────────────────────
+// ─── AWS SDK mocks ────────────────────────────────────────────────────────────
 
-const s3Mock = mockClient(S3Client);
+const s3Mock  = mockClient(S3Client);
+const ssmMock = mockClient(SSMClient);
 
 // ─── Module mocks (must all appear before any dynamic import()) ───────────────
 
@@ -82,7 +84,11 @@ const validBody = {
 
 beforeEach(() => {
   s3Mock.reset();
+  ssmMock.reset();
   jest.clearAllMocks();
+
+  // Set ANTHROPIC_API_KEY directly so loadApiKey() short-circuits without SSM
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
 
   // Restore default mock implementations after clearAllMocks
   generateWorksheet.mockResolvedValue(sampleWorksheet);
