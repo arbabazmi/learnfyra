@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop, staging]
+  push:
+    branches: [main, develop, staging]
+
+jobs:
+  test:
+    name: Test & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Coverage gate (≥80%)
+        run: |
+          npm run test:coverage -- \
+            --coverageThreshold='{"global":{"statements":80,"branches":80,"functions":80,"lines":80}}'
+
+  cdk-synth:
+    name: CDK Synth (dry run)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install CDK dependencies
+        run: cd infra/cdk && npm ci
+
+      - name: CDK synth — dev
+        run: cd infra/cdk && npx cdk synth --context env=dev
+        env:
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+          CDK_DEFAULT_REGION: 'us-east-1'
+
+      - name: CDK tests
+        run: cd infra/cdk && npm test

@@ -1,0 +1,1619 @@
+{
+ "Description": "EduSheet AI — dev environment",
+ "Resources": {
+  "WorksheetBucketC1FC0EA1": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "edusheet-dev-s3-worksheets",
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 7,
+       "Id": "expire-worksheets",
+       "Prefix": "worksheets/",
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     },
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/WorksheetBucket/Resource"
+   }
+  },
+  "WorksheetBucketPolicy44C6DA2C": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "WorksheetBucketC1FC0EA1"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:PutBucketPolicy",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WorksheetBucketC1FC0EA1",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WorksheetBucketC1FC0EA1",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/WorksheetBucket/Policy/Resource"
+   }
+  },
+  "WorksheetBucketAutoDeleteObjectsCustomResourceB55103CA": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "WorksheetBucketC1FC0EA1"
+    }
+   },
+   "DependsOn": [
+    "WorksheetBucketPolicy44C6DA2C"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/WorksheetBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-796929287685-us-east-1",
+     "S3Key": "b7f33614a69548d6bafe224d751a7ef238cde19097415e553fe8b63a4c8fd8a6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "WorksheetBucketC1FC0EA1"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.b7f33614a69548d6bafe224d751a7ef238cde19097415e553fe8b63a4c8fd8a6",
+    "aws:asset:property": "Code"
+   }
+  },
+  "FrontendBucketEFE2E19C": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketName": "edusheet-dev-s3-frontend",
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     },
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/FrontendBucket/Resource"
+   }
+  },
+  "FrontendBucketPolicy1DFF75D9": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "FrontendBucketEFE2E19C"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:PutBucketPolicy",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "FrontendBucketEFE2E19C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "FrontendBucketEFE2E19C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "CanonicalUser": {
+         "Fn::GetAtt": [
+          "FrontendOAIF4D25B13",
+          "S3CanonicalUserId"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "FrontendBucketEFE2E19C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "FrontendBucketEFE2E19C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Principal": {
+        "CanonicalUser": {
+         "Fn::GetAtt": [
+          "FrontendOAIF4D25B13",
+          "S3CanonicalUserId"
+         ]
+        }
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "FrontendBucketEFE2E19C",
+            "Arn"
+           ]
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/FrontendBucket/Policy/Resource"
+   }
+  },
+  "FrontendBucketAutoDeleteObjectsCustomResourceDB860B32": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "FrontendBucketEFE2E19C"
+    }
+   },
+   "DependsOn": [
+    "FrontendBucketPolicy1DFF75D9"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/FrontendBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "FrontendOAIF4D25B13": {
+   "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+   "Properties": {
+    "CloudFrontOriginAccessIdentityConfig": {
+     "Comment": "OAI for edusheet-dev-s3-frontend"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/FrontendOAI/Resource"
+   }
+  },
+  "GenerateFunctionServiceRole1CC0749E": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/GenerateFunction/ServiceRole/Resource"
+   }
+  },
+  "GenerateFunctionServiceRoleDefaultPolicyA29D0247": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "WorksheetBucketC1FC0EA1",
+            "Arn"
+           ]
+          },
+          "/*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WorksheetBucketC1FC0EA1",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WorksheetBucketC1FC0EA1",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "ssm:DescribeParameters",
+        "ssm:GetParameters",
+        "ssm:GetParameter",
+        "ssm:GetParameterHistory"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:us-east-1:796929287685:parameter/edusheet/dev/anthropic-api-key"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GenerateFunctionServiceRoleDefaultPolicyA29D0247",
+    "Roles": [
+     {
+      "Ref": "GenerateFunctionServiceRole1CC0749E"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/GenerateFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "GenerateFunctionD11A7A28": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "arm64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-796929287685-us-east-1",
+     "S3Key": "bc17009ec93ac0551871460c3618bd464d0a9c1c9af7f3de37b884100685083a.zip"
+    },
+    "Description": "edusheet-dev-lambda-generate — worksheet generation",
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "dev",
+      "WORKSHEET_BUCKET_NAME": {
+       "Ref": "WorksheetBucketC1FC0EA1"
+      },
+      "CLAUDE_MODEL": "claude-sonnet-4-20250514",
+      "SSM_PARAM_NAME": "/edusheet/dev/anthropic-api-key"
+     }
+    },
+    "FunctionName": "edusheet-dev-lambda-generate",
+    "Handler": "generateHandler.handler",
+    "MemorySize": 1024,
+    "Role": {
+     "Fn::GetAtt": [
+      "GenerateFunctionServiceRole1CC0749E",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ],
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "GenerateFunctionServiceRoleDefaultPolicyA29D0247",
+    "GenerateFunctionServiceRole1CC0749E"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/GenerateFunction/Resource",
+    "aws:asset:path": "asset.bc17009ec93ac0551871460c3618bd464d0a9c1c9af7f3de37b884100685083a",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "DownloadFunctionServiceRole54440FCD": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/DownloadFunction/ServiceRole/Resource"
+   }
+  },
+  "DownloadFunctionServiceRoleDefaultPolicy47891FCE": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WorksheetBucketC1FC0EA1",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WorksheetBucketC1FC0EA1",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "WorksheetBucketC1FC0EA1",
+            "Arn"
+           ]
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "DownloadFunctionServiceRoleDefaultPolicy47891FCE",
+    "Roles": [
+     {
+      "Ref": "DownloadFunctionServiceRole54440FCD"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/DownloadFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "DownloadFunction5EECE48A": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "arm64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-796929287685-us-east-1",
+     "S3Key": "bc17009ec93ac0551871460c3618bd464d0a9c1c9af7f3de37b884100685083a.zip"
+    },
+    "Description": "edusheet-dev-lambda-download — presigned URL generation",
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "dev",
+      "WORKSHEET_BUCKET_NAME": {
+       "Ref": "WorksheetBucketC1FC0EA1"
+      }
+     }
+    },
+    "FunctionName": "edusheet-dev-lambda-download",
+    "Handler": "downloadHandler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "DownloadFunctionServiceRole54440FCD",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ],
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "DownloadFunctionServiceRoleDefaultPolicy47891FCE",
+    "DownloadFunctionServiceRole54440FCD"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/DownloadFunction/Resource",
+    "aws:asset:path": "asset.bc17009ec93ac0551871460c3618bd464d0a9c1c9af7f3de37b884100685083a",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ApiGateway11E7F47B": {
+   "Type": "AWS::ApiGateway::RestApi",
+   "Properties": {
+    "Description": "EduSheet AI API — dev",
+    "Name": "edusheet-dev-apigw",
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Resource"
+   }
+  },
+  "ApiGatewayCloudWatchRoleA41EF9FE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "apigateway.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/CloudWatchRole/Resource"
+   }
+  },
+  "ApiGatewayAccountBC7F34C1": {
+   "Type": "AWS::ApiGateway::Account",
+   "Properties": {
+    "CloudWatchRoleArn": {
+     "Fn::GetAtt": [
+      "ApiGatewayCloudWatchRoleA41EF9FE",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "ApiGateway11E7F47B"
+   ],
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Account"
+   }
+  },
+  "ApiGatewayDeploymentA26796E85d5dc76def938227496bd457da780cc4": {
+   "Type": "AWS::ApiGateway::Deployment",
+   "Properties": {
+    "Description": "EduSheet AI API — dev",
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "DependsOn": [
+    "ApiGatewayapidownloadGETD81A1C37",
+    "ApiGatewayapidownloadOPTIONS7DCFBF6F",
+    "ApiGatewayapidownload2E89E99F",
+    "ApiGatewayapigenerateOPTIONSD4484B7A",
+    "ApiGatewayapigeneratePOSTD5E0D13D",
+    "ApiGatewayapigenerate264652CD",
+    "ApiGatewayapiOPTIONSA7CF6F65",
+    "ApiGatewayapiBD54C415",
+    "ApiGatewayOPTIONSFAD6DF6F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Deployment/Resource"
+   }
+  },
+  "ApiGatewayDeploymentStagedev5A0070C9": {
+   "Type": "AWS::ApiGateway::Stage",
+   "Properties": {
+    "DeploymentId": {
+     "Ref": "ApiGatewayDeploymentA26796E85d5dc76def938227496bd457da780cc4"
+    },
+    "MethodSettings": [
+     {
+      "DataTraceEnabled": false,
+      "HttpMethod": "*",
+      "LoggingLevel": "INFO",
+      "MetricsEnabled": true,
+      "ResourcePath": "/*",
+      "ThrottlingBurstLimit": 20,
+      "ThrottlingRateLimit": 10
+     }
+    ],
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    },
+    "StageName": "dev",
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "DependsOn": [
+    "ApiGatewayAccountBC7F34C1"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/DeploymentStage.dev/Resource"
+   }
+  },
+  "ApiGatewayOPTIONSFAD6DF6F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Fn::GetAtt": [
+      "ApiGateway11E7F47B",
+      "RootResourceId"
+     ]
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/OPTIONS/Resource"
+   }
+  },
+  "ApiGatewayapiBD54C415": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiGateway11E7F47B",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "api",
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/Resource"
+   }
+  },
+  "ApiGatewayapiOPTIONSA7CF6F65": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiGatewayapiBD54C415"
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/OPTIONS/Resource"
+   }
+  },
+  "ApiGatewayapigenerate264652CD": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiGatewayapiBD54C415"
+    },
+    "PathPart": "generate",
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/generate/Resource"
+   }
+  },
+  "ApiGatewayapigenerateOPTIONSD4484B7A": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiGatewayapigenerate264652CD"
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/generate/OPTIONS/Resource"
+   }
+  },
+  "ApiGatewayapigeneratePOSTApiPermissionEduSheetAiStackdevApiGateway8F81B070POSTapigenerate3CBD5524": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "GenerateFunctionD11A7A28",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:796929287685:",
+       {
+        "Ref": "ApiGateway11E7F47B"
+       },
+       "/",
+       {
+        "Ref": "ApiGatewayDeploymentStagedev5A0070C9"
+       },
+       "/POST/api/generate"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/generate/POST/ApiPermission.EduSheetAiStackdevApiGateway8F81B070.POST..api.generate"
+   }
+  },
+  "ApiGatewayapigeneratePOSTApiPermissionTestEduSheetAiStackdevApiGateway8F81B070POSTapigenerate44F2586D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "GenerateFunctionD11A7A28",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:796929287685:",
+       {
+        "Ref": "ApiGateway11E7F47B"
+       },
+       "/test-invoke-stage/POST/api/generate"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/generate/POST/ApiPermission.Test.EduSheetAiStackdevApiGateway8F81B070.POST..api.generate"
+   }
+  },
+  "ApiGatewayapigeneratePOSTD5E0D13D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "GenerateFunctionD11A7A28",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApiGatewayapigenerate264652CD"
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/generate/POST/Resource"
+   }
+  },
+  "ApiGatewayapidownload2E89E99F": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiGatewayapiBD54C415"
+    },
+    "PathPart": "download",
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/Resource"
+   }
+  },
+  "ApiGatewayapidownloadOPTIONS7DCFBF6F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiGatewayapidownload2E89E99F"
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/OPTIONS/Resource"
+   }
+  },
+  "ApiGatewayapidownloadGETApiPermissionEduSheetAiStackdevApiGateway8F81B070GETapidownload5041FB10": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DownloadFunction5EECE48A",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:796929287685:",
+       {
+        "Ref": "ApiGateway11E7F47B"
+       },
+       "/",
+       {
+        "Ref": "ApiGatewayDeploymentStagedev5A0070C9"
+       },
+       "/GET/api/download"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/GET/ApiPermission.EduSheetAiStackdevApiGateway8F81B070.GET..api.download"
+   }
+  },
+  "ApiGatewayapidownloadGETApiPermissionTestEduSheetAiStackdevApiGateway8F81B070GETapidownloadEAA645BC": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DownloadFunction5EECE48A",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:796929287685:",
+       {
+        "Ref": "ApiGateway11E7F47B"
+       },
+       "/test-invoke-stage/GET/api/download"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/GET/ApiPermission.Test.EduSheetAiStackdevApiGateway8F81B070.GET..api.download"
+   }
+  },
+  "ApiGatewayapidownloadGETD81A1C37": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DownloadFunction5EECE48A",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApiGatewayapidownload2E89E99F"
+    },
+    "RestApiId": {
+     "Ref": "ApiGateway11E7F47B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/ApiGateway/Default/api/download/GET/Resource"
+   }
+  },
+  "CloudFrontDistributionBA64CE3A": {
+   "Type": "AWS::CloudFront::Distribution",
+   "Properties": {
+    "DistributionConfig": {
+     "CacheBehaviors": [
+      {
+       "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT",
+        "PATCH",
+        "POST",
+        "DELETE"
+       ],
+       "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+       "CachedMethods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+       ],
+       "Compress": true,
+       "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+       "PathPattern": "/api/*",
+       "TargetOriginId": "EduSheetAiStackdevCloudFrontDistributionOrigin2E38AA1A5",
+       "ViewerProtocolPolicy": "https-only"
+      }
+     ],
+     "Comment": "edusheet-dev-cloudfront",
+     "CustomErrorResponses": [
+      {
+       "ErrorCachingMinTTL": 0,
+       "ErrorCode": 403,
+       "ResponseCode": 200,
+       "ResponsePagePath": "/index.html"
+      },
+      {
+       "ErrorCachingMinTTL": 0,
+       "ErrorCode": 404,
+       "ResponseCode": 200,
+       "ResponsePagePath": "/index.html"
+      }
+     ],
+     "DefaultCacheBehavior": {
+      "AllowedMethods": [
+       "GET",
+       "HEAD"
+      ],
+      "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+      "Compress": true,
+      "TargetOriginId": "EduSheetAiStackdevCloudFrontDistributionOrigin127CE0413",
+      "ViewerProtocolPolicy": "redirect-to-https"
+     },
+     "DefaultRootObject": "index.html",
+     "Enabled": true,
+     "HttpVersion": "http2",
+     "IPV6Enabled": true,
+     "Origins": [
+      {
+       "DomainName": {
+        "Fn::GetAtt": [
+         "FrontendBucketEFE2E19C",
+         "RegionalDomainName"
+        ]
+       },
+       "Id": "EduSheetAiStackdevCloudFrontDistributionOrigin127CE0413",
+       "S3OriginConfig": {
+        "OriginAccessIdentity": {
+         "Fn::Join": [
+          "",
+          [
+           "origin-access-identity/cloudfront/",
+           {
+            "Ref": "FrontendOAIF4D25B13"
+           }
+          ]
+         ]
+        }
+       }
+      },
+      {
+       "CustomOriginConfig": {
+        "OriginProtocolPolicy": "https-only",
+        "OriginSSLProtocols": [
+         "TLSv1.2"
+        ]
+       },
+       "DomainName": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Ref": "ApiGateway11E7F47B"
+          },
+          ".execute-api.us-east-1.amazonaws.com"
+         ]
+        ]
+       },
+       "Id": "EduSheetAiStackdevCloudFrontDistributionOrigin2E38AA1A5",
+       "OriginPath": "/dev"
+      }
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "Env",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "cdk"
+     },
+     {
+      "Key": "Project",
+      "Value": "edusheet"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/CloudFrontDistribution/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/21QW47CMAw8C/8hy2MvUEBI+7EClQOgkJiuaZtUsQNCUe++SloEu+JrZjxjW/ZCzpczOZuoG021qacNnmQ8sNK1UDc6RlrKuAq6Bhbrsx3ZAHvXoL4/y6MexEoR9EI3Lpizd5Zl3Hms0BZaA9GXAcvIuXmdMtuUeZvYILHHU2B0NsVfdS8a1Z6MknEbrH4kXvkefItEOYuqlbF0DSQj4/OCgfWClkdFBEyySCBUh5ViuKm7jCUQFx3m7icttHbBsthA17h7CzY/6kUdWFV55UBKIBe8hvQg8Q3840wyR/ZwxyWZ971YB2LXvjP/WXvvrmjA5+n5hLQVbfVn8i5wF7gX1hmQF/q4LhZy/ilnkwshTn2wjC3IcsBfR7SiiCICAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "EduSheetAiStack-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ApiGatewayEndpoint5AA8EC3A": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "ApiGateway11E7F47B"
+      },
+      ".execute-api.us-east-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "ApiGatewayDeploymentStagedev5A0070C9"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "CloudFrontUrl": {
+   "Description": "CloudFront distribution URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Fn::GetAtt": [
+        "CloudFrontDistributionBA64CE3A",
+        "DomainName"
+       ]
+      }
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "edusheet-dev-cloudfront-url"
+   }
+  },
+  "DistributionId": {
+   "Description": "CloudFront distribution ID (for cache invalidation)",
+   "Value": {
+    "Ref": "CloudFrontDistributionBA64CE3A"
+   },
+   "Export": {
+    "Name": "edusheet-dev-cloudfront-id"
+   }
+  },
+  "ApiGatewayUrl": {
+   "Description": "API Gateway URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "ApiGateway11E7F47B"
+      },
+      ".execute-api.us-east-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "ApiGatewayDeploymentStagedev5A0070C9"
+      },
+      "/"
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "edusheet-dev-apigw-url"
+   }
+  },
+  "WorksheetBucketName": {
+   "Description": "Worksheet S3 bucket name",
+   "Value": {
+    "Ref": "WorksheetBucketC1FC0EA1"
+   },
+   "Export": {
+    "Name": "edusheet-dev-s3-worksheets-name"
+   }
+  },
+  "FrontendBucketName": {
+   "Description": "Frontend S3 bucket name",
+   "Value": {
+    "Ref": "FrontendBucketEFE2E19C"
+   },
+   "Export": {
+    "Name": "edusheet-dev-s3-frontend-name"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

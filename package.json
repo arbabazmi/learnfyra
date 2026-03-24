@@ -17,12 +17,16 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
+    "@aws-sdk/client-s3": "^3.1014.0",
+    "@aws-sdk/s3-request-presigner": "^3.1014.0",
     "docx": "8.5.0",
     "dotenv": "16.4.5",
     "inquirer": "9.3.7",
     "puppeteer": "22.15.0"
   },
   "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "aws-sdk-client-mock-jest": "^4.1.0",
     "jest": "29.7.0"
   },
   "jest": {
