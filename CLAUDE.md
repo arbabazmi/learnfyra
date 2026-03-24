@@ -32,15 +32,17 @@ CI/CD: GitHub Actions
 - infra/cdk/        → AWS CDK stack (TypeScript)
 - .github/workflows/→ CI/CD pipelines (ci, deploy-dev, deploy-staging, deploy-prod)
 
-### NEEDS WORK
-- frontend/         → configure for S3 static hosting + CloudFront URLs (local dev works via server.js)
+### NEEDS WORK (deferred — local-first, AWS later)
+- infra/cdk/        → update CDK stack with solve/submit Lambda functions (AFTER local feature is complete)
+- frontend/         → configure for S3 static hosting + CloudFront URLs (AFTER local feature is complete)
 
 ### NOT YET BUILT — Online Solve & Answer Validation (feature/online-solve)
 - frontend/solve.html              → Interactive solve page (renders questions, timer, input fields)
 - frontend/js/solve.js             → Solve page logic (timer, answer capture, submit, scoring)
 - frontend/css/solve.css           → Solve page styles (or extend styles.css)
-- backend/handlers/submitHandler.js→ POST /api/submit — validates student answers against answer key
-- backend/handlers/solveHandler.js → GET /api/solve/{id} — returns worksheet questions (no answers)
+- server.js routes                 → GET /api/solve/:id and POST /api/submit added to Express dev server
+- backend/handlers/submitHandler.js→ POST /api/submit Lambda handler (LATER — after local feature is complete)
+- backend/handlers/solveHandler.js → GET /api/solve/{id} Lambda handler (LATER — after local feature is complete)
 - src/solve/                       → scoring engine, answer comparator, result builder
 - src/solve/scorer.js              → compares student answers to correct answers, calculates score
 - src/solve/resultBuilder.js       → builds result HTML/JSON with score, correct/incorrect breakdown
@@ -235,11 +237,13 @@ worksheets-local/{uuid}/
 
 ### New API Endpoints
 ```
-GET  /api/solve/{worksheetId}     → returns questions only (no answers)
+GET  /api/solve/:worksheetId      → returns questions only (no answers)
 POST /api/submit                  → validates answers, returns score
 ```
+Local: Express routes in server.js call the handlers directly.
+AWS (later): API Gateway routes to Lambda functions.
 
-### New Lambda Functions (IaC agent adds to CDK)
+### Lambda Functions (NOT DEPLOYING YET — code is Lambda-ready, deploy later)
 ```
 edusheet-solve    GET  /api/solve/{id}  10s  128MB
 edusheet-submit   POST /api/submit      15s  256MB
@@ -248,13 +252,16 @@ edusheet-submit   POST /api/submit      15s  256MB
 ### File Structure for Online Solve
 ```
 frontend/
-  solve.html                  ← solve page (standalone HTML served by CloudFront/Express)
+  solve.html                  ← solve page (served by Express dev server)
   js/solve.js                 ← timer, answer capture, submit, results rendering
   css/solve.css               ← solve page styles (matches main theme)
 
+server.js                       ← ADD routes: GET /api/solve/:id, POST /api/submit
+                                  (wraps handlers same pattern as existing /api/generate)
+
 backend/handlers/
-  solveHandler.js             ← GET /api/solve/{id} — reads solve-data.json, strips answers
-  submitHandler.js            ← POST /api/submit — reads solve-data.json, scores answers
+  solveHandler.js             ← Lambda-compatible handler (works local + AWS)
+  submitHandler.js            ← Lambda-compatible handler (works local + AWS)
 
 src/solve/
   scorer.js                   ← answer comparison logic per question type
@@ -262,8 +269,9 @@ src/solve/
 
 tests/unit/
   scorer.test.js              ← scoring engine unit tests
-  submitHandler.test.js       ← submit handler tests
+  resultBuilder.test.js       ← result builder tests
   solveHandler.test.js        ← solve handler tests
+  submitHandler.test.js       ← submit handler tests
 tests/integration/
   solve.test.js               ← full solve flow integration test
 ```
@@ -838,14 +846,15 @@ Phase 1 — Spec (BA leads):
   BA   → writes full feature spec, acceptance criteria, scoring rules
   DBA  → confirms worksheet storage schema, solve-data.json format
 
-Phase 2 — Build (BA advises DEV, parallel tracks):
+Phase 2 — Build (BA advises DEV):
   BA tells DEV:
     Track A: "Build src/solve/scorer.js and resultBuilder.js per this spec"
     Track B: "Build backend/handlers/solveHandler.js and submitHandler.js"
-    Track C: "Build frontend/solve.html, js/solve.js, css/solve.css"
-  BA tells IaC:
-    "Add GET /api/solve/{id} and POST /api/submit routes to CDK stack"
-  DEV + IaC work in parallel
+             (Lambda-compatible — same pattern as generateHandler.js)
+    Track C: "Wire handlers into server.js Express routes for local dev"
+    Track D: "Build frontend/solve.html, js/solve.js, css/solve.css"
+    Track E: "Wire generate flow to save solve-data.json to worksheets-local/"
+  NO IaC or deploy in this phase — test everything on localhost:3000
 
 Phase 3 — Verify (BA advises QA):
   BA tells QA:
@@ -853,11 +862,19 @@ Phase 3 — Verify (BA advises QA):
     "Test scoring for every question type"
     "Test timed mode auto-submit"
     "Test boundary: 0 answers, all correct, all wrong"
+    "Test full local flow: generate → solve → submit → score"
+    "Test handlers with mock Lambda events (same as generateHandler tests)"
   QA writes and runs tests, reports results to BA
 
-Phase 4 — Ship:
+Phase 4 — Local Complete:
   BA reviews QA results → confirms "done" or sends DEV back to fix
-  DevOps → deploys to dev, QA runs smoke tests
+  All tests pass → feature works end-to-end on localhost:3000
+  Handlers are Lambda-ready — no code changes needed for AWS deploy
+
+Phase 5 — AWS Deploy (LATER, separate branch):
+  IaC → adds solveHandler + submitHandler Lambda functions to CDK stack
+  DevOps → deploys to dev → staging → prod
+  (handlers already written — just wiring infrastructure)
 ```
 
 ---
