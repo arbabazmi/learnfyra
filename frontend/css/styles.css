@@ -78,7 +78,7 @@
   --shadow-btn-coral: 0 4px 12px rgb(249 115 22 / 0.40);
 
   /* Typography */
-  --font:         'Nunito', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font:         'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Nunito', var(--font);
   --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
 
