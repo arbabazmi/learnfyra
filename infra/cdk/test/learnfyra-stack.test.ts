@@ -104,8 +104,6 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('dev stack uses DESTROY removal policy (autoDeleteObjects Lambda present)', () => {
-    // CDK shares a single custom resource Lambda for all autoDeleteObjects buckets.
-    // So: generate + download + 1 shared autoDelete = 3 Lambdas minimum.
     const lambdaResources = template.findResources('AWS::Lambda::Function');
     expect(Object.keys(lambdaResources).length).toBeGreaterThanOrEqual(3);
   });
@@ -138,7 +136,6 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('generate Lambda environment has WORKSHEET_BUCKET_NAME set', () => {
-    // WORKSHEET_BUCKET_NAME resolves to a CloudFormation Ref at synth time, not a literal string.
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'learnfyra-dev-lambda-generate',
       Environment: {
@@ -150,7 +147,6 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('dev generate Lambda does not have X-Ray tracing enabled', () => {
-    // When tracing=DISABLED, CDK omits TracingConfig entirely from the template.
     const lambdas = template.findResources('AWS::Lambda::Function', {
       Properties: { FunctionName: 'learnfyra-dev-lambda-generate' },
     });
