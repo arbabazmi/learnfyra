@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Dashboard — Learnfyra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <link rel="stylesheet" href="../css/rewards.css" />
+</head>
+<body>
+
+  <div class="bg-orb bg-orb--one" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb--two" aria-hidden="true"></div>
+
+  <!-- ============================================================
+       Site Header
+       ============================================================ -->
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a href="/" class="logo" aria-label="Learnfyra home">
+          <span class="logo-icon" aria-hidden="true">&#9998;</span>
+          <span class="logo-text">Learn<span class="logo-accent">fyra</span></span>
+        </a>
+        <p class="header-tagline">USA curriculum-aligned worksheets for Grades 1–10</p>
+        <div class="header-auth" id="headerAuth">
+          <!-- injected by inline script below -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       Dashboard Main
+       ============================================================ -->
+  <main class="main-content" id="studentDashboardMain" aria-label="Student dashboard">
+    <div class="dashboard-container">
+
+      <!-- Welcome Banner -->
+      <div class="dashboard-welcome reveal" aria-label="Welcome section">
+        <div class="welcome-inner">
+          <div class="welcome-avatar" id="welcomeAvatar" aria-hidden="true">S</div>
+          <div class="welcome-text">
+            <h1 class="welcome-heading">
+              Welcome back, <span id="welcomeName">Student</span>!
+            </h1>
+            <p class="welcome-sub">
+              <span class="role-badge role-badge--student">Student</span>
+              &nbsp; Keep practicing — every worksheet makes you sharper.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div
+        class="stat-cards reveal"
+        aria-label="Your statistics"
+        role="list"
+      >
+        <div class="stat-card stat-card--neutral" role="listitem">
+          <div class="stat-number" id="statTotal">—</div>
+          <div class="stat-label">Worksheets Completed</div>
+        </div>
+        <div class="stat-card stat-card--neutral" id="statCardAvg" role="listitem">
+          <div class="stat-number" id="statAvg">—</div>
+          <div class="stat-label">Average Score</div>
+        </div>
+        <div class="stat-card stat-card--great" role="listitem">
+          <div class="stat-number" id="statBest">—</div>
+          <div class="stat-label">Best Score</div>
+        </div>
+        <div class="stat-card stat-card--ok" role="listitem">
+          <div class="stat-number" id="statStreak">—</div>
+          <div class="stat-label">Day Streak</div>
+        </div>
+      </div>
+
+      <!-- Recent Attempts -->
+      <div class="dashboard-card reveal" aria-label="Recent worksheet attempts">
+        <h2 class="section-heading">Recent Attempts</h2>
+        <div id="attemptHistoryList" aria-live="polite" aria-label="Attempt history">
+          <!-- Rendered by dashboard.js -->
+          <div class="empty-state">
+            <span class="empty-state-icon" aria-hidden="true">&#128196;</span>
+            Loading your attempts&hellip;
+          </div>
+        </div>
+      </div>
+
+      <!-- Subject Breakdown -->
+      <div class="dashboard-card reveal" aria-label="Performance by subject">
+        <h2 class="section-heading">Subject Breakdown</h2>
+        <div id="subjectBreakdown" aria-live="polite">
+          <!-- Rendered by dashboard.js -->
+          <p class="empty-state" style="padding:var(--space-6)">Loading&hellip;</p>
+        </div>
+      </div>
+
+      <!-- Badge Collection -->
+      <section class="card reveal" aria-label="Your badges">
+        <h2 class="card-title">&#127885; My Badges</h2>
+        <div id="badgeCollection"></div>
+      </section>
+
+      <!-- Practice Streak -->
+      <section class="card reveal" aria-label="Your streak">
+        <h2 class="card-title">&#128293; Practice Streak</h2>
+        <div id="streakDisplay"></div>
+      </section>
+
+      <!-- Dashboard Actions -->
+      <div class="dashboard-actions reveal" role="group" aria-label="Dashboard actions">
+        <a href="/" class="btn btn--primary">
+          &#9997;&nbsp; Practice More
+        </a>
+        <button
+          type="button"
+          class="btn btn--secondary"
+          aria-disabled="true"
+          title="Coming soon — view full attempt history"
+        >
+          View All History
+        </button>
+      </div>
+
+    </div><!-- /.dashboard-container -->
+  </main>
+
+  <!-- ============================================================
+       Footer
+       ============================================================ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p class="footer-text">Learnfyra &mdash; Aligned to CCSS, NGSS, and NHES standards</p>
+    </div>
+  </footer>
+
+  <!-- Inline auth header injection (no module dependency) -->
+  <script>
+    (function() {
+      const token = localStorage.getItem('auth_token');
+      const user  = token ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null;
+      const el    = document.getElementById('headerAuth');
+      if (!el) return;
+      if (user) {
+        el.innerHTML =
+          '<span style="font-size:0.875rem;font-weight:600;color:var(--text-muted)">Hi, ' +
+          (user.displayName || user.email) +
+          '</span>' +
+          '&nbsp;<button onclick="localStorage.removeItem(\'auth_token\');localStorage.removeItem(\'auth_user\');location.href=\'/login.html\';" style="font-size:0.75rem;padding:0.25rem 0.75rem;" class="btn btn--secondary">Sign Out</button>';
+      } else {
+        // Not authenticated — module script will redirect, but show link as fallback
+        el.innerHTML = '<a href="/login.html" class="btn btn--secondary" style="font-size:0.875rem;padding:0.4rem 1rem;">Sign In</a>';
+      }
+    })();
+  </script>
+
+  <script type="module">
+    import { loadStudentDashboard } from '../js/dashboard.js';
+    loadStudentDashboard();
+  </script>
+</body>
+</html>

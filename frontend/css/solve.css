@@ -6,21 +6,6 @@
    ============================================================= */
 
 /* ---------------------------------------------------------------
-   Solve button (also used in generator results page)
-   --------------------------------------------------------------- */
-.btn--solve {
-  background: linear-gradient(145deg, var(--color-coral) 0%, var(--color-coral-dark) 100%);
-  color: #fff;
-  box-shadow: var(--shadow-btn-coral);
-}
-
-.btn--solve:hover {
-  background: linear-gradient(145deg, #EA580C 0%, #C2410C 100%);
-  box-shadow: 0 6px 20px rgb(249 115 22 / 0.50);
-  transform: translateY(-1px);
-}
-
-/* ---------------------------------------------------------------
    Screen-reader utility
    --------------------------------------------------------------- */
 .sr-only {
@@ -592,6 +577,14 @@
   z-index: 1;
 }
 
+.score-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: relative;
+  z-index: 1;
+}
+
 /* ---------------------------------------------------------------
    Results — Per-question Breakdown
    --------------------------------------------------------------- */
@@ -685,6 +678,11 @@
 
 .result-correct-value {
   color: var(--color-leaf-dark);
+  font-weight: 700;
+}
+
+.result-student-value {
+  color: var(--color-ink);
   font-weight: 700;
 }
 

@@ -24,9 +24,9 @@ const LOCAL_FILES_DIR = join(__dirname, 'worksheets-local');
 
 // ── Validate required env vars ────────────────────────────────────────────────
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('\nERROR: ANTHROPIC_API_KEY is not set.');
-  console.error('Copy .env.example to .env and add your Anthropic API key.\n');
-  process.exit(1);
+  console.warn('\nWARNING: ANTHROPIC_API_KEY is not set.');
+  console.warn('Copy .env.example to .env and add your Anthropic API key.');
+  console.warn('Auth, student, class, and analytics routes will still work.\n');
 }
 
 mkdirSync(LOCAL_FILES_DIR, { recursive: true });
@@ -146,6 +146,14 @@ app.get('/api/download', (req, res) => {
   res.json({ downloadUrl });
 });
 
+// ── OPTIONS preflight for all /api/* routes ───────────────────────────────────
+app.options('/api/*', (req, res) => {
+  res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.sendStatus(200);
+});
+
 // ── Lazy-load solve/submit handlers ───────────────────────────────────────────
 let _solveHandler;
 let _submitHandler;
@@ -201,6 +209,280 @@ app.post('/api/submit', async (req, res) => {
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('submit route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Lazy-load Phase 3 handlers ────────────────────────────────────────────────
+let _authHandler;
+let _studentHandler;
+let _progressHandler;
+let _classHandler;
+let _analyticsHandler;
+
+/**
+ * Returns the authHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getAuthHandler = async () => {
+  if (!_authHandler) {
+    const mod = await import('./backend/handlers/authHandler.js');
+    _authHandler = mod.handler;
+  }
+  return _authHandler;
+};
+
+/**
+ * Returns the studentHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getStudentHandler = async () => {
+  if (!_studentHandler) {
+    const mod = await import('./backend/handlers/studentHandler.js');
+    _studentHandler = mod.handler;
+  }
+  return _studentHandler;
+};
+
+/**
+ * Returns the progressHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getProgressHandler = async () => {
+  if (!_progressHandler) {
+    const mod = await import('./backend/handlers/progressHandler.js');
+    _progressHandler = mod.handler;
+  }
+  return _progressHandler;
+};
+
+/**
+ * Returns the classHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getClassHandler = async () => {
+  if (!_classHandler) {
+    const mod = await import('./backend/handlers/classHandler.js');
+    _classHandler = mod.handler;
+  }
+  return _classHandler;
+};
+
+/**
+ * Returns the analyticsHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getAnalyticsHandler = async () => {
+  if (!_analyticsHandler) {
+    const mod = await import('./backend/handlers/analyticsHandler.js');
+    _analyticsHandler = mod.handler;
+  }
+  return _analyticsHandler;
+};
+
+// ── POST /api/auth/register ───────────────────────────────────────────────────
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/register', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/login ──────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/login', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/logout ─────────────────────────────────────────────────────
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/logout', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/student/profile ──────────────────────────────────────────────────
+app.get('/api/student/profile', async (req, res) => {
+  try {
+    const fn = await getStudentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/student/profile', headers: req.headers, body: null },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/student/join-class ──────────────────────────────────────────────
+app.post('/api/student/join-class', async (req, res) => {
+  try {
+    const fn = await getStudentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/student/join-class', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/progress/save ───────────────────────────────────────────────────
+app.post('/api/progress/save', async (req, res) => {
+  try {
+    const fn = await getProgressHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/progress/save', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('progress route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/progress/history ─────────────────────────────────────────────────
+app.get('/api/progress/history', async (req, res) => {
+  try {
+    const fn = await getProgressHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/progress/history', headers: req.headers, body: null },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('progress route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/class/create ────────────────────────────────────────────────────
+app.post('/api/class/create', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/class/create', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/class/:id/students ───────────────────────────────────────────────
+app.get('/api/class/:id/students', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/class/${req.params.id}/students`, headers: req.headers, body: null, pathParameters: { id: req.params.id } },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/analytics/class/:id ─────────────────────────────────────────────
+app.get('/api/analytics/class/:id', async (req, res) => {
+  try {
+    const fn = await getAnalyticsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/analytics/class/${req.params.id}`, headers: req.headers, body: null, pathParameters: { id: req.params.id } },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('analytics route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Lazy-load rewardsHandler ──────────────────────────────────────────────────
+let _rewardsHandler;
+
+/**
+ * Returns the rewardsHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getRewardsHandler = async () => {
+  if (!_rewardsHandler) {
+    const mod = await import('./backend/handlers/rewardsHandler.js');
+    _rewardsHandler = mod.handler;
+  }
+  return _rewardsHandler;
+};
+
+// ── GET /api/rewards/student/:id ──────────────────────────────────────────────
+app.get('/api/rewards/student/:id', async (req, res) => {
+  try {
+    const fn = await getRewardsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/rewards/student/${req.params.id}`, headers: req.headers, pathParameters: { id: req.params.id }, body: null },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('rewards route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/rewards/class/:id ────────────────────────────────────────────────
+app.get('/api/rewards/class/:id', async (req, res) => {
+  try {
+    const fn = await getRewardsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/rewards/class/${req.params.id}`, headers: req.headers, pathParameters: { id: req.params.id }, body: null },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('rewards class route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
   }

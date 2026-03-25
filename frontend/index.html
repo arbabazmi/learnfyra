@@ -6,7 +6,7 @@
   <title>Learnfyra — AI Worksheet Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/solve.css" />
 </head>
@@ -23,6 +23,9 @@
           <span class="logo-text">Learn<span class="logo-accent">fyra</span></span>
         </div>
         <p class="header-tagline">USA curriculum-aligned worksheets for Grades 1–10</p>
+        <div class="header-auth" id="headerAuth">
+          <!-- JS will inject: "Hi, Name" or "Sign In" button -->
+        </div>
       </div>
     </div>
   </header>
@@ -223,6 +226,19 @@
     </div>
   </footer>
 
+  <script>
+    (function() {
+      const token = localStorage.getItem('auth_token');
+      const user = token ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null;
+      const el = document.getElementById('headerAuth');
+      if (!el) return;
+      if (user) {
+        el.innerHTML = '<span style="font-size:0.875rem;font-weight:600;color:var(--text-muted)">Hi, ' + (user.displayName || user.email) + '</span> &nbsp;<button onclick="localStorage.removeItem(\'auth_token\');localStorage.removeItem(\'auth_user\');location.reload();" style="font-size:0.75rem;padding:0.25rem 0.75rem;" class="btn btn--secondary">Sign Out</button>';
+      } else {
+        el.innerHTML = '<a href="/login.html" class="btn btn--secondary" style="font-size:0.875rem;padding:0.4rem 1rem;">Sign In</a>';
+      }
+    })();
+  </script>
   <script src="js/app.js" defer></script>
 </body>
 </html>

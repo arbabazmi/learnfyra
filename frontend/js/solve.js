@@ -15,6 +15,18 @@
 'use strict';
 
 /* =============================================================
+   Rewards — lazy import so rewards.js is only loaded when needed
+   ============================================================= */
+let _renderRewardSummary;
+async function getRenderRewardSummary() {
+  if (!_renderRewardSummary) {
+    const mod = await import('./rewards.js');
+    _renderRewardSummary = mod.renderRewardSummary;
+  }
+  return _renderRewardSummary;
+}
+
+/* =============================================================
    State
    ============================================================= */
 let worksheetData = null;   // full response from /api/solve/:id
@@ -22,6 +34,7 @@ let timerInterval  = null;  // setInterval handle for countdown
 let secondsLeft    = 0;     // remaining seconds in timed mode
 let startTime      = null;  // Date.now() when solving began
 let isTimed        = false; // whether timed mode is active
+let isGuestSolve   = false; // true when student bypassed the auth gate
 
 /* =============================================================
    DOM References
@@ -29,6 +42,7 @@ let isTimed        = false; // whether timed mode is active
 const loadingSection    = document.getElementById('loadingSection');
 const errorSection      = document.getElementById('errorSection');
 const errorMessage      = document.getElementById('errorMessage');
+const authGateSection   = document.getElementById('authGateSection');
 const modeSection       = document.getElementById('modeSection');
 const modeTitleText     = document.getElementById('modeTitleText');
 const modeSubtitleText  = document.getElementById('modeSubtitleText');
@@ -119,6 +133,14 @@ async function loadWorksheet() {
       timedDesc.textContent = `${formatTime(data.timerSeconds)} countdown`;
     }
 
+    // Auth gate: require a stored token before showing mode selection
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      loadingSection.hidden   = true;
+      authGateSection.hidden  = false;
+      return;
+    }
+
     loadingSection.hidden = true;
     modeSection.hidden    = false;
 
@@ -133,6 +155,16 @@ async function loadWorksheet() {
 
 timedModeBtn.addEventListener('click', () => startSolving(true));
 untimedModeBtn.addEventListener('click', () => startSolving(false));
+
+// Auth gate — guest bypass
+const continueAsGuestBtn = document.getElementById('continueAsGuestBtn');
+if (continueAsGuestBtn) {
+  continueAsGuestBtn.addEventListener('click', () => {
+    authGateSection.hidden = true;
+    modeSection.hidden     = false;
+    isGuestSolve           = true;
+  });
+}
 
 /**
  * Transitions from mode selection into the solve view.
@@ -599,6 +631,25 @@ function showResults(result) {
   });
 
   resultsSection.hidden = false;
+
+  // Show reward summary if the server returned reward data
+  if (result.rewards) {
+    const rewardContainer = document.getElementById('rewardSummary');
+    if (rewardContainer) {
+      getRenderRewardSummary().then(function(renderFn) {
+        renderFn(result.rewards, rewardContainer);
+      });
+    }
+  }
+
+  // Guest banner — results visible but not persisted
+  if (isGuestSolve) {
+    const banner = document.createElement('p');
+    banner.style.cssText = 'text-align:center;padding:0.75rem;background:var(--color-sun-soft);border-radius:var(--radius);margin-bottom:1rem;font-size:0.875rem;';
+    banner.innerHTML = '📝 <strong>Your results were not saved.</strong> <a href="/login.html" style="color:var(--primary)">Sign in</a> to track your progress.';
+    resultsSection.prepend(banner);
+  }
+
   resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -633,6 +684,9 @@ tryAgainBtn.addEventListener('click', () => {
 
   resultsSection.hidden = true;
   modeSection.hidden    = false;
+
+  const rewardSummary = document.getElementById('rewardSummary');
+  if (rewardSummary) { rewardSummary.hidden = true; rewardSummary.innerHTML = ''; }
 });
 
 /* =============================================================

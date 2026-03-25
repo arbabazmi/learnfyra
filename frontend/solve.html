@@ -6,9 +6,10 @@
   <title>Solve Worksheet — Learnfyra</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/solve.css" />
+  <link rel="stylesheet" href="css/rewards.css" />
 </head>
 <body>
 
@@ -45,6 +46,24 @@
         <div class="form-actions">
           <a href="/" class="btn btn--secondary">Back to Generator</a>
         </div>
+      </section>
+
+      <!-- Auth Gate (shown when not logged in) -->
+      <section id="authGateSection" class="card reveal" hidden aria-label="Sign in required">
+        <div class="card-header" style="text-align:center;">
+          <div class="success-badge" aria-hidden="true" style="background:var(--color-sun);font-size:1.5rem;">🔒</div>
+          <div>
+            <h2 class="card-title">Sign in to Solve Online</h2>
+            <p class="card-subtitle">Create a free account to practice online and track your progress.</p>
+          </div>
+        </div>
+        <div class="form-actions" style="justify-content:center;gap:1rem;flex-wrap:wrap;">
+          <a href="/login.html" class="btn btn--primary">Sign In / Create Account</a>
+          <button type="button" id="continueAsGuestBtn" class="btn btn--secondary">Continue as Guest</button>
+        </div>
+        <p style="text-align:center;margin-top:1rem;font-size:0.875rem;color:var(--text-muted);">
+          Guest results are shown but not saved.
+        </p>
       </section>
 
       <!-- Mode Selection Screen -->
@@ -102,6 +121,8 @@
         <div id="resultsBreakdown" class="results-breakdown">
           <!-- Per-question results injected by solve.js -->
         </div>
+
+        <div id="rewardSummary" hidden></div>
 
         <div class="form-actions">
           <button type="button" id="tryAgainBtn" class="btn btn--secondary">
