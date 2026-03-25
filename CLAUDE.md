@@ -289,14 +289,19 @@ Requires Claude Code v2.1.32+. Uses ~3-4x tokens vs single session — worth it 
 
 ### Team Structure
 ```
-ORCHESTRATOR (main session — you)
-├── ba-agent      → requirements and specs
-├── dev-agent     → application and Lambda code
-├── qa-agent      → tests and verification
-├── dba-agent     → data schemas and curriculum
-├── devops-agent  → AWS services and CI/CD pipelines
-└── iac-agent     → AWS CDK infrastructure code
+ORCHESTRATOR (main session — you, acting as Team Lead)
+├── ba-agent            → requirements and acceptance criteria
+├── architect-agent     → technical design and tradeoff decisions
+├── dev-agent           → application/Lambda code + data schemas/curriculum
+├── qa-agent            → tests and verification
+├── ui-agent            → UI/UX and frontend design
+├── code-reviewer-agent → code quality and risk review
+└── devops-agent        → CI/CD, AWS deployment, monitoring
 ```
+
+Team lead guidance:
+- No separate team-lead agent is required.
+- The ORCHESTRATOR is the team lead and controls sequencing/go-no-go decisions.
 
 ### When to use Agent Teams vs Subagents
 Use Agent Teams (--teammate-mode) when:
