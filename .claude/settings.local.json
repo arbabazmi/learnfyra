@@ -35,7 +35,28 @@
       "Bash(node -e \"const origins = require\\(''aws-cdk-lib/aws-cloudfront-origins''\\); console.log\\(Object.keys\\(origins\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''s3''\\)\\)\\)\")",
       "Bash(echo SYNTH_EXIT:$?)",
       "Bash(\"C:/arbab-github/edusheet-ai/DEPLOY.md\":*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(node -e \"require.resolve\\(''express''\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit/generateHandler.test.js --verbose)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node --check src/solve/scorer.js)",
+      "Bash(node --check src/solve/resultBuilder.js)",
+      "Bash(node --check backend/handlers/solveHandler.js)",
+      "Bash(node --check backend/handlers/submitHandler.js)",
+      "Bash(node --check server.js)",
+      "Bash(node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --passWithNoTests)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/src/solve/scorer.js)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/src/solve/resultBuilder.js)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/backend/handlers/solveHandler.js)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/backend/handlers/submitHandler.js)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/server.js)",
+      "Bash(node --check /c/arbab-github/edusheet-ai/frontend/js/solve.js)",
+      "Bash(node:*)",
+      "Bash(grep -rl \"EduSheet\\\\|edusheet\\\\|EduSheet AI\" --include=*.js --include=*.html --include=*.css --include=*.json --include=*.md --include=*.ts --include=*.yaml --include=*.yml --include=*.txt .)",
+      "Bash(git:*)"
     ]
   }
 }
