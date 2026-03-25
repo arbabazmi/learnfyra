@@ -212,7 +212,7 @@ Precomputed class reward summary must track:
 ## Related Documents
 
 1. Module architecture and mode control: [docs/specs/auth-online-offline-reporting-spec.md](docs/specs/auth-online-offline-reporting-spec.md)
-2. UX reward design details: [docs/ux-rewards-engagement-spec.md](docs/ux-rewards-engagement-spec.md)
+2. UX reward design details: [docs/design/ux-rewards-engagement-spec.md](docs/design/ux-rewards-engagement-spec.md)
 3. QA reward coverage: [docs/qa/rewards-gamification-qa-spec.md](docs/qa/rewards-gamification-qa-spec.md)
 4. QA auth/reporting coverage: [docs/qa/auth-mode-reporting-qa-spec.md](docs/qa/auth-mode-reporting-qa-spec.md)
 
