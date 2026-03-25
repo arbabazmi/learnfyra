@@ -91,16 +91,18 @@ describe('LearnfyraStack (dev)', () => {
     });
   });
 
-  test('does not create CloudFront distribution in dev', () => {
-    template.resourceCountIs('AWS::CloudFront::Distribution', 0);
+  test('creates CloudFront distribution in dev', () => {
+    template.resourceCountIs('AWS::CloudFront::Distribution', 1);
   });
 
-  test('dev frontend bucket is configured for website hosting', () => {
+  test('dev frontend bucket blocks all public access', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: 'learnfyra-dev-s3-frontend',
-      WebsiteConfiguration: {
-        IndexDocument: 'index.html',
-        ErrorDocument: 'index.html',
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
       },
     });
   });

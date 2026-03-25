@@ -4,9 +4,32 @@
  * @agent DEV
  */
 
-import puppeteer from 'puppeteer';
 import { buildWorksheetHTML, buildAnswerKeyHTML } from '../templates/worksheet.html.js';
 import { buildOutputPath } from '../utils/fileUtils.js';
+
+async function launchBrowser() {
+  const isLambdaRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+  if (isLambdaRuntime) {
+    const [{ default: puppeteerCore }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ]);
+
+    return puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  }
+
+  const { default: puppeteer } = await import('puppeteer');
+  return puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+}
 
 /**
  * Renders an HTML string to a PDF file via Puppeteer
@@ -15,10 +38,7 @@ import { buildOutputPath } from '../utils/fileUtils.js';
  * @returns {Promise<string>} Path to the generated PDF file
  */
 async function renderToPDF(html, outputPath) {
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

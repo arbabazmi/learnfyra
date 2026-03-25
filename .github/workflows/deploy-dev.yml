@@ -78,6 +78,7 @@ jobs:
             --context enableCustomDomains=true \
             --context rootDomainName=learnfyra.com \
             --context hostedZoneId=Z027880820G9W7LYJRE7H \
+            --context cloudFrontCertificateArn=arn:aws:acm:us-east-1:796929287685:certificate/abb068ee-3a48-4546-bb30-b494d7fe1ea7 \
             --context apiCertificateArn=arn:aws:acm:us-east-1:796929287685:certificate/abb068ee-3a48-4546-bb30-b494d7fe1ea7 \
             --require-approval never \
             --outputs-file cdk-outputs.json

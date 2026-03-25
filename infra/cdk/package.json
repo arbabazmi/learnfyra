@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "aws-cdk-lib": "2.130.0",
-    "constructs": "^10.0.0"
+    "@sparticuz/chromium": "^126.0.0",
+    "constructs": "^10.0.0",
+    "puppeteer-core": "22.15.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
@@ -28,6 +30,9 @@
     "preset": "ts-jest",
     "testMatch": [
       "**/test/**/*.test.ts"
+    ],
+    "setupFiles": [
+      "<rootDir>/test/jest.setup.ts"
     ]
   }
 }

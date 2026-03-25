@@ -57,13 +57,14 @@ export class LearnfyraStack extends cdk.Stack {
     const webDomainName = isProd
       ? `${rootDomainName}`
       : `web.${dnsEnvLabel}.${rootDomainName}`;
+    const wwwDomainName = `www.${rootDomainName}`;
     const adminDomainName = isProd
       ? `admin.${rootDomainName}`
       : `admin.${dnsEnvLabel}.${rootDomainName}`;
     const authDomainName = `auth.dev.${rootDomainName}`;
 
     let cloudFrontCertificate: acm.ICertificate | undefined;
-    if (enableCustomDomains && !isDev) {
+    if (enableCustomDomains) {
       if (!props.cloudFrontCertificateArn) {
         throw new Error('Custom domains for CloudFront require cloudFrontCertificateArn.');
       }
@@ -78,7 +79,6 @@ export class LearnfyraStack extends cdk.Stack {
     cdk.Tags.of(this).add('Project', 'learnfyra');
     cdk.Tags.of(this).add('Env', appEnv);
     cdk.Tags.of(this).add('Environment', appEnv);
-    cdk.Tags.of(this).add('environment', appEnv);
     cdk.Tags.of(this).add('ManagedBy', 'cdk');
 
     // ── S3: Worksheet bucket (private) ────────────────────────────────────────
@@ -104,17 +104,7 @@ export class LearnfyraStack extends cdk.Stack {
       bucketName: `learnfyra-${appEnv}-s3-frontend`,
       removalPolicy,
       autoDeleteObjects: !isProd,
-      blockPublicAccess: isDev
-        ? new s3.BlockPublicAccess({
-            blockPublicAcls: false,
-            ignorePublicAcls: false,
-            blockPublicPolicy: false,
-            restrictPublicBuckets: false,
-          })
-        : s3.BlockPublicAccess.BLOCK_ALL,
-      publicReadAccess: isDev,
-      websiteIndexDocument: isDev ? 'index.html' : undefined,
-      websiteErrorDocument: isDev ? 'index.html' : undefined,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     // ── API Gateway ────────────────────────────────────────────────────────────
@@ -135,50 +125,48 @@ export class LearnfyraStack extends cdk.Stack {
       },
     });
 
-    let distribution: cloudfront.Distribution | undefined;
+    // Origin Access Identity — grants CloudFront read access to the private bucket
+    const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
+      comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
+    });
+    frontendBucket.grantRead(oai);
 
-    if (!isDev) {
-      // Origin Access Identity — grants CloudFront read access to the private bucket
-      const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
-        comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
-      });
-      frontendBucket.grantRead(oai);
+    // ── CloudFront distribution ──────────────────────────────────────────────
+    const apiGatewayExecuteDomain = `${api.restApiId}.execute-api.${this.region}.amazonaws.com`;
 
-      // ── CloudFront distribution ──────────────────────────────────────────────
-      const apiDomainName = `${api.restApiId}.execute-api.${this.region}.amazonaws.com`;
-
-      distribution = new cloudfront.Distribution(this, 'CloudFrontDistribution', {
-        comment: `learnfyra-${appEnv}-cloudfront`,
-        defaultRootObject: 'index.html',
-        domainNames:
-          enableCustomDomains && rootDomainName
-            ? [webDomainName, adminDomainName]
-            : undefined,
-        certificate: cloudFrontCertificate,
-        defaultBehavior: {
-          origin: new origins.S3Origin(frontendBucket, { originAccessIdentity: oai }),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+    const distribution = new cloudfront.Distribution(this, 'CloudFrontDistribution', {
+      comment: `learnfyra-${appEnv}-cloudfront`,
+      defaultRootObject: 'index.html',
+      domainNames:
+        enableCustomDomains && rootDomainName
+          ? isProd
+            ? [webDomainName, wwwDomainName, adminDomainName]
+            : [webDomainName, adminDomainName]
+          : undefined,
+      certificate: cloudFrontCertificate,
+      defaultBehavior: {
+        origin: new origins.S3Origin(frontendBucket, { originAccessIdentity: oai }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      },
+      additionalBehaviors: {
+        '/api/*': {
+          origin: new origins.HttpOrigin(apiGatewayExecuteDomain, {
+            originPath: `/${appEnv}`,
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         },
-        additionalBehaviors: {
-          '/api/*': {
-            origin: new origins.HttpOrigin(apiDomainName, {
-              originPath: `/${appEnv}`,
-            }),
-            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-            cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-            allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-            cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          },
-        },
-        errorResponses: [
-          { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.seconds(0) },
-          { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.seconds(0) },
-        ],
-      });
-    }
+      },
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.seconds(0) },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.seconds(0) },
+      ],
+    });
 
     // ── SSM: Anthropic API key ─────────────────────────────────────────────────
     const anthropicKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
@@ -193,7 +181,20 @@ export class LearnfyraStack extends cdk.Stack {
     const bundling = {
       format: OutputFormat.CJS,
       target: 'node20',
-      externalModules: ['@aws-sdk/*', 'typescript', 'puppeteer'],
+      // In production/staging/dev: nodeModules installs puppeteer-core +
+      // @sparticuz/chromium natively inside the Lambda zip (npm ci approach).
+      // In test (NODE_ENV=test): mark them external so esbuild doesn't try to
+      // bundle the 300MB Chromium binary. CDK unit tests validate CloudFormation
+      // template structure only — they don't execute Lambda code.
+      externalModules: [
+        '@aws-sdk/*',
+        'typescript',
+        'puppeteer',
+        ...(process.env.NODE_ENV === 'test' ? ['puppeteer-core', '@sparticuz/chromium'] : []),
+      ],
+      ...(process.env.NODE_ENV !== 'test' && {
+        nodeModules: ['puppeteer-core', '@sparticuz/chromium'],
+      }),
       minify: true,
       sourceMap: false,
     };
@@ -294,53 +295,47 @@ export class LearnfyraStack extends cdk.Stack {
           target: route53.RecordTarget.fromAlias(new route53Targets.ApiGatewayDomain(apiCustomDomain)),
         });
 
-        if (isDev) {
-          new route53.CnameRecord(this, 'WebDomainRecordDev', {
-            zone,
-            recordName: webDomainName,
-            domainName: frontendBucket.bucketWebsiteDomainName,
-            ttl: cdk.Duration.minutes(5),
-          });
-
-          new route53.CnameRecord(this, 'AdminDomainRecordDev', {
-            zone,
-            recordName: adminDomainName,
-            domainName: webDomainName,
-            ttl: cdk.Duration.minutes(5),
-          });
-
-          new route53.CnameRecord(this, 'AuthDomainRecordDev', {
-            zone,
-            recordName: authDomainName,
-            domainName: apiDomainName,
-            ttl: cdk.Duration.minutes(5),
-          });
-        } else if (distribution) {
+        if (distribution) {
           new route53.ARecord(this, 'WebDomainRecord', {
             zone,
             recordName: webDomainName,
             target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
           });
 
+          if (isProd) {
+            new route53.ARecord(this, 'WwwDomainRecord', {
+              zone,
+              recordName: wwwDomainName,
+              target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
+            });
+          }
+
           new route53.ARecord(this, 'AdminDomainRecord', {
             zone,
             recordName: adminDomainName,
             target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
           });
+
+          if (isDev) {
+            new route53.CnameRecord(this, 'AuthDomainRecordDev', {
+              zone,
+              recordName: authDomainName,
+              domainName: apiDomainName,
+              ttl: cdk.Duration.minutes(5),
+            });
+          }
         }
       }
     }
 
     // ── Outputs ────────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'FrontendUrl', {
-      value: isDev ? `http://${frontendBucket.bucketWebsiteDomainName}` : `https://${distribution!.distributionDomainName}`,
-      description: isDev
-        ? 'S3 website URL (dev only)'
-        : 'CloudFront URL (open this in your browser)',
+      value: `https://${distribution.distributionDomainName}`,
+      description: 'CloudFront URL (open this in your browser)',
       exportName: `learnfyra-${appEnv}-frontend-url`,
     });
 
-    if (!isDev && distribution) {
+    if (distribution) {
       new cdk.CfnOutput(this, 'DistributionId', {
         value: distribution.distributionId,
         description: 'CloudFront distribution ID (for cache invalidation)',
