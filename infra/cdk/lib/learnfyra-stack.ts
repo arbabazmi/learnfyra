@@ -203,7 +203,9 @@ export class LearnfyraStack extends cdk.Stack {
     const generateFn = new NodejsFunction(this, 'GenerateFunction', {
       functionName: `learnfyra-${appEnv}-lambda-generate`,
       runtime: lambda.Runtime.NODEJS_20_X,
-      architecture: lambda.Architecture.ARM_64,
+      // @sparticuz/chromium does not provide an ARM Lambda binary here, so the
+      // PDF-generating function must run on x86_64 to execute Chromium in /tmp.
+      architecture: lambda.Architecture.X86_64,
       entry: path.join(__dirname, '../../../backend/handlers/generateHandler.js'),
       handler: 'handler',
       memorySize: isDev ? 512 : 1024,

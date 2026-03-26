@@ -57,7 +57,7 @@ describe('LearnfyraStack (dev)', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'learnfyra-dev-lambda-generate',
       MemorySize: 512,
-      Architectures: ['arm64'],
+      Architectures: ['x86_64'],
       Runtime: 'nodejs20.x',
     });
   });
