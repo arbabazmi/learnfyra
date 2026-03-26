@@ -1,0 +1,1804 @@
+{
+  "version": "36.0.0",
+  "artifacts": {
+    "LearnfyraStack-dev.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "LearnfyraStack-dev.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "LearnfyraStack-dev": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://796929287685/us-east-1",
+      "properties": {
+        "templateFile": "LearnfyraStack-dev.template.json",
+        "terminationProtection": false,
+        "tags": {
+          "Env": "dev",
+          "Environment": "dev",
+          "ManagedBy": "cdk",
+          "Project": "learnfyra"
+        },
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::796929287685:role/cdk-hnb659fds-deploy-role-796929287685-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::796929287685:role/cdk-hnb659fds-cfn-exec-role-796929287685-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-796929287685-us-east-1/9c614a4a139669c868960a8482053e892f0c9264db5cdf39f6980419b50bc289.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "LearnfyraStack-dev.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::796929287685:role/cdk-hnb659fds-lookup-role-796929287685-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "LearnfyraStack-dev.assets"
+      ],
+      "metadata": {
+        "/LearnfyraStack-dev": [
+          {
+            "type": "aws:cdk:stack-tags",
+            "data": [
+              {
+                "Key": "Env",
+                "Value": "dev"
+              },
+              {
+                "Key": "Environment",
+                "Value": "dev"
+              },
+              {
+                "Key": "ManagedBy",
+                "Value": "cdk"
+              },
+              {
+                "Key": "Project",
+                "Value": "learnfyra"
+              }
+            ]
+          }
+        ],
+        "/LearnfyraStack-dev/WorksheetBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorksheetBucketC1FC0EA1"
+          }
+        ],
+        "/LearnfyraStack-dev/WorksheetBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorksheetBucketPolicy44C6DA2C"
+          }
+        ],
+        "/LearnfyraStack-dev/WorksheetBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorksheetBucketAutoDeleteObjectsCustomResourceB55103CA"
+          }
+        ],
+        "/LearnfyraStack-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/LearnfyraStack-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendBucketEFE2E19C"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendBucketPolicy1DFF75D9"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendBucketAutoDeleteObjectsCustomResourceDB860B32"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiAccessLogs/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiAccessLogsE9DF007D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGateway11E7F47B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/CloudWatchRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayCloudWatchRoleA41EF9FE"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Account": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayAccountBC7F34C1"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayDeploymentA26796E829afc76827d6bd8094c42fc3efb616cd"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/DeploymentStage.dev/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayDeploymentStagedev5A0070C9"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayEndpoint5AA8EC3A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayOPTIONSFAD6DF6F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiBD54C415"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiOPTIONSA7CF6F65"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/generate/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapigenerate264652CD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/generate/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapigenerateOPTIONSD4484B7A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/generate/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.generate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapigeneratePOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapigenerate0949DDBA"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/generate/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.generate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapigeneratePOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapigenerate931976A2"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/generate/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapigeneratePOSTD5E0D13D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/download/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapidownload2E89E99F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/download/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapidownloadOPTIONS7DCFBF6F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/download/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapidownloadGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapidownload4E559913"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/download/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapidownloadGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapidownload3A008295"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/download/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapidownloadGETD81A1C37"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthC228EEA1"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthOPTIONS6C3BD7A8"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/register/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthregister9E91F7F4"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/register/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthregisterOPTIONS4C815476"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/register/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.register": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthregisterPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthregister8932166A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/register/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.register": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthregisterPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthregister17D2CF64"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/register/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthregisterPOSTD60C3B65"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/login/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogin8197054C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/login/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthloginOPTIONS1D6CCE16"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/login/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.login": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthloginPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthloginB0743644"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/login/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.login": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthloginPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthlogin51AEBD11"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/login/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthloginPOST17E08A28"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/logout/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogoutA5A32C48"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/logout/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogoutOPTIONS6EF70F25"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/logout/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.logout": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogoutPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthlogout75341036"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/logout/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.logout": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogoutPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthlogout739481BE"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/logout/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthlogoutPOST5E188F95"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthA5E02A48"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthOPTIONS5BC484C7"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/{provider}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthprovider9F657DF0"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/{provider}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthproviderOPTIONS5CF7D6E7"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/{provider}/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.oauth.{provider}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthproviderPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthoauthproviderF9C56961"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/{provider}/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.auth.oauth.{provider}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthproviderPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiauthoauthprovider30300E68"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/oauth/{provider}/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthoauthproviderPOST013FF1F6"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackD78C0C37"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackOPTIONS022B6D6F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/{provider}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackproviderEA9D2ACB"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/{provider}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackproviderOPTIONS223B381A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/{provider}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.auth.callback.{provider}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackproviderGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapiauthcallbackproviderE1090752"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/{provider}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.auth.callback.{provider}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackproviderGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapiauthcallbackprovider41F348FE"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/auth/callback/{provider}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiauthcallbackproviderGET2FAB4F76"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/submit/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisubmitBF98B2F0"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/submit/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisubmitOPTIONSF488A0F0"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/submit/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.submit": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisubmitPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapisubmit981A96A4"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/submit/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.submit": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisubmitPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapisubmit25F0157C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/submit/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisubmitPOST9FAF1572"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolve5EBA7EE4"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveOPTIONS5F756AFF"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/{worksheetId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveworksheetId7658D755"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/{worksheetId}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveworksheetIdOPTIONS02D7F46C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/{worksheetId}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.solve.{worksheetId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveworksheetIdGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapisolveworksheetIdEE6FC15A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/{worksheetId}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.solve.{worksheetId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveworksheetIdGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapisolveworksheetIdF7D13585"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/solve/{worksheetId}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapisolveworksheetIdGET5BADB963"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogress4E1DA211"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogressOPTIONSD8293EF5"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/save/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresssave40805317"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/save/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresssaveOPTIONS426FB9AD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/save/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.progress.save": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresssavePOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiprogresssave82694F4F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/save/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.progress.save": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresssavePOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiprogresssaveD7DE2F53"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/save/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresssavePOSTAE69513C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/history/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresshistoryE58E2C3E"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/history/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresshistoryOPTIONSB22B3EE5"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/history/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.progress.history": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresshistoryGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapiprogresshistory5A4E6AF5"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/history/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.progress.history": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresshistoryGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapiprogresshistory6F83F2FF"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/progress/history/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiprogresshistoryGET37737CCE"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclass7D72DA2E"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassOPTIONS6D101DF9"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/create/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclasscreate99A0385C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/create/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclasscreateOPTIONS6C1FA6EC"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/create/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.class.create": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclasscreatePOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiclasscreateDCB8D72B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/create/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.class.create": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclasscreatePOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiclasscreate547B0E1D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/create/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclasscreatePOST57134557"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassid0331A867"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidOPTIONS39CDE3EA"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/students/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidstudents1DCDF6AA"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/students/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidstudentsOPTIONS43D96A7B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/students/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.class.{id}.students": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidstudentsGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapiclassidstudents6EDDCD3C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/students/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.class.{id}.students": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidstudentsGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapiclassidstudents67FE0088"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/class/{id}/students/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiclassidstudentsGET232C0091"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalytics93FE02E1"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsOPTIONS79B5DC47"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclass344EEEFD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassOPTIONS84DA7BD6"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassidD9DE0576"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassidOPTIONSAAC0306A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/{id}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.analytics.class.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassidGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapianalyticsclassidD33487C0"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/{id}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.analytics.class.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassidGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapianalyticsclassidF19A0883"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/analytics/class/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapianalyticsclassidGETAF4F464F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewards8A78B03F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsOPTIONS04F87CE1"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudent4ADD5440"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentOPTIONS0DBEC15A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentidFD1CA23C"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentidOPTIONS6FC7C50D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/{id}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.rewards.student.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentidGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapirewardsstudentid2B2B1937"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/{id}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.rewards.student.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentidGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapirewardsstudentid7F66EA6B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/student/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsstudentidGETC47E6939"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclass22CF89F4"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassOPTIONS4C9A0F94"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassid282CFEDD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassidOPTIONSF6613553"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/{id}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.rewards.class.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassidGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapirewardsclassid0737529F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/{id}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.rewards.class.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassidGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapirewardsclassid7A633365"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/rewards/class/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapirewardsclassidGET5CB168CB"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudent594E0F54"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentOPTIONSCF3BFAA8"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/profile/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentprofile03AAB87D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/profile/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentprofileOPTIONSB68BB3DD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/profile/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.student.profile": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentprofileGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapistudentprofile1E225E21"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/profile/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.student.profile": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentprofileGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapistudentprofile56CE1016"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/profile/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentprofileGETA826E226"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/join-class/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentjoinclassE21A66FD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/join-class/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentjoinclassOPTIONSCB29F887"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/join-class/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.student.join-class": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentjoinclassPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapistudentjoinclass1F22F43B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/join-class/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.student.join-class": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentjoinclassPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapistudentjoinclass50E608BD"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/student/join-class/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapistudentjoinclassPOST08CDDC76"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqb5B412013"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbOPTIONS7D159BC2"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsE261CB00"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsOPTIONS40116512"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.qb.questions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapiqbquestions8CA0E88F"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.qb.questions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapiqbquestions43FC1DE9"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsGET040B1FA0"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.qb.questions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsPOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiqbquestions44410E8E"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.qb.questions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsPOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiqbquestions28D2C0F7"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsPOSTC15385D6"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsid87315828"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidOPTIONS2CDAC9C4"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/GET/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.qb.questions.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidGETApiPermissionLearnfyraStackdevApiGatewayFC2B99A6GETapiqbquestionsid2B2B6F44"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/GET/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.GET..api.qb.questions.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidGETApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6GETapiqbquestionsid17E3E0CC"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidGETDD008F71"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/reuse/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidreuse8F48102D"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/reuse/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidreuseOPTIONS5C58311A"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/reuse/POST/ApiPermission.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.qb.questions.{id}.reuse": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidreusePOSTApiPermissionLearnfyraStackdevApiGatewayFC2B99A6POSTapiqbquestionsidreuse59ACF6A1"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/reuse/POST/ApiPermission.Test.LearnfyraStackdevApiGatewayFC2B99A6.POST..api.qb.questions.{id}.reuse": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidreusePOSTApiPermissionTestLearnfyraStackdevApiGatewayFC2B99A6POSTapiqbquestionsidreuse7F5937D8"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway/Default/api/qb/questions/{id}/reuse/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayapiqbquestionsidreusePOST8A9DC86F"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendOAI/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendOAIF4D25B13"
+          }
+        ],
+        "/LearnfyraStack-dev/CloudFrontDistribution/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CloudFrontDistributionBA64CE3A"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateFunctionServiceRole1CC0749E"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateFunctionServiceRoleDefaultPolicyA29D0247"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateFunctionD11A7A28"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateFunctionLogRetention92DD6CC3"
+          }
+        ],
+        "/LearnfyraStack-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+          }
+        ],
+        "/LearnfyraStack-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB"
+          }
+        ],
+        "/LearnfyraStack-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadFunctionServiceRole54440FCD"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadFunctionServiceRoleDefaultPolicy47891FCE"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadFunction5EECE48A"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadFunctionLogRetentionB19B3752"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthFunctionServiceRole87A7A68C"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthFunctionServiceRoleDefaultPolicy4198AD5B"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthFunctionA1CD5E0F"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthFunctionLogRetention5816710E"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveFunctionServiceRole09007382"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveFunctionServiceRoleDefaultPolicy31E7E243"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveFunction12DDD7CE"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveFunctionLogRetentionA23F719B"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitFunctionServiceRole9EBDFBC1"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitFunctionServiceRoleDefaultPolicyE9533743"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitFunction882FE8FE"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitFunctionLogRetentionAA68CD65"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressFunctionServiceRoleBB04EF5C"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressFunctionServiceRoleDefaultPolicy4B8AF569"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressFunctionF8A41D43"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressFunctionLogRetentionA7034AD9"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsFunctionServiceRole4C6FF659"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsFunctionServiceRoleDefaultPolicy0F4B1A8C"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsFunctionFF8C31E8"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsFunctionLogRetention3886D16E"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassFunctionServiceRole1C7052E6"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassFunctionServiceRoleDefaultPolicyD6ACC83B"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassFunction31593528"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassFunctionLogRetention7252D8D8"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsFunctionServiceRoleE711BB5C"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsFunctionServiceRoleDefaultPolicyF7B29D1B"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsFunction16476671"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsFunctionLogRetentionCF9C6A29"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentFunctionServiceRole926E9E8B"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentFunctionServiceRoleDefaultPolicyC0F4A37E"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentFunctionB4C45B77"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentFunctionLogRetentionCAB6487B"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunctionServiceRoleE19718A7"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunction09BA95C5"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunctionLogRetentionAD5A3C40"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateLambdaErrorsAlarm94D460E6"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateLambdaDurationP95Alarm82BF512C"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateLambdaErrorRateAlarmAC6B4738"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateInvocationAnomalyAlarm0C6B84BC"
+          }
+        ],
+        "/LearnfyraStack-dev/GenerateConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenerateConcurrentExecutionAlarmCF759FB9"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadLambdaErrorsAlarmA506EB9F"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadLambdaDurationP95AlarmBBAF6C26"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadLambdaErrorRateAlarm8D8DE9B9"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadInvocationAnomalyAlarmD1E45239"
+          }
+        ],
+        "/LearnfyraStack-dev/DownloadConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DownloadConcurrentExecutionAlarm45DA23C7"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthLambdaErrorsAlarm1EF3F0C4"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthLambdaDurationP95Alarm72CFE3B7"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthLambdaErrorRateAlarm345BA165"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthInvocationAnomalyAlarmF8D341B5"
+          }
+        ],
+        "/LearnfyraStack-dev/AuthConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthConcurrentExecutionAlarm32911FF9"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveLambdaErrorsAlarm7DDC385C"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveLambdaDurationP95Alarm70A33CFC"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveLambdaErrorRateAlarm2BE3E982"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveInvocationAnomalyAlarm3A122F3C"
+          }
+        ],
+        "/LearnfyraStack-dev/SolveConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SolveConcurrentExecutionAlarmDF3347F0"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitLambdaErrorsAlarmC9B562AC"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitLambdaDurationP95Alarm8D24946E"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitLambdaErrorRateAlarm63340B05"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitInvocationAnomalyAlarm174D9897"
+          }
+        ],
+        "/LearnfyraStack-dev/SubmitConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubmitConcurrentExecutionAlarm26DC8247"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressLambdaErrorsAlarmB877463B"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressLambdaDurationP95Alarm74743321"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressLambdaErrorRateAlarmF50B1A90"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressInvocationAnomalyAlarm64D1C83D"
+          }
+        ],
+        "/LearnfyraStack-dev/ProgressConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProgressConcurrentExecutionAlarm9BF7D5E4"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsLambdaErrorsAlarm5D45ED75"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsLambdaDurationP95Alarm608BB0C4"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsLambdaErrorRateAlarmE1C827C2"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsInvocationAnomalyAlarm330348C6"
+          }
+        ],
+        "/LearnfyraStack-dev/AnalyticsConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AnalyticsConcurrentExecutionAlarm7D460728"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassLambdaErrorsAlarm54DE96D6"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassLambdaDurationP95AlarmB457B1A6"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassLambdaErrorRateAlarm51C01D5E"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassInvocationAnomalyAlarm9E1342FE"
+          }
+        ],
+        "/LearnfyraStack-dev/ClassConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ClassConcurrentExecutionAlarm37292A8C"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsLambdaErrorsAlarmBF3B7499"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsLambdaDurationP95Alarm8F70D397"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsLambdaErrorRateAlarm0AC2F6BA"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsInvocationAnomalyAlarmFA53035E"
+          }
+        ],
+        "/LearnfyraStack-dev/RewardsConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RewardsConcurrentExecutionAlarm1D8123A2"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentLambdaErrorsAlarm949948AB"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentLambdaDurationP95AlarmFCAA61CB"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentLambdaErrorRateAlarm91502857"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentInvocationAnomalyAlarm3DCE3A21"
+          }
+        ],
+        "/LearnfyraStack-dev/StudentConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StudentConcurrentExecutionAlarm227E8500"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminLambdaErrorsAlarmD7E0C946"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminLambdaDurationP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminLambdaDurationP95Alarm43B629F9"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminLambdaErrorRateAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminLambdaErrorRateAlarm915063AE"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminInvocationAnomalyDetector": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminInvocationAnomalyDetector"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminInvocationAnomalyAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminInvocationAnomalyAlarm490F2B0C"
+          }
+        ],
+        "/LearnfyraStack-dev/AdminConcurrentExecutionAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminConcurrentExecutionAlarm48194590"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGateway5xxAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGateway5xxAlarm4F808175"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGatewayLatencyP95Alarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayLatencyP95Alarm808B377B"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGatewayThrottleAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayThrottleAlarmB621B493"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGatewaySurgeAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewaySurgeAlarm464FB04E"
+          }
+        ],
+        "/LearnfyraStack-dev/BackendObservabilityDashboard/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BackendObservabilityDashboard4B1C7A05"
+          }
+        ],
+        "/LearnfyraStack-dev/LambdaTopErrorsQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LambdaTopErrorsQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiAuthFailuresQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiAuthFailuresQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiHighLatencyTracesQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiHighLatencyTracesQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiRouteHotspotsQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiRouteHotspotsQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/CostByFunctionQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CostByFunctionQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/CostByEndpointQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CostByEndpointQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/CostEstimationQueryDefinition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CostEstimationQueryDefinition"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendUrl"
+          }
+        ],
+        "/LearnfyraStack-dev/DistributionId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DistributionId"
+          }
+        ],
+        "/LearnfyraStack-dev/ApiGatewayUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayUrl"
+          }
+        ],
+        "/LearnfyraStack-dev/WorksheetBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorksheetBucketName"
+          }
+        ],
+        "/LearnfyraStack-dev/FrontendBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "FrontendBucketName"
+          }
+        ],
+        "/LearnfyraStack-dev/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/LearnfyraStack-dev/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/LearnfyraStack-dev/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "LearnfyraStack-dev"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  }
+}
