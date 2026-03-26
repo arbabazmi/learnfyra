@@ -59,10 +59,10 @@ const { exportAnswerKey } = await import('../../src/exporters/answerKey.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function mockEvent(body, method = 'POST') {
+function mockEvent(body, method = 'POST', headers = {}) {
   return {
     httpMethod: method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
     queryStringParameters: null,
   };
@@ -121,6 +121,11 @@ describe('generateHandler — OPTIONS preflight', () => {
     expect(result.body).toBe('');
   });
 
+  it('exposes diagnostic headers on OPTIONS response', async () => {
+    const result = await handler(mockEvent({}, 'OPTIONS'), mockContext);
+    expect(result.headers['Access-Control-Expose-Headers']).toBe('x-request-id,x-client-request-id');
+  });
+
 });
 
 // ─── Happy path ───────────────────────────────────────────────────────────────
@@ -154,6 +159,23 @@ describe('generateHandler — valid request', () => {
   it('response body contains metadata', async () => {
     const result = await handler(mockEvent(validBody), mockContext);
     expect(JSON.parse(result.body)).toHaveProperty('metadata');
+  });
+
+  it('response body contains request diagnostics', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.requestId).toBeTruthy();
+    expect(result.headers['x-request-id']).toBe(body.requestId);
+  });
+
+  it('echoes the client request id when provided', async () => {
+    const result = await handler(
+      mockEvent(validBody, 'POST', { 'x-client-request-id': 'client-test-123' }),
+      mockContext
+    );
+    const body = JSON.parse(result.body);
+    expect(body.clientRequestId).toBe('client-test-123');
+    expect(result.headers['x-client-request-id']).toBe('client-test-123');
   });
 
   it('worksheetKey contains worksheet.pdf', async () => {
@@ -232,6 +254,11 @@ describe('generateHandler — valid request', () => {
   it('CORS headers present on 200 response', async () => {
     const result = await handler(mockEvent(validBody), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('exposes diagnostic headers on 200 response', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.headers['Access-Control-Expose-Headers']).toBe('x-request-id,x-client-request-id');
   });
 
   it('passes optional student details into worksheet export options', async () => {
@@ -334,6 +361,19 @@ describe('generateHandler — 400 validation errors', () => {
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
+  it('exposes diagnostic headers on 400 response', async () => {
+    const result = await handler(mockEvent({ ...validBody, grade: 0 }), mockContext);
+    expect(result.headers['Access-Control-Expose-Headers']).toBe('x-request-id,x-client-request-id');
+  });
+
+  it('returns diagnostic fields on 400 validation response', async () => {
+    const result = await handler(mockEvent({ ...validBody, grade: 0 }), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.errorCode).toBe('VALIDATION_ERROR');
+    expect(body.errorStage).toBe('request:validate-body');
+    expect(body.requestId).toBeTruthy();
+  });
+
 });
 
 // ─── Malformed JSON body (400) ────────────────────────────────────────────────
@@ -372,6 +412,20 @@ describe('generateHandler — 400 malformed JSON', () => {
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
+  it('returns invalid JSON diagnostics on malformed JSON response', async () => {
+    const event = {
+      httpMethod: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{not valid json',
+      queryStringParameters: null,
+    };
+    const result = await handler(event, mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.errorCode).toBe('INVALID_JSON');
+    expect(body.errorStage).toBe('request:parse-body');
+    expect(body.requestId).toBeTruthy();
+  });
+
 });
 
 // ─── Generator error (500) ────────────────────────────────────────────────────
@@ -406,10 +460,26 @@ describe('generateHandler — 500 generator error', () => {
     expect(typeof body.error).toBe('string');
   });
 
+  it('returns diagnostic fields on 500 response', async () => {
+    generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
+    const result = await handler(mockEvent(validBody), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.errorCode).toBe('GENERATION_FAILED');
+    expect(body.errorStage).toBe('worksheet:generate');
+    expect(body.requestId).toBeTruthy();
+    expect(result.headers['x-request-id']).toBe(body.requestId);
+  });
+
   it('CORS headers present on 500 response', async () => {
     generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
     const result = await handler(mockEvent(validBody), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('exposes diagnostic headers on 500 response', async () => {
+    generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.headers['Access-Control-Expose-Headers']).toBe('x-request-id,x-client-request-id');
   });
 
 });
