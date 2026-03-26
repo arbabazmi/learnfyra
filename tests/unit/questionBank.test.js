@@ -498,6 +498,13 @@ describe('questionBankHandler — GET /api/qb/questions list', () => {
     expect(mockListQuestions).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Science' }));
   });
 
+  it('returns 200 with case-insensitive subject filter values', async () => {
+    mockListQuestions.mockReturnValue([]);
+    const result = await handler(getListEvent({ subject: 'science' }), mockContext);
+    expect(result.statusCode).toBe(200);
+    expect(mockListQuestions).toHaveBeenCalledWith(expect.objectContaining({ subject: 'science' }));
+  });
+
   it('returns 200 with topic, difficulty, and type filters', async () => {
     mockListQuestions.mockReturnValue([]);
     const result = await handler(
@@ -523,6 +530,34 @@ describe('questionBankHandler — GET /api/qb/questions list', () => {
   it('returns 400 for grade filter of 11', async () => {
     const result = await handler(getListEvent({ grade: '11' }), mockContext);
     expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 for an invalid subject filter value', async () => {
+    const result = await handler(getListEvent({ subject: 'Art' }), mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('QB_INVALID_SUBJECT');
+  });
+
+  it('returns 400 for an empty topic filter value', async () => {
+    const result = await handler(getListEvent({ topic: '   ' }), mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('QB_INVALID_TOPIC');
+  });
+
+  it('returns 400 for an invalid difficulty filter value', async () => {
+    const result = await handler(getListEvent({ difficulty: 'Extreme' }), mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('QB_INVALID_DIFFICULTY');
+  });
+
+  it('returns 400 for an invalid type filter value', async () => {
+    const result = await handler(getListEvent({ type: 'essay' }), mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('QB_INVALID_TYPE');
   });
 
   it('error body mentions "grade" for invalid grade filter', async () => {

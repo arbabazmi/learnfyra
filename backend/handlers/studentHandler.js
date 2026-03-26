@@ -23,6 +23,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
+const INVITE_CODE_REGEX = /^[A-Z0-9]{6}$/;
+
 /**
  * Builds a standard error response.
  * @param {number} statusCode
@@ -53,7 +55,9 @@ async function handleGetProfile(decoded) {
   }
 
   const memberships = await db.queryByField('memberships', 'studentId', decoded.sub);
-  const classMemberships = memberships.map((m) => m.classId);
+  const classMemberships = memberships
+    .filter((m) => m.status === 'active')
+    .map((m) => m.classId);
 
   return {
     statusCode: 200,
@@ -85,11 +89,21 @@ async function handleJoinClass(decoded, body) {
     return errorResponse(400, 'inviteCode is required.');
   }
 
+  const normalizedInviteCode = String(inviteCode).toUpperCase().trim();
+  if (!INVITE_CODE_REGEX.test(normalizedInviteCode)) {
+    return errorResponse(400, 'inviteCode must be 6 uppercase alphanumeric characters.');
+  }
+
   const db = getDbAdapter();
 
-  const classes = await db.queryByField('classes', 'inviteCode', inviteCode.toUpperCase().trim());
+  const classes = await db.queryByField('classes', 'inviteCode', normalizedInviteCode);
   if (classes.length === 0) {
     return errorResponse(404, 'Class not found for that invite code.');
+  }
+
+  if (classes.length > 1) {
+    console.error(`Duplicate invite code detected: ${normalizedInviteCode}`);
+    return errorResponse(500, 'Data integrity error. Contact support.');
   }
 
   const classRecord = classes[0];
@@ -130,9 +144,7 @@ async function handleJoinClass(decoded, body) {
  * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
  */
 export const handler = async (event, context) => {
-  if (context?.callbackWaitsForEmptyEventLoop !== undefined) {
-    context.callbackWaitsForEmptyEventLoop = false;
-  }
+  context.callbackWaitsForEmptyEventLoop = false;
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };

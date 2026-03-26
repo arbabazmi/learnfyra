@@ -228,6 +228,8 @@ let _studentHandler;
 let _progressHandler;
 let _classHandler;
 let _analyticsHandler;
+let _certificatesHandler;
+let _adminHandler;
 
 /**
  * Returns the authHandler function, importing it on first call.
@@ -287,6 +289,30 @@ const getAnalyticsHandler = async () => {
     _analyticsHandler = mod.handler;
   }
   return _analyticsHandler;
+};
+
+/**
+ * Returns the certificatesHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getCertificatesHandler = async () => {
+  if (!_certificatesHandler) {
+    const mod = await import('./backend/handlers/certificatesHandler.js');
+    _certificatesHandler = mod.handler;
+  }
+  return _certificatesHandler;
+};
+
+/**
+ * Returns the adminHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getAdminHandler = async () => {
+  if (!_adminHandler) {
+    const mod = await import('./backend/handlers/adminHandler.js');
+    _adminHandler = mod.handler;
+  }
+  return _adminHandler;
 };
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
@@ -428,7 +454,58 @@ app.get('/api/progress/history', async (req, res) => {
   try {
     const fn = await getProgressHandler();
     const result = await fn(
-      { httpMethod: 'GET', path: '/api/progress/history', headers: req.headers, body: null },
+      {
+        httpMethod: 'GET',
+        path: '/api/progress/history',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('progress route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/progress/insights ───────────────────────────────────────────────
+app.get('/api/progress/insights', async (req, res) => {
+  try {
+    const fn = await getProgressHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/progress/insights',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('progress route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/progress/parent/:childId ────────────────────────────────────────
+app.get('/api/progress/parent/:childId', async (req, res) => {
+  try {
+    const fn = await getProgressHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: `/api/progress/parent/${req.params.childId}`,
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+        pathParameters: { childId: req.params.childId },
+      },
       {},
     );
     res.status(result.statusCode).json(JSON.parse(result.body));
@@ -482,6 +559,185 @@ app.get('/api/analytics/class/:id', async (req, res) => {
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('analytics route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/analytics/student/:id ───────────────────────────────────────────
+app.get('/api/analytics/student/:id', async (req, res) => {
+  try {
+    const fn = await getAnalyticsHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: `/api/analytics/student/${req.params.id}`,
+        headers: req.headers,
+        body: null,
+        pathParameters: { id: req.params.id },
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('analytics route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/certificates ─────────────────────────────────────────────────────
+app.get('/api/certificates', async (req, res) => {
+  try {
+    const fn = await getCertificatesHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/certificates',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('certificates route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/certificates/:id/download ───────────────────────────────────────
+app.get('/api/certificates/:id/download', async (req, res) => {
+  try {
+    const fn = await getCertificatesHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: `/api/certificates/${req.params.id}/download`,
+        headers: req.headers,
+        body: null,
+        pathParameters: { id: req.params.id },
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('certificates route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/admin/policies ──────────────────────────────────────────────────
+app.get('/api/admin/policies', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/admin/policies',
+        headers: req.headers,
+        body: null,
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PUT /api/admin/policies/model-routing ───────────────────────────────────
+app.put('/api/admin/policies/model-routing', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/model-routing',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PUT /api/admin/policies/budget-usage ────────────────────────────────────
+app.put('/api/admin/policies/budget-usage', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/budget-usage',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PUT /api/admin/policies/validation-profile ──────────────────────────────
+app.put('/api/admin/policies/validation-profile', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/validation-profile',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/admin/audit/events ──────────────────────────────────────────────
+app.get('/api/admin/audit/events', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/admin/audit/events',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
   }

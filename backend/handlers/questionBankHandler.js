@@ -40,6 +40,12 @@ const VALID_TYPES = [
   'word-problem',
 ];
 
+function matchesAllowedValue(validValues, value) {
+  return validValues.some((validValue) => (
+    typeof value === 'string' && validValue.toLowerCase() === value.trim().toLowerCase()
+  ));
+}
+
 /**
  * Builds a standard JSON error response from a qbError payload.
  *
@@ -95,8 +101,24 @@ async function handleList(queryStringParameters) {
     filters.grade = g;
   }
 
+  if (filters.subject !== undefined && !matchesAllowedValue(VALID_SUBJECTS, filters.subject)) {
+    return qbErrorResponse('INVALID_SUBJECT', `Received: "${filters.subject}".`);
+  }
+
+  if (filters.topic !== undefined && (typeof filters.topic !== 'string' || !filters.topic.trim())) {
+    return qbErrorResponse('INVALID_TOPIC');
+  }
+
+  if (filters.difficulty !== undefined && !matchesAllowedValue(VALID_DIFFICULTIES, filters.difficulty)) {
+    return qbErrorResponse('INVALID_DIFFICULTY');
+  }
+
+  if (filters.type !== undefined && !matchesAllowedValue(VALID_TYPES, filters.type)) {
+    return qbErrorResponse('INVALID_TYPE', `Received: "${filters.type}".`);
+  }
+
   const qb = await getQuestionBankAdapter();
-  const questions = qb.listQuestions(filters);
+  const questions = await qb.listQuestions(filters);
 
   return {
     statusCode: 200,
@@ -203,7 +225,7 @@ async function handleAdd(body) {
 
   // ── Atomic dedupe + insert ─────────────────────────────────────────────────
   const qb = await getQuestionBankAdapter();
-  const { stored, duplicate } = qb.addIfNotExists(candidate, newQuestion);
+  const { stored, duplicate } = await qb.addIfNotExists(candidate, newQuestion);
 
   if (duplicate) {
     return qbErrorResponse('DUPLICATE');
@@ -228,7 +250,7 @@ async function handleGetById(questionId) {
   }
 
   const qb = await getQuestionBankAdapter();
-  const question = qb.getQuestion(questionId.trim());
+  const question = await qb.getQuestion(questionId.trim());
 
   if (!question) {
     return qbErrorResponse('NOT_FOUND');
@@ -255,7 +277,7 @@ async function handleReuse(questionId) {
   }
 
   const qb = await getQuestionBankAdapter();
-  const updated = qb.incrementReuseCount(questionId.trim());
+  const updated = await qb.incrementReuseCount(questionId.trim());
 
   if (!updated) {
     return qbErrorResponse('NOT_FOUND');

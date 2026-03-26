@@ -22,6 +22,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
+
 /**
  * Builds a standard error response.
  * @param {number} statusCode
@@ -41,7 +44,30 @@ function errorResponse(statusCode, message) {
  * @returns {string} e.g. "A3K9FZ"
  */
 function generateInviteCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+/**
+ * Generates an invite code not currently in use.
+ * @param {Object} db
+ * @param {number} maxAttempts
+ * @returns {Promise<string>}
+ */
+async function generateUniqueInviteCode(db, maxAttempts = 20) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const inviteCode = generateInviteCode();
+    const existing = await db.queryByField('classes', 'inviteCode', inviteCode);
+    if (!Array.isArray(existing) || existing.length === 0) {
+      return inviteCode;
+    }
+  }
+
+  throw new Error('Failed to generate unique invite code.');
 }
 
 /**
@@ -56,19 +82,32 @@ function generateInviteCode() {
 async function handleCreate(decoded, body) {
   const { className, grade, subject } = body || {};
 
-  if (!className || !grade || !subject) {
+  if (className == null || grade == null || subject == null) {
     return errorResponse(400, 'className, grade, and subject are required.');
+  }
+
+  const normalizedClassName = typeof className === 'string' ? className.trim() : '';
+  if (!normalizedClassName || normalizedClassName.length > 120) {
+    return errorResponse(400, 'className must be 1 to 120 characters.');
+  }
+
+  if (!Number.isInteger(grade) || grade < 1 || grade > 10) {
+    return errorResponse(400, 'grade must be an integer between 1 and 10.');
+  }
+
+  if (typeof subject !== 'string' || !VALID_SUBJECTS.includes(subject)) {
+    return errorResponse(400, `subject must be one of: ${VALID_SUBJECTS.join(', ')}.`);
   }
 
   const db = getDbAdapter();
   const now = new Date().toISOString();
   const classId = randomUUID();
-  const inviteCode = generateInviteCode();
+  const inviteCode = await generateUniqueInviteCode(db);
 
   const classRecord = {
     classId,
     teacherId: decoded.sub,
-    className,
+    className: normalizedClassName,
     grade,
     subject,
     inviteCode,
@@ -82,7 +121,7 @@ async function handleCreate(decoded, body) {
     headers: corsHeaders,
     body: JSON.stringify({
       classId,
-      className,
+      className: normalizedClassName,
       grade,
       subject,
       inviteCode,
@@ -103,11 +142,19 @@ async function handleGetStudents(decoded, classId) {
     return errorResponse(400, 'Class ID is required.');
   }
 
+  if (!UUID_REGEX.test(classId)) {
+    return errorResponse(400, 'Class ID must be a valid UUID v4.');
+  }
+
   const db = getDbAdapter();
 
   const classRecord = await db.getItem('classes', classId);
   if (!classRecord) {
     return errorResponse(404, 'Class not found.');
+  }
+
+  if (classRecord.teacherId !== decoded.sub) {
+    return errorResponse(403, 'Forbidden.');
   }
 
   // Fetch all active memberships for this class
@@ -148,9 +195,7 @@ async function handleGetStudents(decoded, classId) {
  * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
  */
 export const handler = async (event, context) => {
-  if (context?.callbackWaitsForEmptyEventLoop !== undefined) {
-    context.callbackWaitsForEmptyEventLoop = false;
-  }
+  context.callbackWaitsForEmptyEventLoop = false;
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };

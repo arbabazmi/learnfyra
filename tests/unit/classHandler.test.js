@@ -110,6 +110,7 @@ describe('classHandler — POST /api/class/create happy path', () => {
   beforeEach(() => {
     mockVerifyToken.mockReturnValue(teacherDecoded);
     mockPutItem.mockResolvedValue({});
+    mockQueryByField.mockResolvedValue([]);
   });
 
   it('returns status 201 for a valid create request', async () => {
@@ -180,6 +181,19 @@ describe('classHandler — POST /api/class/create happy path', () => {
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
+  it('returns 500 when invite-code uniqueness lookup fails', async () => {
+    mockQueryByField.mockRejectedValueOnce(new Error('db read failed'));
+    const result = await handler(
+      mockPostEvent('/api/class/create', {
+        className: 'Grade 3 Math',
+        grade: 3,
+        subject: 'Math',
+      }, 'teacher-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(500);
+  });
+
 });
 
 // ─── POST /api/class/create — student role blocked ───────────────────────────
@@ -243,6 +257,30 @@ describe('classHandler — POST /api/class/create validation errors', () => {
   it('returns 400 when subject is missing', async () => {
     const result = await handler(
       mockPostEvent('/api/class/create', { className: 'Grade 3 Math', grade: 3 }, 'teacher-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when grade is out of range', async () => {
+    const result = await handler(
+      mockPostEvent('/api/class/create', { className: 'Grade 3 Math', grade: 11, subject: 'Math' }, 'teacher-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when subject is invalid', async () => {
+    const result = await handler(
+      mockPostEvent('/api/class/create', { className: 'Grade 3 Math', grade: 3, subject: 'Art' }, 'teacher-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when className is blank after trim', async () => {
+    const result = await handler(
+      mockPostEvent('/api/class/create', { className: '   ', grade: 3, subject: 'Math' }, 'teacher-token'),
       mockContext,
     );
     expect(result.statusCode).toBe(400);
@@ -321,6 +359,36 @@ describe('classHandler — GET /api/class/:id/students happy path', () => {
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns 400 for invalid classId format', async () => {
+    const result = await handler(
+      mockGetEvent('/api/class/not-a-uuid/students', 'teacher-token', { id: 'not-a-uuid' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 403 when teacher does not own the class', async () => {
+    mockGetItem.mockImplementation(async (table, id) => {
+      if (table === 'classes' && id === VALID_CLASS_ID) {
+        return {
+          classId: VALID_CLASS_ID,
+          className: 'Grade 3 Math',
+          teacherId: '99999999-9999-4999-8999-999999999999',
+          grade: 3,
+          subject: 'Math',
+          inviteCode: 'ABC123',
+        };
+      }
+      return null;
+    });
+
+    const result = await handler(
+      mockGetEvent('/api/class/33333333/students', 'teacher-token', { id: VALID_CLASS_ID }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
   });
 
 });

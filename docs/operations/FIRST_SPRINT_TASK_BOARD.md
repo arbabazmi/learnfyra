@@ -202,7 +202,7 @@ Establish the core platform foundation so authenticated users can enter the syst
 - Title: Define bank-first generator contract
 - Owner: `architect-agent` + `backend-developer-agent`
 - Primary executor: Claude
-- Status: todo
+- Status: completed
 - Priority: P0
 - Inputs:
   - `docs/specs/modules/M03-worksheet-generator-spec.md`
@@ -219,7 +219,7 @@ Establish the core platform foundation so authenticated users can enter the syst
 - Title: Implement generator preparation slice
 - Owner: `backend-developer-agent`
 - Primary executor: Copilot
-- Status: todo
+- Status: completed
 - Depends on: `M03-BE-01`, `M02-BE-02`
 - Files target:
   - `src/ai/generator.js`
@@ -298,8 +298,8 @@ Establish the core platform foundation so authenticated users can enter the syst
 | M02-FE-01 | Question Bank | ui-agent + frontend-developer-agent | Claude | todo |
 | M02-FE-02 | Question Bank | frontend-developer-agent | Copilot | todo |
 | M02-QA-01 | Question Bank | qa-agent | Claude/Copilot | todo |
-| M03-BE-01 | Generator | architect-agent + backend-developer-agent | Claude | todo |
-| M03-BE-02 | Generator | backend-developer-agent | Copilot | todo |
+| M03-BE-01 | Generator | architect-agent + backend-developer-agent | Claude | completed |
+| M03-BE-02 | Generator | backend-developer-agent | Copilot | completed |
 | M03-FE-01 | Generator | ui-agent + frontend-developer-agent | Claude | todo |
 | M03-FE-02 | Generator | frontend-developer-agent | Copilot | todo |
 | M03-QA-01 | Generator | qa-agent | Claude/Copilot | todo |

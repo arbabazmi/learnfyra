@@ -15,6 +15,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Project root is two levels up from src/db/
 const DATA_DIR = join(__dirname, '../../data-local');
 
+const _writeLocks = new Map();
+
+function withTableLock(tableName, fn) {
+  const prev = _writeLocks.get(tableName) || Promise.resolve();
+  const next = prev.then(fn);
+  _writeLocks.set(tableName, next.catch(() => {}));
+  return next;
+}
+
 /**
  * Ensures the data-local directory exists.
  * @returns {void}
@@ -86,20 +95,22 @@ export const localDbAdapter = {
    * @returns {Promise<Object>} The stored item
    */
   async putItem(table, item) {
-    const records = readTable(table);
-    const key = getPrimaryKey(item);
-    const idx = key !== undefined
-      ? records.findIndex((r) => getPrimaryKey(r) === key)
-      : -1;
+    return withTableLock(table, async () => {
+      const records = readTable(table);
+      const key = getPrimaryKey(item);
+      const idx = key !== undefined
+        ? records.findIndex((r) => getPrimaryKey(r) === key)
+        : -1;
 
-    if (idx >= 0) {
-      records[idx] = item;
-    } else {
-      records.push(item);
-    }
+      if (idx >= 0) {
+        records[idx] = item;
+      } else {
+        records.push(item);
+      }
 
-    writeTable(table, records);
-    return item;
+      writeTable(table, records);
+      return item;
+    });
   },
 
   /**

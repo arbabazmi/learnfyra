@@ -1,6 +1,6 @@
 # Backend Task Progress Tracker
 
-Last updated: 2026-03-25
+Last updated: 2026-03-26
 Owner: Backend execution stream
 
 ## Status Legend
@@ -15,21 +15,21 @@ Owner: Backend execution stream
 | 1 | M01-BE-01 | M01 | Define OAuth and local auth API contracts | completed |
 | 2 | M01-BE-02 | M01 | Implement auth backend foundation | completed |
 | 3 | M02-BE-01 | M02 | Define question bank schema and API contracts | completed |
-| 4 | M02-BE-02 | M02 | Implement question bank backend CRUD/search | in-progress |
-| 5 | M03-BE-01 | M03 | Define bank-first generator contract | not-started |
-| 6 | M03-BE-02 | M03 | Implement generator preparation slice | not-started |
-| 7 | M04-BE-01 | M04 | Define solve and submit API/scoring contract | not-started |
-| 8 | M04-BE-02 | M04 | Implement solve and submit backend/scoring logic | not-started |
-| 9 | M05-BE-01 | M05 | Define progress and reporting contracts | not-started |
-| 10 | M05-BE-02 | M05 | Implement progress and reporting backend | not-started |
-| 11 | M06-BE-01 | M06 | Define class relationship contracts | not-started |
-| 12 | M06-BE-02 | M06 | Implement class relationship backend logic | not-started |
-| 13 | M07-BE-01 | M07 | Define admin control-plane contracts | not-started |
-| 14 | M07-BE-02 | M07 | Implement admin control-plane backend logic | not-started |
-| 15 | INT-BE-01 | Cross-module | Integration contract and risk map | not-started |
-| 16 | INT-BE-02 | Cross-module | Integration hardening implementation | not-started |
-| 17 | RC-BE-01 | Release | Backend contract lock and compatibility check | not-started |
-| 18 | RC-BE-02 | Release | Final backend hardening for release candidate | not-started |
+| 4 | M02-BE-02 | M02 | Implement question bank backend CRUD/search | completed |
+| 5 | M03-BE-01 | M03 | Define bank-first generator contract | completed |
+| 6 | M03-BE-02 | M03 | Implement generator preparation slice | completed |
+| 7 | M04-BE-01 | M04 | Define solve and submit API/scoring contract | completed |
+| 8 | M04-BE-02 | M04 | Implement solve and submit backend/scoring logic | completed |
+| 9 | M05-BE-01 | M05 | Define progress and reporting contracts | completed |
+| 10 | M05-BE-02 | M05 | Implement progress and reporting backend | completed |
+| 11 | M06-BE-01 | M06 | Define class relationship contracts | completed |
+| 12 | M06-BE-02 | M06 | Implement class relationship backend logic | completed |
+| 13 | M07-BE-01 | M07 | Define admin control-plane contracts | completed |
+| 14 | M07-BE-02 | M07 | Implement admin control-plane backend logic | completed |
+| 15 | INT-BE-01 | Cross-module | Integration contract and risk map | completed |
+| 16 | INT-BE-02 | Cross-module | Integration hardening implementation | completed |
+| 17 | RC-BE-01 | Release | Backend contract lock and compatibility check | completed |
+| 18 | RC-BE-02 | Release | Final backend hardening for release candidate | completed |
 
 ## Update Rule
 - Move only one item to in-progress at a time.
@@ -136,7 +136,7 @@ Output: files changed, review results, test report, open issues.
 
 ### 11) M06-BE-01
 ```text
-Agent: backend-developer-agent + architect-agent
+Agent: backend-developer-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: M06-BE-01
 Goal: Define class relationship contracts.
@@ -160,7 +160,7 @@ Output: files changed, review findings, QA results, blockers.
 
 ### 13) M07-BE-01
 ```text
-Agent: backend-developer-agent + architect-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: M07-BE-01
 Goal: Define admin control-plane contracts.
@@ -172,7 +172,7 @@ Output: implementation-ready contract + error model + risk notes.
 
 ### 14) M07-BE-02
 ```text
-Agent: backend-developer-agent + code-reviewer-agent + qa-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: M07-BE-02
 Goal: Implement admin control-plane backend logic.
@@ -184,7 +184,7 @@ Output: files changed, reviewer severity findings, QA pass/fail, blockers.
 
 ### 15) INT-BE-01
 ```text
-Agent: backend-developer-agent + architect-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: INT-BE-01
 Goal: Define cross-module integration contract and risk map.
@@ -196,7 +196,7 @@ Output: integration contract + prioritized risk list.
 
 ### 16) INT-BE-02
 ```text
-Agent: backend-developer-agent + code-reviewer-agent + qa-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: INT-BE-02
 Goal: Implement integration hardening across backend modules.
@@ -208,7 +208,7 @@ Output: files changed, review findings, test evidence, unresolved risks.
 
 ### 17) RC-BE-01
 ```text
-Agent: backend-developer-agent + architect-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: RC-BE-01
 Goal: Freeze backend release contract and compatibility guarantees.
@@ -220,7 +220,7 @@ Output: release contract baseline + go/no-go risks.
 
 ### 18) RC-BE-02
 ```text
-Agent: backend-developer-agent + code-reviewer-agent + qa-agent
+Agent: backend-developer-agent + architect-agent + code-reviewer-agent + qa-agent
 Mode: standard
 Task ID: RC-BE-02
 Goal: Final backend release-candidate hardening.

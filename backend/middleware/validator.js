@@ -6,6 +6,8 @@
 const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
 const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Mixed'];
 const VALID_FORMATS = ['PDF', 'Word (.docx)', 'HTML'];
+const VALID_GENERATION_MODES = ['auto', 'bank-first'];
+const VALID_PROVENANCE_LEVELS = ['none', 'summary', 'full'];
 
 /**
  * Returns a trimmed string when input is a string, otherwise empty.
@@ -62,9 +64,12 @@ export function validateGenerateBody(body) {
     throw new Error(`subject must be one of: ${VALID_SUBJECTS.join(', ')}.`);
   }
 
-  // topic: required, non-empty string
+  // topic: required, non-empty string, max 200 characters
   if (typeof body.topic !== 'string' || !body.topic.trim()) {
     throw new Error('topic must be a non-empty string.');
+  }
+  if (body.topic.trim().length > 200) {
+    throw new Error('topic must be 200 characters or fewer.');
   }
 
   // difficulty: required, one of valid list
@@ -86,6 +91,16 @@ export function validateGenerateBody(body) {
   // includeAnswerKey: optional boolean, defaults to true
   const includeAnswerKey = body.includeAnswerKey !== false;
 
+  const generationMode = body.generationMode == null ? 'auto' : String(body.generationMode).trim();
+  if (!VALID_GENERATION_MODES.includes(generationMode)) {
+    throw new Error(`generationMode must be one of: ${VALID_GENERATION_MODES.join(', ')}.`);
+  }
+
+  const provenanceLevel = body.provenanceLevel == null ? 'summary' : String(body.provenanceLevel).trim();
+  if (!VALID_PROVENANCE_LEVELS.includes(provenanceLevel)) {
+    throw new Error(`provenanceLevel must be one of: ${VALID_PROVENANCE_LEVELS.join(', ')}.`);
+  }
+
   const studentName = normalizeOptionalString(body.studentName, 80);
   const teacherName = normalizeOptionalString(body.teacherName, 80);
   const period = normalizeOptionalString(body.period, 40);
@@ -100,6 +115,8 @@ export function validateGenerateBody(body) {
     questionCount,
     format: body.format,
     includeAnswerKey,
+    generationMode,
+    provenanceLevel,
     studentName,
     worksheetDate,
     teacherName,

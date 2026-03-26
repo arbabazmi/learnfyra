@@ -24,5 +24,6 @@ Thumbs.db
 npm-debug.log*
 
 # CDK generated output
+cdk.out/
 infra/cdk/cdk.out/
 infra/cdk/cdk-outputs.json

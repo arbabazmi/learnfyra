@@ -11,7 +11,9 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // ─── Mock fs BEFORE any dynamic import of the handler ────────────────────────
 
 jest.unstable_mockModule('fs', () => ({
-  readFileSync: jest.fn(),
+  promises: {
+    readFile: jest.fn(),
+  },
 }));
 
 // ─── Mock resultBuilder BEFORE any dynamic import of the handler ─────────────
@@ -22,7 +24,7 @@ jest.unstable_mockModule('../../src/solve/resultBuilder.js', () => ({
 
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
 
-const { readFileSync } = await import('fs');
+const { promises: fsPromises } = await import('fs');
 const { buildResult } = await import('../../src/solve/resultBuilder.js');
 const { handler } = await import('../../backend/handlers/submitHandler.js');
 
@@ -73,7 +75,7 @@ const mockContext = { callbackWaitsForEmptyEventLoop: true };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  readFileSync.mockReturnValue(JSON.stringify(mockSolveData));
+  fsPromises.readFile.mockResolvedValue(JSON.stringify(mockSolveData));
   buildResult.mockReturnValue(mockResultResponse);
 });
 
@@ -128,6 +130,14 @@ describe('submitHandler — happy path', () => {
     expect(body).toMatchObject({ worksheetId: VALID_ID, totalScore: 2, percentage: 100 });
   });
 
+  it('passes an empty answers array through for valid no-answer submissions', async () => {
+    await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: [], timeTaken: 0, timed: false }),
+      mockContext,
+    );
+    expect(buildResult).toHaveBeenCalledWith(mockSolveData, [], 0, false);
+  });
+
   it('CORS headers are present on a 200 response', async () => {
     const result = await handler(
       mockEvent({ worksheetId: VALID_ID, answers: validAnswers }),
@@ -157,6 +167,25 @@ describe('submitHandler — 400 invalid worksheetId format', () => {
     );
     const body = JSON.parse(result.body);
     expect(body.error).toMatch(/invalid worksheetId format/i);
+  });
+
+  it('returns SUBMIT_INVALID_REQUEST code for invalid worksheetId format', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: '../etc/passwd', answers: validAnswers }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INVALID_REQUEST');
+  });
+
+  it('rejects URL-encoded traversal payloads as invalid worksheetId format', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: '%2e%2e%2fetc%2fpasswd', answers: validAnswers }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INVALID_REQUEST');
   });
 
   it('CORS headers are present on invalid-format 400 response', async () => {
@@ -191,6 +220,15 @@ describe('submitHandler — 400 missing worksheetId', () => {
     expect(body.error).toMatch(/worksheetId/i);
   });
 
+  it('returns SUBMIT_INVALID_REQUEST code when worksheetId is missing', async () => {
+    const result = await handler(
+      mockEvent({ answers: validAnswers }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INVALID_REQUEST');
+  });
+
   it('CORS headers are present on a 400 response', async () => {
     const result = await handler(
       mockEvent({ answers: validAnswers }),
@@ -222,6 +260,15 @@ describe('submitHandler — 400 answers not an array', () => {
     expect(body.error).toBe('answers must be an array.');
   });
 
+  it('returns SUBMIT_INVALID_REQUEST code when answers is not an array', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: 'not-an-array' }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INVALID_REQUEST');
+  });
+
   it('returns status 400 when answers is missing (undefined → undefined)', async () => {
     const result = await handler(
       mockEvent({ worksheetId: VALID_ID }),
@@ -238,6 +285,98 @@ describe('submitHandler — 400 answers not an array', () => {
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
+  it('returns 400 when an answers entry is not an object', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: ['wrong-shape'] }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when an answers entry number is missing or invalid', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: [{ answer: '24' }] }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.error).toMatch(/positive integer number/i);
+  });
+
+  it('returns 400 when answers contains duplicate question numbers', async () => {
+    const result = await handler(
+      mockEvent({
+        worksheetId: VALID_ID,
+        answers: [
+          { number: 1, answer: '24' },
+          { number: 1, answer: '25' },
+        ],
+      }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.error).toMatch(/duplicate question numbers/i);
+  });
+
+});
+
+// ─── 400 — malformed JSON body ────────────────────────────────────────────────
+
+describe('submitHandler — 400 malformed JSON body', () => {
+
+  it('returns 400 for malformed JSON body', async () => {
+    const event = {
+      httpMethod: 'POST',
+      body: '{not valid json{{',
+    };
+    const result = await handler(event, mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.error).toBeDefined();
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns SUBMIT_INVALID_REQUEST code for malformed JSON body', async () => {
+    const event = {
+      httpMethod: 'POST',
+      body: '{not valid json{{',
+    };
+    const result = await handler(event, mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INVALID_REQUEST');
+  });
+
+});
+
+// ─── 500 — unexpected internal error ─────────────────────────────────────────
+
+describe('submitHandler — 500 internal error', () => {
+
+  it('returns 500 when buildResult throws an unexpected error', async () => {
+    buildResult.mockImplementation(() => {
+      throw new Error('unexpected error');
+    });
+    const result = await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: validAnswers, timeTaken: 120, timed: false }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(500);
+    const body = JSON.parse(result.body);
+    expect(body.error).toBeDefined();
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns SUBMIT_INTERNAL_ERROR code on 500', async () => {
+    buildResult.mockImplementation(() => {
+      throw new Error('unexpected error');
+    });
+    const result = await handler(
+      mockEvent({ worksheetId: VALID_ID, answers: validAnswers }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_INTERNAL_ERROR');
+  });
+
 });
 
 // ─── 404 — worksheet not found ────────────────────────────────────────────────
@@ -247,7 +386,7 @@ describe('submitHandler — 404 worksheet not found', () => {
   beforeEach(() => {
     const err = new Error('ENOENT: no such file or directory');
     err.code = 'ENOENT';
-    readFileSync.mockImplementation(() => { throw err; });
+    fsPromises.readFile.mockRejectedValue(err);
   });
 
   it('returns status 404 when solve-data.json does not exist', async () => {
@@ -265,6 +404,15 @@ describe('submitHandler — 404 worksheet not found', () => {
     );
     const body = JSON.parse(result.body);
     expect(body.error).toBeTruthy();
+  });
+
+  it('returns SUBMIT_NOT_FOUND code on 404', async () => {
+    const result = await handler(
+      mockEvent({ worksheetId: MISSING_ID, answers: validAnswers }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SUBMIT_NOT_FOUND');
   });
 
   it('CORS headers are present on a 404 response', async () => {

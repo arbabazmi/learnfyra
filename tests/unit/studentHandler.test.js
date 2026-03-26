@@ -109,7 +109,7 @@ describe('studentHandler — GET /api/student/profile happy path', () => {
   };
 
   const membershipRecords = [
-    { id: `${VALID_CLASS_ID}#${VALID_STUDENT_ID}`, classId: VALID_CLASS_ID, studentId: VALID_STUDENT_ID },
+    { id: `${VALID_CLASS_ID}#${VALID_STUDENT_ID}`, classId: VALID_CLASS_ID, studentId: VALID_STUDENT_ID, status: 'active' },
   ];
 
   beforeEach(() => {
@@ -154,6 +154,20 @@ describe('studentHandler — GET /api/student/profile happy path', () => {
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('filters inactive memberships from profile response', async () => {
+    mockQueryByField.mockResolvedValueOnce([
+      { id: 'x1', classId: VALID_CLASS_ID, studentId: VALID_STUDENT_ID, status: 'active' },
+      { id: 'x2', classId: '44444444-4444-4444-8444-444444444444', studentId: VALID_STUDENT_ID, status: 'removed' },
+    ]);
+
+    const result = await handler(
+      mockGetEvent('/api/student/profile', 'valid-token'),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.classMemberships).toEqual([VALID_CLASS_ID]);
   });
 
 });
@@ -239,6 +253,14 @@ describe('studentHandler — POST /api/student/join-class happy path', () => {
     }));
   });
 
+  it('accepts lowercase inviteCode by normalizing to uppercase', async () => {
+    await handler(
+      mockPostEvent('/api/student/join-class', { inviteCode: 'abc123' }, 'valid-token'),
+      mockContext,
+    );
+    expect(mockQueryByField).toHaveBeenCalledWith('classes', 'inviteCode', 'ABC123');
+  });
+
   it('CORS headers are present on a 200 join-class response', async () => {
     const result = await handler(
       mockPostEvent('/api/student/join-class', { inviteCode: 'ABC123' }, 'valid-token'),
@@ -273,6 +295,41 @@ describe('studentHandler — POST /api/student/join-class error cases', () => {
       mockContext,
     );
     expect(result.statusCode).toBe(404);
+  });
+
+  it('returns 400 for malformed inviteCode format', async () => {
+    const result = await handler(
+      mockPostEvent('/api/student/join-class', { inviteCode: 'ab-12' }, 'valid-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 500 when duplicate classes share the same invite code', async () => {
+    mockQueryByField.mockResolvedValue([
+      { classId: VALID_CLASS_ID, className: 'Grade 3 Math', grade: 3, subject: 'Math', inviteCode: 'ABC123' },
+      { classId: '44444444-4444-4444-8444-444444444444', className: 'Grade 3 Science', grade: 3, subject: 'Science', inviteCode: 'ABC123' },
+    ]);
+
+    const result = await handler(
+      mockPostEvent('/api/student/join-class', { inviteCode: 'ABC123' }, 'valid-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(500);
+  });
+
+  it('returns 403 when a teacher tries to join a class', async () => {
+    mockVerifyToken.mockReturnValue({
+      sub: '22222222-2222-4222-8222-222222222222',
+      email: 'teacher@test.com',
+      role: 'teacher',
+    });
+
+    const result = await handler(
+      mockPostEvent('/api/student/join-class', { inviteCode: 'ABC123' }, 'teacher-token'),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
   });
 
   it('returns 409 when student is already a member of the class', async () => {

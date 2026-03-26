@@ -14,6 +14,26 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import { existsSync } from 'fs';
+
+function resolveHandlerEntry(handlerFile: string): string {
+  const candidates = [
+    // ts-node / source path: infra/cdk/lib -> repo root via ../../../
+    path.resolve(__dirname, '../../../backend/handlers', handlerFile),
+    // compiled test path: infra/cdk/dist/lib -> repo root via ../../../../
+    path.resolve(__dirname, '../../../../backend/handlers', handlerFile),
+    // when cwd is repository root
+    path.resolve(process.cwd(), 'backend/handlers', handlerFile),
+    // when cwd is infra/cdk
+    path.resolve(process.cwd(), '../../backend/handlers', handlerFile),
+  ];
+
+  const resolved = candidates.find((candidate) => existsSync(candidate));
+  if (!resolved) {
+    throw new Error(`Cannot resolve handler entry for ${handlerFile}`);
+  }
+  return resolved;
+}
 
 export interface LearnfyraStackProps extends cdk.StackProps {
   appEnv: 'dev' | 'staging' | 'prod';
@@ -239,7 +259,7 @@ export class LearnfyraStack extends cdk.Stack {
       // @sparticuz/chromium does not provide an ARM Lambda binary here, so the
       // PDF-generating function must run on x86_64 to execute Chromium in /tmp.
       architecture: lambda.Architecture.X86_64,
-      entry: path.join(__dirname, '../../../backend/handlers/generateHandler.js'),
+      entry: resolveHandlerEntry('generateHandler.js'),
       handler: 'handler',
       memorySize: isDev ? 512 : 1024,
       timeout: cdk.Duration.seconds(60),
@@ -264,7 +284,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-download`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/downloadHandler.js'),
+      entry: resolveHandlerEntry('downloadHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
@@ -289,7 +309,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-auth`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/authHandler.js'),
+      entry: resolveHandlerEntry('authHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(15),
@@ -307,7 +327,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-solve`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/solveHandler.js'),
+      entry: resolveHandlerEntry('solveHandler.js'),
       handler: 'handler',
       memorySize: 128,
       timeout: cdk.Duration.seconds(10),
@@ -326,7 +346,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-submit`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/submitHandler.js'),
+      entry: resolveHandlerEntry('submitHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(15),
@@ -345,7 +365,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-progress`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/progressHandler.js'),
+      entry: resolveHandlerEntry('progressHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(15),
@@ -363,7 +383,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-analytics`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/analyticsHandler.js'),
+      entry: resolveHandlerEntry('analyticsHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(15),
@@ -381,7 +401,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-class`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/classHandler.js'),
+      entry: resolveHandlerEntry('classHandler.js'),
       handler: 'handler',
       memorySize: 128,
       timeout: cdk.Duration.seconds(10),
@@ -399,7 +419,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-rewards`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/rewardsHandler.js'),
+      entry: resolveHandlerEntry('rewardsHandler.js'),
       handler: 'handler',
       memorySize: 128,
       timeout: cdk.Duration.seconds(10),
@@ -417,7 +437,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-student`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/studentHandler.js'),
+      entry: resolveHandlerEntry('studentHandler.js'),
       handler: 'handler',
       memorySize: 128,
       timeout: cdk.Duration.seconds(10),
@@ -435,7 +455,7 @@ export class LearnfyraStack extends cdk.Stack {
       functionName: `learnfyra-${appEnv}-lambda-admin`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      entry: path.join(__dirname, '../../../backend/handlers/questionBankHandler.js'),
+      entry: resolveHandlerEntry('questionBankHandler.js'),
       handler: 'handler',
       memorySize: 256,
       timeout: cdk.Duration.seconds(15),

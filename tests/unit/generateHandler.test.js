@@ -32,6 +32,17 @@ jest.unstable_mockModule('../../src/ai/assembler.js', () => ({
   assembleWorksheet: jest.fn().mockResolvedValue({
     worksheet: sampleWorksheet,
     bankStats: { fromBank: 0, generated: 10, totalStored: 10 },
+    provenance: {
+      mode: 'bank-first',
+      level: 'summary',
+      usedBank: false,
+      usedGeneration: true,
+      selectedBankCount: 0,
+      generatedCount: 10,
+      storedGeneratedCount: 10,
+      bankedQuestionIds: [],
+      generatedByModels: ['claude-haiku-4-5-20251001'],
+    },
   }),
 }));
 
@@ -45,7 +56,9 @@ jest.unstable_mockModule('../../src/exporters/answerKey.js', () => ({
 
 // Mock fs so readFileSync (used inside uploadToS3) returns a fake buffer
 jest.unstable_mockModule('fs', () => ({
-  readFileSync: jest.fn().mockReturnValue(Buffer.from('fake-file-content')),
+  promises: {
+    readFile: jest.fn().mockResolvedValue(Buffer.from('fake-file-content')),
+  },
 }));
 
 // Mock crypto so randomUUID returns a deterministic value
@@ -106,6 +119,17 @@ beforeEach(() => {
   assembleWorksheet.mockResolvedValue({
     worksheet: sampleWorksheet,
     bankStats: { fromBank: 0, generated: 10, totalStored: 10 },
+    provenance: {
+      mode: 'bank-first',
+      level: 'summary',
+      usedBank: false,
+      usedGeneration: true,
+      selectedBankCount: 0,
+      generatedCount: 10,
+      storedGeneratedCount: 10,
+      bankedQuestionIds: [],
+      generatedByModels: ['claude-haiku-4-5-20251001'],
+    },
   });
   exportWorksheet.mockResolvedValue(['/tmp/worksheet.pdf']);
   exportAnswerKey.mockResolvedValue(['/tmp/answer-key.pdf']);
@@ -268,6 +292,40 @@ describe('generateHandler — valid request', () => {
     });
   });
 
+  it('metadata includes additive provenanceSummary when assembler returns provenance', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    const { metadata } = JSON.parse(result.body);
+    expect(metadata.provenanceSummary).toMatchObject({
+      mode: 'bank-first',
+      level: 'summary',
+      usedGeneration: true,
+      generatedByModels: ['claude-haiku-4-5-20251001'],
+    });
+  });
+
+  it('passes generationMode and provenanceLevel through to assembleWorksheet', async () => {
+    const body = {
+      ...validBody,
+      generationMode: 'bank-first',
+      provenanceLevel: 'full',
+    };
+    await handler(mockEvent(body), mockContext);
+    expect(assembleWorksheet).toHaveBeenCalledWith(expect.objectContaining({
+      generationMode: 'bank-first',
+      provenanceLevel: 'full',
+    }));
+  });
+
+  it('omits provenanceSummary when assembler does not return provenance', async () => {
+    assembleWorksheet.mockResolvedValueOnce({
+      worksheet: sampleWorksheet,
+      bankStats: { fromBank: 10, generated: 0, totalStored: 0 },
+    });
+    const result = await handler(mockEvent({ ...validBody, provenanceLevel: 'none' }), mockContext);
+    const { metadata } = JSON.parse(result.body);
+    expect(metadata.provenanceSummary).toBeUndefined();
+  });
+
 });
 
 // ─── S3 upload call counts ────────────────────────────────────────────────────
@@ -349,6 +407,21 @@ describe('generateHandler — 400 validation errors', () => {
     expect(result.statusCode).toBe(400);
   });
 
+  it('returns 400 for invalid generationMode', async () => {
+    const result = await handler(mockEvent({ ...validBody, generationMode: 'legacy' }), mockContext);
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 for invalid provenanceLevel', async () => {
+    const result = await handler(mockEvent({ ...validBody, provenanceLevel: 'debug' }), mockContext);
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns WG_INVALID_REQUEST code for validation failures', async () => {
+    const result = await handler(mockEvent({ ...validBody, generationMode: 'legacy' }), mockContext);
+    expect(JSON.parse(result.body).code).toBe('WG_INVALID_REQUEST');
+  });
+
   it('CORS headers present on 400 response', async () => {
     const result = await handler(mockEvent({ ...validBody, grade: 0 }), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
@@ -380,6 +453,17 @@ describe('generateHandler — 400 malformed JSON', () => {
     };
     const result = await handler(event, mockContext);
     expect(JSON.parse(result.body).success).toBe(false);
+  });
+
+  it('returns WG_INVALID_REQUEST code for malformed JSON', async () => {
+    const event = {
+      httpMethod: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{not valid json',
+      queryStringParameters: null,
+    };
+    const result = await handler(event, mockContext);
+    expect(JSON.parse(result.body).code).toBe('WG_INVALID_REQUEST');
   });
 
   it('CORS headers present on malformed JSON 400 response', async () => {
@@ -424,6 +508,12 @@ describe('generateHandler — 500 assembler error', () => {
     const body = JSON.parse(result.body);
     expect(body.error).toBeTruthy();
     expect(typeof body.error).toBe('string');
+  });
+
+  it('returns an additive machine-readable code on 500 responses', async () => {
+    assembleWorksheet.mockRejectedValueOnce(new Error('Claude API returned an empty response.'));
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(JSON.parse(result.body).code).toBe('WG_GENERATION_EMPTY_RESPONSE');
   });
 
   it('CORS headers present on 500 response', async () => {

@@ -197,6 +197,18 @@ describe('assembleWorksheet — full bank coverage', () => {
     expect(worksheet).toHaveProperty('totalPoints');
   });
 
+  it('returns summary provenance by default', async () => {
+    const { provenance } = await assembleWorksheet(baseOptions);
+    expect(provenance).toMatchObject({
+      mode: 'bank-first',
+      level: 'summary',
+      usedBank: true,
+      usedGeneration: false,
+      selectedBankCount: 5,
+      generatedCount: 0,
+    });
+  });
+
 });
 
 // ─── Empty bank (generate all questions) ─────────────────────────────────────
@@ -249,6 +261,11 @@ describe('assembleWorksheet — empty bank, generate all', () => {
     expect(worksheet.questions[4].number).toBe(5);
   });
 
+  it('summary provenance includes generated model identifiers', async () => {
+    const { provenance } = await assembleWorksheet(baseOptions);
+    expect(provenance.generatedByModels).toEqual([process.env.LOW_COST_MODEL || 'claude-haiku-4-5-20251001']);
+  });
+
 });
 
 // ─── Partial bank coverage (mix of banked + generated) ───────────────────────
@@ -299,6 +316,28 @@ describe('assembleWorksheet — partial bank coverage', () => {
     const { worksheet } = await assembleWorksheet(baseOptions);
     const numbers = worksheet.questions.map(q => q.number);
     expect(numbers).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('full provenance attaches per-question provenance for banked and generated questions', async () => {
+    const { worksheet, provenance } = await assembleWorksheet({ ...baseOptions, provenanceLevel: 'full' });
+    expect(provenance.level).toBe('full');
+    expect(worksheet.questions[0].provenance).toMatchObject({
+      source: 'bank',
+      questionId: expect.stringMatching(/^bqid-/),
+      reuseRecorded: true,
+    });
+    expect(worksheet.questions[4].provenance).toMatchObject({
+      source: 'generated',
+      modelUsed: 'claude-haiku-4-5-20251001',
+    });
+  });
+
+  it('none provenance omits worksheet and response provenance fields', async () => {
+    const { worksheet, provenance } = await assembleWorksheet({ ...baseOptions, provenanceLevel: 'none' });
+    expect(provenance).toBeUndefined();
+    worksheet.questions.forEach((question) => {
+      expect(question.provenance).toBeUndefined();
+    });
   });
 
 });

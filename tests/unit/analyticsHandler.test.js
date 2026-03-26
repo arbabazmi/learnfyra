@@ -22,6 +22,7 @@ const mockVerifyToken = jest.fn();
 
 const mockGetItem      = jest.fn();
 const mockQueryByField = jest.fn();
+const mockListAll      = jest.fn();
 
 // ─── Mock ../../src/auth/index.js BEFORE any dynamic import ──────────────────
 
@@ -37,6 +38,7 @@ jest.unstable_mockModule('../../src/db/index.js', () => ({
   getDbAdapter: jest.fn(() => ({
     getItem:      mockGetItem,
     queryByField: mockQueryByField,
+    listAll:      mockListAll,
   })),
 }));
 
@@ -347,6 +349,94 @@ describe('analyticsHandler — student role blocked', () => {
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── GET /api/analytics/student/:id ──────────────────────────────────────────
+
+describe('analyticsHandler — GET /api/analytics/student/:id', () => {
+
+  beforeEach(() => {
+    mockVerifyToken.mockReturnValue(teacherDecoded);
+    mockGetItem.mockImplementation(async (table, id) => {
+      if (table === 'users') {
+        return {
+          userId: id,
+          displayName: 'Alex Student',
+          email: 'alex@test.com',
+        };
+      }
+      if (table === 'classes') {
+        return classRecord;
+      }
+      return null;
+    });
+    mockQueryByField.mockResolvedValue([
+      {
+        attemptId: 's1',
+        studentId: VALID_STUDENT_ID,
+        worksheetId: VALID_WORKSHEET_ID,
+        classId: VALID_CLASS_ID,
+        grade: 3,
+        subject: 'Math',
+        topic: 'Multiplication',
+        difficulty: 'Medium',
+        totalScore: 8,
+        totalPoints: 10,
+        percentage: 80,
+        answers: [{ number: 1, answer: '24' }],
+        createdAt: '2026-03-25T10:00:00.000Z',
+      },
+    ]);
+    mockListAll.mockResolvedValue([
+      {
+        id: `${VALID_STUDENT_ID}#Math`,
+        studentId: VALID_STUDENT_ID,
+        subject: 'Math',
+        attemptCount: 1,
+        averagePercentage: 80,
+        lastAttemptAt: '2026-03-25T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('returns 200 with attempts and aggregates for teacher', async () => {
+    const result = await handler(
+      mockGetEvent(
+        `/api/analytics/student/${VALID_STUDENT_ID}`,
+        'teacher-token',
+        { id: VALID_STUDENT_ID },
+      ),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.displayName).toBe('Alex Student');
+    expect(Array.isArray(body.attempts)).toBe(true);
+    expect(Array.isArray(body.aggregates)).toBe(true);
+  });
+
+  it('returns 403 when classId is provided but teacher does not own class', async () => {
+    mockGetItem.mockImplementation(async (table) => {
+      if (table === 'users') return { userId: VALID_STUDENT_ID, displayName: 'Alex Student' };
+      if (table === 'classes') return { ...classRecord, teacherId: '77777777-7777-4777-8777-777777777777' };
+      return null;
+    });
+
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: `/api/analytics/student/${VALID_STUDENT_ID}`,
+        headers: { authorization: 'Bearer teacher-token' },
+        pathParameters: { id: VALID_STUDENT_ID },
+        queryStringParameters: { classId: VALID_CLASS_ID },
+        body: null,
+      },
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(403);
   });
 
 });

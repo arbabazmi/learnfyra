@@ -16,7 +16,7 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { readFileSync } from 'fs';
+import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import { validateGenerateBody } from '../middleware/validator.js';
 
@@ -118,7 +118,7 @@ const FORMAT_EXT = {
 async function uploadToS3(localPath, s3Key, contentType) {
   const bucket = process.env.WORKSHEET_BUCKET_NAME;
   if (!bucket) throw new Error('WORKSHEET_BUCKET_NAME environment variable is not set.');
-  const body = readFileSync(localPath);
+  const body = await fs.readFile(localPath);
   await getS3().send(new PutObjectCommand({
     Bucket: bucket,
     Key: s3Key,
@@ -142,6 +142,23 @@ function mimeType(ext) {
   }
 }
 
+/**
+ * Maps thrown errors to stable machine-readable error codes.
+ * @param {Error & { code?: string }} err
+ * @returns {string}
+ */
+function mapGenerationErrorCode(err) {
+  if (err?.code) return err.code;
+  const message = String(err?.message || '').toLowerCase();
+  if (message.includes('empty response')) return 'WG_GENERATION_EMPTY_RESPONSE';
+  if (message.includes('max_tokens') || message.includes('truncated')) return 'WG_GENERATION_TRUNCATED';
+  if (message.includes('expected exactly')) return 'WG_GENERATION_COUNT_MISMATCH';
+  if (message.includes('refused')) return 'WG_GENERATION_REFUSED';
+  if (message.includes('validation')) return 'WG_VALIDATION_FAILED';
+  if (message.includes('bucket') || message.includes('upload')) return 'WG_UPLOAD_FAILED';
+  return 'WG_GENERATION_FAILED';
+}
+
 export const handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
 
@@ -162,7 +179,11 @@ export const handler = async (event, context) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: 'Invalid JSON in request body.' }),
+        body: JSON.stringify({
+          success: false,
+          error: 'Invalid JSON in request body.',
+          code: 'WG_INVALID_REQUEST',
+        }),
       };
     }
 
@@ -173,7 +194,11 @@ export const handler = async (event, context) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: err.message }),
+        body: JSON.stringify({
+          success: false,
+          error: err.message,
+          code: 'WG_INVALID_REQUEST',
+        }),
       };
     }
 
@@ -185,6 +210,8 @@ export const handler = async (event, context) => {
       questionCount,
       format,
       includeAnswerKey,
+      generationMode,
+      provenanceLevel,
       studentName,
       worksheetDate,
       teacherName,
@@ -200,7 +227,15 @@ export const handler = async (event, context) => {
 
     // 2. Assemble worksheet JSON via M03 bank-first pipeline
     const assembleWorksheet = await getAssembleWorksheet();
-    const { worksheet, bankStats } = await assembleWorksheet({ grade, subject, topic, difficulty, questionCount });
+    const { worksheet, bankStats, provenance } = await assembleWorksheet({
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      generationMode,
+      provenanceLevel,
+    });
 
     // 3. Export worksheet file to /tmp
     const exportWorksheet = await getExportWorksheet();
@@ -252,8 +287,7 @@ export const handler = async (event, context) => {
       questionCount,
       format,
       bankStats,
-      // NOTE: studentDetails is returned to the caller for session display only.
-      // DO NOT write studentDetails to metadata.json on S3 — CLAUDE.md DBA rule: no PII in storage.
+      ...(provenance ? { provenanceSummary: provenance } : {}),
       studentDetails: {
         studentName,
         worksheetDate,
@@ -282,6 +316,7 @@ export const handler = async (event, context) => {
       body: JSON.stringify({
         success: false,
         error: 'Worksheet generation failed. Please try again.',
+        code: mapGenerationErrorCode(err),
       }),
     };
   }

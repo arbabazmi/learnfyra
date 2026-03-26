@@ -176,6 +176,73 @@ function sampleN(arr, n) {
   return copy.slice(0, count);
 }
 
+/**
+ * Returns whether full per-question provenance should be attached.
+ * @param {string} provenanceLevel
+ * @returns {boolean}
+ */
+function shouldAttachQuestionProvenance(provenanceLevel) {
+  return provenanceLevel === 'full';
+}
+
+/**
+ * Builds per-question provenance for a banked question.
+ * @param {Object} question
+ * @param {boolean} reuseRecorded
+ * @returns {Object}
+ */
+function buildBankQuestionProvenance(question, reuseRecorded) {
+  return {
+    source: 'bank',
+    questionId: question.questionId || null,
+    reuseRecorded,
+    modelUsed: null,
+    storedToBank: false,
+  };
+}
+
+/**
+ * Builds per-question provenance for a generated question.
+ * @param {string} model
+ * @param {Object|null} stored
+ * @returns {Object}
+ */
+function buildGeneratedQuestionProvenance(model, stored) {
+  return {
+    source: 'generated',
+    questionId: stored?.questionId || null,
+    reuseRecorded: false,
+    modelUsed: model,
+    storedToBank: Boolean(stored),
+  };
+}
+
+/**
+ * Builds worksheet-level provenance summary.
+ * @param {Object} input
+ * @returns {Object}
+ */
+function buildProvenanceSummary({
+  provenanceLevel,
+  fromBank,
+  missingCount,
+  totalStored,
+  bankedIds,
+  model,
+}) {
+  return {
+    mode: 'bank-first',
+    level: provenanceLevel,
+    usedBank: fromBank > 0,
+    usedGeneration: missingCount > 0,
+    selectedBankCount: fromBank,
+    generatedCount: missingCount,
+    storedGeneratedCount: totalStored,
+    bankedQuestionIds: bankedIds,
+    generatedByModels: model ? [model] : [],
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -191,14 +258,23 @@ function sampleN(arr, n) {
  * @param {string}  options.difficulty     - Easy | Medium | Hard | Mixed
  * @param {number}  options.questionCount  - Total questions requested (5–30)
  *
- * @returns {Promise<{ worksheet: Object, bankStats: { fromBank: number, generated: number, totalStored: number } }>}
+ * @param {string}  [options.generationMode]  - auto | bank-first
+ * @param {string}  [options.provenanceLevel] - none | summary | full
+ * @returns {Promise<{ worksheet: Object, bankStats: { fromBank: number, generated: number, totalStored: number }, provenance?: Object }>} 
  */
 export async function assembleWorksheet(options) {
-  const { grade, subject, topic, difficulty, questionCount } = options;
+  const {
+    grade,
+    subject,
+    topic,
+    difficulty,
+    questionCount,
+    provenanceLevel = 'summary',
+  } = options;
 
   // ── Step 1: Query the bank ──────────────────────────────────────────────────
   const qb = await getQuestionBankAdapter();
-  const candidates = qb.listQuestions({ grade, subject, topic, difficulty });
+  const candidates = await qb.listQuestions({ grade, subject, topic, difficulty });
 
   // ── Step 2: Randomly select up to questionCount banked questions ────────────
   const bankedSelected = sampleN(candidates, questionCount);
@@ -213,13 +289,14 @@ export async function assembleWorksheet(options) {
   // ── Step 3: Full bank coverage — no AI call needed ─────────────────────────
   let generatedQuestions = [];
   let totalStored = 0;
+  let generationModel = null;
 
   if (missingCount > 0) {
     // ── Step 4: Generate only the missing questions via AI ───────────────────
-    const model = pickModel(missingCount, questionCount, difficulty);
-    logger.info(`Assembler — generating ${missingCount} question(s) using model: ${model}`);
+    generationModel = pickModel(missingCount, questionCount, difficulty);
+    logger.info(`Assembler — generating ${missingCount} question(s) using model: ${generationModel}`);
 
-    generatedQuestions = await generateMissingQuestions(options, missingCount, model);
+    generatedQuestions = await generateMissingQuestions(options, missingCount, generationModel);
 
     // ── Step 5–6: Validate and store each new question ────────────────────────
     for (let i = 0; i < generatedQuestions.length; i++) {
@@ -245,10 +322,17 @@ export async function assembleWorksheet(options) {
         subject,
         topic,
         difficulty,
-        modelUsed: model, // use the model variable already in scope — not a second pickModel call (C2)
+        modelUsed: generationModel,
       };
 
-      const { stored } = qb.addIfNotExists(candidate, newEntry);
+      const { stored } = await qb.addIfNotExists(candidate, newEntry);
+      if (shouldAttachQuestionProvenance(provenanceLevel)) {
+        generatedQuestions[i] = {
+          ...q,
+          provenance: buildGeneratedQuestionProvenance(generationModel, stored),
+        };
+      }
+
       if (stored) {
         totalStored++;
         logger.debug(`Assembler — stored new question to bank (questionId: ${stored.questionId})`);
@@ -267,14 +351,21 @@ export async function assembleWorksheet(options) {
 
   // ── Step 8: Merge and renumber questions 1..N ─────────────────────────────
   // Banked questions are placed first, generated questions fill the remainder.
-  const merged = [...bankedSelected, ...generatedQuestions];
+  const bankedQuestions = shouldAttachQuestionProvenance(provenanceLevel)
+    ? bankedSelected.map((question) => ({
+      ...question,
+      provenance: buildBankQuestionProvenance(question, bankedIds.includes(question.questionId)),
+    }))
+    : bankedSelected;
+
+  const merged = [...bankedQuestions, ...generatedQuestions];
 
   const renumbered = merged.map((q, idx) => ({
     ...q,
     number: idx + 1,
   }));
 
-  const totalPoints = renumbered.reduce((sum, q) => sum + (q.points || 1), 0);
+  const totalPoints = renumbered.reduce((sum, q) => sum + (q.points ?? 1), 0);
 
   // ~2 minutes per question as a baseline estimate, minimum 5 minutes (W2)
   const estimatedMinutes = Math.max(5, questionCount * 2);
@@ -296,5 +387,20 @@ export async function assembleWorksheet(options) {
 
   const bankStats = { fromBank, generated: missingCount, totalStored };
 
-  return { worksheet, bankStats };
+  if (provenanceLevel === 'none') {
+    return { worksheet, bankStats };
+  }
+
+  return {
+    worksheet,
+    bankStats,
+    provenance: buildProvenanceSummary({
+      provenanceLevel,
+      fromBank,
+      missingCount,
+      totalStored,
+      bankedIds,
+      model: generationModel,
+    }),
+  };
 }

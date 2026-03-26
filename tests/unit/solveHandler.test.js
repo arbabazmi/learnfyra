@@ -11,12 +11,14 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // ─── Mock fs BEFORE any dynamic import of the handler ────────────────────────
 
 jest.unstable_mockModule('fs', () => ({
-  readFileSync: jest.fn(),
+  promises: {
+    readFile: jest.fn(),
+  },
 }));
 
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
 
-const { readFileSync } = await import('fs');
+const { promises: fsPromises } = await import('fs');
 const { handler } = await import('../../backend/handlers/solveHandler.js');
 
 // ─── Shared fixture ───────────────────────────────────────────────────────────
@@ -50,6 +52,8 @@ const mockSolveData = {
       answer: 'B. 56',
       explanation: '7×8=56.',
       points: 1,
+      provenance: { source: 'generated', modelUsed: 'claude-haiku-4-5-20251001' },
+      questionId: 'qb-123',
     },
   ],
 };
@@ -92,7 +96,7 @@ describe('solveHandler — OPTIONS preflight', () => {
 describe('solveHandler — happy path', () => {
 
   beforeEach(() => {
-    readFileSync.mockReturnValue(JSON.stringify(mockSolveData));
+    fsPromises.readFile.mockResolvedValue(JSON.stringify(mockSolveData));
   });
 
   it('returns status 200 for a valid worksheetId', async () => {
@@ -129,6 +133,15 @@ describe('solveHandler — happy path', () => {
     }
   });
 
+  it('questions in response do NOT include internal provenance or questionId fields', async () => {
+    const result = await handler(mockEvent(VALID_ID), mockContext);
+    const body = JSON.parse(result.body);
+    for (const q of body.questions) {
+      expect(q).not.toHaveProperty('provenance');
+      expect(q).not.toHaveProperty('questionId');
+    }
+  });
+
   it('questions in response still contain the question text', async () => {
     const result = await handler(mockEvent(VALID_ID), mockContext);
     const body = JSON.parse(result.body);
@@ -149,7 +162,7 @@ describe('solveHandler — 404 worksheet not found', () => {
   beforeEach(() => {
     const err = new Error('ENOENT: no such file or directory');
     err.code = 'ENOENT';
-    readFileSync.mockImplementation(() => { throw err; });
+    fsPromises.readFile.mockRejectedValue(err);
   });
 
   it('returns status 404 when the solve-data.json file does not exist', async () => {
@@ -163,9 +176,40 @@ describe('solveHandler — 404 worksheet not found', () => {
     expect(body.error).toBe('Worksheet not found.');
   });
 
+  it('returns SOLVE_NOT_FOUND code on 404', async () => {
+    const result = await handler(mockEvent(MISSING_ID), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SOLVE_NOT_FOUND');
+  });
+
   it('CORS headers are present on a 404 response', async () => {
     const result = await handler(mockEvent(MISSING_ID), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── 500 — internal error ────────────────────────────────────────────────────
+
+describe('solveHandler — 500 internal error', () => {
+
+  it('returns 500 when the stored JSON causes a runtime error during response construction', async () => {
+    // worksheet.questions is a non-null truthy non-array value (e.g. integer 1).
+    // The handler guards with (worksheet.questions || []) but the truthy value
+    // is not an array, so .map() throws a TypeError that reaches the outer catch.
+    fsPromises.readFile.mockResolvedValue(JSON.stringify({ ...mockSolveData, questions: 1 }));
+    const result = await handler(mockEvent(VALID_ID), mockContext);
+    expect(result.statusCode).toBe(500);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SOLVE_INTERNAL_ERROR');
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns error message on 500 response', async () => {
+    fsPromises.readFile.mockResolvedValue(JSON.stringify({ ...mockSolveData, questions: 1 }));
+    const result = await handler(mockEvent(VALID_ID), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.error).toBeDefined();
   });
 
 });
@@ -183,6 +227,19 @@ describe('solveHandler — 400 invalid worksheetId format', () => {
     const result = await handler(mockEvent('../etc/passwd'), mockContext);
     const body = JSON.parse(result.body);
     expect(body.error).toMatch(/invalid worksheetId format/i);
+  });
+
+  it('returns SOLVE_INVALID_WORKSHEET_ID code for invalid format', async () => {
+    const result = await handler(mockEvent('../etc/passwd'), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SOLVE_INVALID_WORKSHEET_ID');
+  });
+
+  it('rejects URL-encoded traversal payloads as invalid worksheetId format', async () => {
+    const result = await handler(mockEvent('%2e%2e%2fetc%2fpasswd'), mockContext);
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SOLVE_INVALID_WORKSHEET_ID');
   });
 
   it('CORS headers are present on invalid-format 400 response', async () => {
@@ -205,6 +262,12 @@ describe('solveHandler — 400 missing worksheetId', () => {
     const result = await handler(mockEvent(null), mockContext);
     const body = JSON.parse(result.body);
     expect(body.error).toBeTruthy();
+  });
+
+  it('returns SOLVE_MISSING_WORKSHEET_ID code when worksheetId is missing', async () => {
+    const result = await handler(mockEvent(null), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('SOLVE_MISSING_WORKSHEET_ID');
   });
 
   it('CORS headers are present on a 400 response', async () => {

@@ -8,7 +8,7 @@
  * Lambda/AWS: S3 integration to be wired in the CDK stack (Phase 5)
  */
 
-import { readFileSync } from 'fs';
+import { promises as fs } from 'fs';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,6 +19,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST,OPTIONS',
 };
+
+const WORKSHEET_ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Validates the submitted answers array without rejecting valid partial submissions.
+ * @param {unknown[]} answers
+ * @returns {string|null}
+ */
+function validateAnswersArray(answers) {
+  const seenNumbers = new Set();
+  for (const entry of answers) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return 'Each answers entry must be an object.';
+    }
+
+    const number = Number(entry.number);
+    if (!Number.isInteger(number) || number < 1) {
+      return 'Each answers entry must include a positive integer number.';
+    }
+
+    if (seenNumbers.has(number)) {
+      return 'answers must not contain duplicate question numbers.';
+    }
+    seenNumbers.add(number);
+  }
+
+  return null;
+}
+
+/**
+ * Ensures a resolved child directory remains inside the base directory.
+ * Uses case-insensitive comparison on Windows.
+ * @param {string} baseDir
+ * @param {string} childDir
+ * @returns {boolean}
+ */
+function isWithinBaseDir(baseDir, childDir) {
+  const normalize = process.platform === 'win32'
+    ? (value) => value.toLowerCase()
+    : (value) => value;
+  const base = normalize(baseDir);
+  const child = normalize(childDir);
+  return child.startsWith(base + sep);
+}
 
 // Lazy-load resultBuilder to keep module load time fast
 let _buildResult;
@@ -41,9 +85,7 @@ async function getBuildResult() {
  * @returns {Promise<{statusCode: number, headers: Object, body: string}>}
  */
 export const handler = async (event, context) => {
-  if (context && context.callbackWaitsForEmptyEventLoop !== undefined) {
-    context.callbackWaitsForEmptyEventLoop = false;
-  }
+  context.callbackWaitsForEmptyEventLoop = false;
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
@@ -57,26 +99,38 @@ export const handler = async (event, context) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Invalid JSON in request body.' }),
+        body: JSON.stringify({
+          error: 'Invalid JSON in request body.',
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
       };
     }
 
     const { worksheetId, answers, timeTaken, timed } = body;
+    const studentName = typeof body.studentName === 'string'
+      ? body.studentName.trim().slice(0, 100)
+      : '';
 
     if (!worksheetId) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'worksheetId is required.' }),
+        body: JSON.stringify({
+          error: 'worksheetId is required.',
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
       };
     }
 
     // Guard against path traversal: worksheetId must be a v4 UUID
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(worksheetId)) {
+    if (!WORKSHEET_ID_REGEX.test(worksheetId)) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Invalid worksheetId format.' }),
+        body: JSON.stringify({
+          error: 'Invalid worksheetId format.',
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
       };
     }
 
@@ -84,7 +138,22 @@ export const handler = async (event, context) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'answers must be an array.' }),
+        body: JSON.stringify({
+          error: 'answers must be an array.',
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
+      };
+    }
+
+    const answersValidationError = validateAnswersArray(answers);
+    if (answersValidationError) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          error: answersValidationError,
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
       };
     }
 
@@ -93,11 +162,14 @@ export const handler = async (event, context) => {
     const localDir = resolve(join(baseDir, worksheetId));
 
     // Ensure the resolved path stays within the worksheets-local directory
-    if (!localDir.startsWith(baseDir + sep)) {
+    if (!isWithinBaseDir(baseDir, localDir)) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Invalid worksheetId format.' }),
+        body: JSON.stringify({
+          error: 'Invalid worksheetId format.',
+          code: 'SUBMIT_INVALID_REQUEST',
+        }),
       };
     }
 
@@ -105,12 +177,15 @@ export const handler = async (event, context) => {
 
     let worksheet;
     try {
-      worksheet = JSON.parse(readFileSync(filePath, 'utf8'));
+      worksheet = JSON.parse(await fs.readFile(filePath, 'utf8'));
     } catch {
       return {
         statusCode: 404,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Worksheet not found.' }),
+        body: JSON.stringify({
+          error: 'Worksheet not found.',
+          code: 'SUBMIT_NOT_FOUND',
+        }),
       };
     }
 
@@ -118,7 +193,7 @@ export const handler = async (event, context) => {
     const result = buildResult(
       worksheet,
       answers,
-      typeof timeTaken === 'number' ? timeTaken : 0,
+      typeof timeTaken === 'number' && isFinite(timeTaken) ? Math.max(0, timeTaken) : 0,
       Boolean(timed),
     );
 
@@ -132,7 +207,10 @@ export const handler = async (event, context) => {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal server error.' }),
+      body: JSON.stringify({
+        error: 'Internal server error.',
+        code: 'SUBMIT_INTERNAL_ERROR',
+      }),
     };
   }
 };

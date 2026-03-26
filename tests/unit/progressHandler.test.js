@@ -23,6 +23,7 @@ const mockPutItem      = jest.fn();
 const mockGetItem      = jest.fn();
 const mockQueryByField = jest.fn();
 const mockUpdateItem   = jest.fn();
+const mockListAll      = jest.fn();
 
 // ─── Mock ../../src/auth/index.js BEFORE any dynamic import ──────────────────
 
@@ -40,6 +41,7 @@ jest.unstable_mockModule('../../src/db/index.js', () => ({
     getItem:      mockGetItem,
     queryByField: mockQueryByField,
     updateItem:   mockUpdateItem,
+    listAll:      mockListAll,
   })),
 }));
 
@@ -202,6 +204,19 @@ describe('progressHandler — POST /api/progress/save happy path', () => {
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('issues a certificate for first-attempt qualifying scores', async () => {
+    process.env.CERTIFICATE_THRESHOLD = '80';
+    await handler(
+      mockPostEvent('/api/progress/save', validAttemptBody, 'valid-token'),
+      mockContext,
+    );
+    expect(mockPutItem).toHaveBeenCalledWith('certificates', expect.objectContaining({
+      studentId: VALID_STUDENT_ID,
+      worksheetId: VALID_WORKSHEET_ID,
+      percentage: 80,
+    }));
   });
 
 });
@@ -378,6 +393,160 @@ describe('progressHandler — GET /api/progress/history no attempts', () => {
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body);
     expect(body.attempts).toEqual([]);
+  });
+
+});
+
+// ─── GET /api/progress/insights ──────────────────────────────────────────────
+
+describe('progressHandler — GET /api/progress/insights', () => {
+
+  beforeEach(() => {
+    mockVerifyToken.mockReturnValue(studentDecoded);
+    mockQueryByField.mockResolvedValue([
+      {
+        attemptId: 'a1',
+        studentId: VALID_STUDENT_ID,
+        subject: 'Math',
+        topic: 'Fractions',
+        totalScore: 6,
+        totalPoints: 10,
+        percentage: 60,
+        createdAt: '2026-03-24T10:00:00.000Z',
+      },
+      {
+        attemptId: 'a2',
+        studentId: VALID_STUDENT_ID,
+        subject: 'Math',
+        topic: 'Fractions',
+        totalScore: 8,
+        totalPoints: 10,
+        percentage: 80,
+        createdAt: '2026-03-25T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('returns 200 with computed insights', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: '/api/progress/insights',
+        headers: { authorization: 'Bearer valid-token' },
+        queryStringParameters: {},
+      },
+      mockContext,
+    );
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(Array.isArray(body.insights)).toBe(true);
+    expect(body.totalTopicCount).toBe(1);
+  });
+
+  it('returns 400 for invalid insights limit', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: '/api/progress/insights',
+        headers: { authorization: 'Bearer valid-token' },
+        queryStringParameters: { limit: '0' },
+      },
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+});
+
+// ─── GET /api/progress/parent/:childId ───────────────────────────────────────
+
+describe('progressHandler — GET /api/progress/parent/:childId', () => {
+
+  const parentDecoded = {
+    sub: '99999999-9999-4999-8999-999999999999',
+    email: 'parent@test.com',
+    role: 'parent',
+  };
+
+  const childId = '88888888-8888-4888-8888-888888888888';
+
+  beforeEach(() => {
+    mockVerifyToken.mockReturnValue(parentDecoded);
+    mockGetItem.mockImplementation(async (table, id) => {
+      if (table === 'parentLinks') {
+        return {
+          id,
+          parentId: parentDecoded.sub,
+          childId,
+          status: 'active',
+        };
+      }
+      if (table === 'users') {
+        return {
+          userId: childId,
+          displayName: 'Alex Student',
+        };
+      }
+      return null;
+    });
+    mockQueryByField.mockResolvedValue([
+      {
+        attemptId: 'h1',
+        studentId: childId,
+        worksheetId: VALID_WORKSHEET_ID,
+        subject: 'Math',
+        topic: 'Fractions',
+        difficulty: 'Medium',
+        totalScore: 8,
+        totalPoints: 10,
+        percentage: 80,
+        timeTaken: 120,
+        timed: false,
+        createdAt: '2026-03-25T10:00:00.000Z',
+      },
+    ]);
+    mockListAll.mockResolvedValue([
+      {
+        id: `${childId}#Math`,
+        studentId: childId,
+        subject: 'Math',
+        attemptCount: 1,
+        averagePercentage: 80,
+        lastAttemptAt: '2026-03-25T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('returns 200 for active parent-child link', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: `/api/progress/parent/${childId}`,
+        headers: { authorization: 'Bearer valid-token' },
+        pathParameters: { childId },
+        queryStringParameters: {},
+      },
+      mockContext,
+    );
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.displayName).toBe('Alex Student');
+    expect(Array.isArray(body.history)).toBe(true);
+  });
+
+  it('returns 403 when caller is not parent role', async () => {
+    mockVerifyToken.mockReturnValue(studentDecoded);
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: `/api/progress/parent/${childId}`,
+        headers: { authorization: 'Bearer valid-token' },
+        pathParameters: { childId },
+        queryStringParameters: {},
+      },
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
   });
 
 });
