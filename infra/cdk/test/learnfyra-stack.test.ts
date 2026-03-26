@@ -150,6 +150,28 @@ describe('LearnfyraStack (dev)', () => {
     });
   });
 
+  test('generate Lambda environment has MAX_RETRIES tuned for API latency', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-generate',
+      Environment: {
+        Variables: Match.objectLike({
+          MAX_RETRIES: '1',
+        }),
+      },
+    });
+  });
+
+  test('generate Lambda environment has Anthropic timeout configured', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-generate',
+      Environment: {
+        Variables: Match.objectLike({
+          ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
+        }),
+      },
+    });
+  });
+
   test('dev generate Lambda does not have X-Ray tracing enabled', () => {
     const lambdas = template.findResources('AWS::Lambda::Function', {
       Properties: { FunctionName: 'learnfyra-dev-lambda-generate' },
@@ -178,6 +200,28 @@ describe('LearnfyraStack (prod)', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'learnfyra-prod-lambda-generate',
       TracingConfig: { Mode: 'Active' },
+    });
+  });
+
+  test('prod generate Lambda has MAX_RETRIES set to 0', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-prod-lambda-generate',
+      Environment: {
+        Variables: Match.objectLike({
+          MAX_RETRIES: '0',
+        }),
+      },
+    });
+  });
+
+  test('prod generate Lambda has Anthropic timeout configured', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-prod-lambda-generate',
+      Environment: {
+        Variables: Match.objectLike({
+          ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
+        }),
+      },
     });
   });
 

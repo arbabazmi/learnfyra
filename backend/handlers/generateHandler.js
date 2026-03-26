@@ -137,6 +137,7 @@ function mimeType(ext) {
 
 export const handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
+  const requestStart = Date.now();
 
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -144,8 +145,11 @@ export const handler = async (event, context) => {
   }
 
   try {
+    console.info('generateHandler: request started');
+
     // 0. Ensure API key is available (fetches from SSM on first cold start)
     await loadApiKey();
+    console.info(`generateHandler: api key ready in ${Date.now() - requestStart}ms`);
 
     // 1. Parse and validate request body
     let body;
@@ -191,9 +195,15 @@ export const handler = async (event, context) => {
     const baseKey = `worksheets/${datePath}/${uuid}`;
     const outputDir = '/tmp';
 
+    console.info(
+      `generateHandler: validated request grade=${grade} subject=${subject} topic=${topic} ` +
+      `difficulty=${difficulty} questionCount=${questionCount} format=${format} includeAnswerKey=${includeAnswerKey}`
+    );
+
     // 2. Generate worksheet JSON via Claude API
     const generateWorksheet = await getGenerateWorksheet();
     const worksheet = await generateWorksheet({ grade, subject, topic, difficulty, questionCount });
+    console.info(`generateHandler: worksheet generated in ${Date.now() - requestStart}ms`);
 
     // 3. Export worksheet file to /tmp
     const exportWorksheet = await getExportWorksheet();
@@ -209,10 +219,12 @@ export const handler = async (event, context) => {
       outputDir,
     });
     const worksheetLocalPath = worksheetPaths[0];
+    console.info(`generateHandler: worksheet exported in ${Date.now() - requestStart}ms`);
 
     // 4. Upload worksheet to S3
     const worksheetKey = `${baseKey}/worksheet.${ext}`;
     await uploadToS3(worksheetLocalPath, worksheetKey, mimeType(ext));
+    console.info(`generateHandler: worksheet uploaded in ${Date.now() - requestStart}ms`);
 
     // 5. Export and upload answer key (if requested)
     let answerKeyKey = null;
@@ -231,6 +243,7 @@ export const handler = async (event, context) => {
       if (answerKeyPaths.length > 0) {
         answerKeyKey = `${baseKey}/answer-key.${ext}`;
         await uploadToS3(answerKeyPaths[0], answerKeyKey, mimeType(ext));
+        console.info(`generateHandler: answer key uploaded in ${Date.now() - requestStart}ms`);
       }
     }
 

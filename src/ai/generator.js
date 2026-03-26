@@ -229,6 +229,11 @@ function validateQuestions(data, expectedCount) {
  */
 export async function generateWorksheet(options) {
   const { grade, subject, questionCount } = options;
+  const isLambdaRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+  const anthropicRequestTimeoutMs = parseInt(
+    process.env.ANTHROPIC_REQUEST_TIMEOUT_MS || (isLambdaRuntime ? '22000' : '60000'),
+    10
+  );
 
   // Validate inputs before touching the API
   validateGrade(grade);
@@ -251,6 +256,7 @@ export async function generateWorksheet(options) {
       max_tokens: MAX_TOKENS,
       system:     systemPrompt,
       messages:   [{ role: 'user', content: userPrompt }],
+      timeout:    anthropicRequestTimeoutMs,
     });
 
     // Check for truncated response (max_tokens hit mid-JSON)
@@ -298,7 +304,7 @@ export async function generateWorksheet(options) {
       }
     },
     {
-      maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
+      maxRetries: parseInt(process.env.MAX_RETRIES || (isLambdaRuntime ? '0' : '3'), 10),
       baseDelayMs: 1000,
       onRetry: (attempt, err) => {
         logger.warn(`Retry ${attempt}: ${err.message}`);
