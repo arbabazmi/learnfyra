@@ -48,7 +48,12 @@
     ],
     "collectCoverageFrom": [
       "src/**/*.js",
-      "!src/**/*.test.js"
+      "backend/**/*.js",
+      "!src/**/*.test.js",
+      "!src/cli/prompts.js",
+      "!src/auth/mockAuthAdapter.js",
+      "!src/ai/client.js",
+      "!**/node_modules/**"
     ],
     "coverageThreshold": {
       "global": {

@@ -61,3 +61,11 @@ For each completed slice, always provide:
 2. Tests pass for touched scope.
 3. Backlog status updated.
 4. No unresolved critical review finding.
+
+## Deployment Guardrail
+1. No direct production deployment is allowed.
+2. Mandatory promotion sequence: local validation -> dev deploy -> optional staging -> prod.
+3. Production promotion requires:
+   - evidence of local validation
+   - evidence of successful dev deployment
+   - manual production approval

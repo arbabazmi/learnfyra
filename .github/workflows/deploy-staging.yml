@@ -1,18 +1,65 @@
 name: Full Deploy — Staging
 
 on:
-  push:
-    branches: [staging]
   workflow_dispatch:
+    inputs:
+      local_validation_evidence:
+        description: "Required summary or link proving local validation passed"
+        required: true
+        type: string
+      dev_run_id:
+        description: "Required workflow run ID from Full Deploy — Dev that succeeded"
+        required: true
+        type: string
 
 permissions:
   id-token: write   # required for OIDC token request
   contents: read
 
 jobs:
+  verify-dev-promotion:
+    name: Verify local evidence and successful dev deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate local evidence input
+        run: |
+          if [ -z "${{ github.event.inputs.local_validation_evidence }}" ]; then
+            echo "Missing local validation evidence."
+            exit 1
+          fi
+
+      - name: Validate dev workflow run ID format
+        run: |
+          if ! [[ "${{ github.event.inputs.dev_run_id }}" =~ ^[0-9]+$ ]]; then
+            echo "dev_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Verify referenced dev deploy run succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV_RUN_ID: ${{ github.event.inputs.dev_run_id }}
+        run: |
+          RESPONSE=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${DEV_RUN_ID}")
+          NAME=$(echo "$RESPONSE" | jq -r '.name // empty')
+          CONCLUSION=$(echo "$RESPONSE" | jq -r '.conclusion // empty')
+
+          if [ "$NAME" != "Full Deploy — Dev" ]; then
+            echo "Referenced run is not from Full Deploy — Dev. Found: $NAME"
+            exit 1
+          fi
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "Referenced dev deploy run is not successful. Conclusion: $CONCLUSION"
+            exit 1
+          fi
+
+          echo "Promotion guardrail check passed."
+
   test:
     name: Tests (must pass before deploy)
     runs-on: ubuntu-latest
+    needs: verify-dev-promotion
     steps:
       - uses: actions/checkout@v4
 
@@ -94,9 +141,11 @@ jobs:
           FRONTEND_BUCKET=$(jq -r '.["LearnfyraStack-staging"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
           DIST_ID=$(jq -r '.["LearnfyraStack-staging"]["DistributionId"]' infra/cdk/cdk-outputs.json)
           FRONTEND_URL=$(jq -r '.["LearnfyraStack-staging"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
+          API_URL=$(jq -r '.["LearnfyraStack-staging"]["ApiGatewayUrl"]' infra/cdk/cdk-outputs.json)
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "dist_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
         run: |
@@ -109,6 +158,54 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ steps.cdk-outputs.outputs.dist_id }} \
             --paths "/*"
+
+      - name: Smoke check new backend routes
+        run: |
+          set -euo pipefail
+          BASE_API="${{ steps.cdk-outputs.outputs.api_url }}api"
+          FAILURES=0
+
+          check_get() {
+            NAME="$1"
+            URL="$2"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post() {
+            NAME="$1"
+            URL="$2"
+            BODY="$3"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL" -H "Content-Type: application/json" -d "$BODY")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post "auth/register" "$BASE_API/auth/register" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/login" "$BASE_API/auth/login" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/logout" "$BASE_API/auth/logout" '{}'
+          check_get "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
+          check_post "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
+          check_post "progress/save" "$BASE_API/progress/save" '{"studentId":"smoke-student","worksheetId":"smoke-worksheet-id","score":0}'
+          check_get "progress/history" "$BASE_API/progress/history"
+          check_post "class/create" "$BASE_API/class/create" '{"name":"Smoke Class"}'
+          check_get "analytics/class/{id}" "$BASE_API/analytics/class/smoke-class-id"
+          check_get "rewards/student/{id}" "$BASE_API/rewards/student/smoke-student"
+          check_get "student/profile" "$BASE_API/student/profile"
+          check_post "student/join-class" "$BASE_API/student/join-class" '{"classCode":"SMOKE123"}'
+          check_get "qb/questions" "$BASE_API/qb/questions"
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "Smoke checks failed: $FAILURES endpoint(s) returned 5xx."
+            exit 1
+          fi
+
+          echo "Smoke checks passed for new backend routes."
 
       - name: Print staging URL
         run: echo "Staging deployed at ${{ steps.cdk-outputs.outputs.frontend_url }}"

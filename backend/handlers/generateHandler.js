@@ -26,9 +26,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
-const s3   = new S3Client({});
-const ssm  = new SSMClient({});
-const BUCKET = process.env.WORKSHEET_BUCKET_NAME;
+// Lazy AWS client getters — instantiated on first invocation, not at module
+// scope, to keep cold-start overhead minimal and match the project pattern (W4).
+let _s3, _ssm;
+function getS3()  { if (!_s3)  _s3  = new S3Client({});  return _s3;  }
+function getSsm() { if (!_ssm) _ssm = new SSMClient({}); return _ssm; }
 
 // Cache the API key in module scope so it is only fetched once per cold start.
 let _apiKeyLoaded = false;
@@ -47,7 +49,7 @@ async function loadApiKey() {
   if (!paramName) {
     throw new Error('SSM_PARAM_NAME env var is not set.');
   }
-  const { Parameter } = await ssm.send(new GetParameterCommand({
+  const { Parameter } = await getSsm().send(new GetParameterCommand({
     Name: paramName,
     WithDecryption: true,
   }));
@@ -56,20 +58,21 @@ async function loadApiKey() {
 }
 
 // Lazy import helpers — only loaded on first real invocation
-let _generateWorksheet;
+let _assembleWorksheet;
 let _exportWorksheet;
 let _exportAnswerKey;
 
 /**
- * Returns the generateWorksheet function, importing it on first call.
+ * Returns the assembleWorksheet function (M03 bank-first pipeline),
+ * importing it on first call.
  * @returns {Promise<Function>}
  */
-async function getGenerateWorksheet() {
-  if (!_generateWorksheet) {
-    const mod = await import('../../src/ai/generator.js');
-    _generateWorksheet = mod.generateWorksheet;
+async function getAssembleWorksheet() {
+  if (!_assembleWorksheet) {
+    const mod = await import('../../src/ai/assembler.js');
+    _assembleWorksheet = mod.assembleWorksheet;
   }
-  return _generateWorksheet;
+  return _assembleWorksheet;
 }
 
 /**
@@ -105,15 +108,19 @@ const FORMAT_EXT = {
 
 /**
  * Uploads a local /tmp file to S3 and returns the S3 key.
+ * BUCKET is read inside this function (not at module scope) so Lambda does not
+ * fail at cold-start when the env var has not yet been injected (W5).
  * @param {string} localPath - Absolute path to the file in /tmp
  * @param {string} s3Key - Destination S3 key
  * @param {string} contentType - MIME type for the object
  * @returns {Promise<string>} The S3 key that was written
  */
 async function uploadToS3(localPath, s3Key, contentType) {
+  const bucket = process.env.WORKSHEET_BUCKET_NAME;
+  if (!bucket) throw new Error('WORKSHEET_BUCKET_NAME environment variable is not set.');
   const body = readFileSync(localPath);
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
+  await getS3().send(new PutObjectCommand({
+    Bucket: bucket,
     Key: s3Key,
     Body: body,
     ContentType: contentType,
@@ -191,9 +198,9 @@ export const handler = async (event, context) => {
     const baseKey = `worksheets/${datePath}/${uuid}`;
     const outputDir = '/tmp';
 
-    // 2. Generate worksheet JSON via Claude API
-    const generateWorksheet = await getGenerateWorksheet();
-    const worksheet = await generateWorksheet({ grade, subject, topic, difficulty, questionCount });
+    // 2. Assemble worksheet JSON via M03 bank-first pipeline
+    const assembleWorksheet = await getAssembleWorksheet();
+    const { worksheet, bankStats } = await assembleWorksheet({ grade, subject, topic, difficulty, questionCount });
 
     // 3. Export worksheet file to /tmp
     const exportWorksheet = await getExportWorksheet();
@@ -244,6 +251,9 @@ export const handler = async (event, context) => {
       difficulty,
       questionCount,
       format,
+      bankStats,
+      // NOTE: studentDetails is returned to the caller for session display only.
+      // DO NOT write studentDetails to metadata.json on S3 — CLAUDE.md DBA rule: no PII in storage.
       studentDetails: {
         studentName,
         worksheetDate,

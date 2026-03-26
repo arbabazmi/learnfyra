@@ -331,3 +331,4 @@ Output: UI states, files changed, backend dependencies
 2. M02 question bank schema and backend core are available.
 3. M03 generator contract is extended without breaking current flows.
 4. QA has validated each completed slice.
+5. Deployment guardrail evidence exists: local validation done, then dev deployment validated before any production request.

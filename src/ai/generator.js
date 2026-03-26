@@ -148,11 +148,14 @@ function validateTopLevel(data) {
 
 /**
  * Validates a single question object.
+ * Exported so the M03 assembler can reuse this logic before storing AI-generated
+ * questions to the bank.
+ *
  * @param {Object} q - Question object
  * @param {number} idx - Zero-based index in questions array (for error messages)
  * @throws {Error} If the question is invalid
  */
-function validateQuestion(q, idx) {
+export function validateQuestion(q, idx) {
   const label = `Question at index ${idx}`;
 
   for (const field of REQUIRED_QUESTION_FIELDS) {

@@ -28,8 +28,11 @@ const ssmMock = mockClient(SSMClient);
 
 // ─── Module mocks (must all appear before any dynamic import()) ───────────────
 
-jest.unstable_mockModule('../../src/ai/generator.js', () => ({
-  generateWorksheet: jest.fn().mockResolvedValue(sampleWorksheet),
+jest.unstable_mockModule('../../src/ai/assembler.js', () => ({
+  assembleWorksheet: jest.fn().mockResolvedValue({
+    worksheet: sampleWorksheet,
+    bankStats: { fromBank: 0, generated: 10, totalStored: 10 },
+  }),
 }));
 
 jest.unstable_mockModule('../../src/exporters/index.js', () => ({
@@ -53,7 +56,7 @@ jest.unstable_mockModule('crypto', () => ({
 // ─── Dynamic imports (must come after ALL mockModule calls) ───────────────────
 
 const { handler } = await import('../../backend/handlers/generateHandler.js');
-const { generateWorksheet } = await import('../../src/ai/generator.js');
+const { assembleWorksheet } = await import('../../src/ai/assembler.js');
 const { exportWorksheet } = await import('../../src/exporters/index.js');
 const { exportAnswerKey } = await import('../../src/exporters/answerKey.js');
 
@@ -95,8 +98,15 @@ beforeEach(() => {
   // Set ANTHROPIC_API_KEY directly so loadApiKey() short-circuits without SSM
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
 
+  // Required by uploadToS3 — W5 fix reads BUCKET lazily inside the function
+  // and throws if it is missing, so the env var must be present in tests.
+  process.env.WORKSHEET_BUCKET_NAME = 'test-bucket';
+
   // Restore default mock implementations after clearAllMocks
-  generateWorksheet.mockResolvedValue(sampleWorksheet);
+  assembleWorksheet.mockResolvedValue({
+    worksheet: sampleWorksheet,
+    bankStats: { fromBank: 0, generated: 10, totalStored: 10 },
+  });
   exportWorksheet.mockResolvedValue(['/tmp/worksheet.pdf']);
   exportAnswerKey.mockResolvedValue(['/tmp/answer-key.pdf']);
 });
@@ -248,6 +258,16 @@ describe('generateHandler — valid request', () => {
     );
   });
 
+  it('metadata contains bankStats with fromBank/generated/totalStored', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    const { metadata } = JSON.parse(result.body);
+    expect(metadata.bankStats).toMatchObject({
+      fromBank: expect.any(Number),
+      generated: expect.any(Number),
+      totalStored: expect.any(Number),
+    });
+  });
+
 });
 
 // ─── S3 upload call counts ────────────────────────────────────────────────────
@@ -376,30 +396,30 @@ describe('generateHandler — 400 malformed JSON', () => {
 
 // ─── Generator error (500) ────────────────────────────────────────────────────
 
-describe('generateHandler — 500 generator error', () => {
+describe('generateHandler — 500 assembler error', () => {
 
-  it('returns 500 when generateWorksheet throws', async () => {
-    generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
+  it('returns 500 when assembleWorksheet throws', async () => {
+    assembleWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
     const result = await handler(mockEvent(validBody), mockContext);
     expect(result.statusCode).toBe(500);
   });
 
-  it('returns success: false when generateWorksheet throws', async () => {
-    generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
+  it('returns success: false when assembleWorksheet throws', async () => {
+    assembleWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
     const result = await handler(mockEvent(validBody), mockContext);
     expect(JSON.parse(result.body).success).toBe(false);
   });
 
   it('does NOT expose the raw error message in the 500 response', async () => {
     const internalMessage = 'Claude API unavailable — secret key invalid';
-    generateWorksheet.mockRejectedValueOnce(new Error(internalMessage));
+    assembleWorksheet.mockRejectedValueOnce(new Error(internalMessage));
     const result = await handler(mockEvent(validBody), mockContext);
     const body = JSON.parse(result.body);
     expect(body.error).not.toContain(internalMessage);
   });
 
   it('returns a generic user-facing error message on 500', async () => {
-    generateWorksheet.mockRejectedValueOnce(new Error('network failure'));
+    assembleWorksheet.mockRejectedValueOnce(new Error('network failure'));
     const result = await handler(mockEvent(validBody), mockContext);
     const body = JSON.parse(result.body);
     expect(body.error).toBeTruthy();
@@ -407,8 +427,28 @@ describe('generateHandler — 500 generator error', () => {
   });
 
   it('CORS headers present on 500 response', async () => {
-    generateWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
+    assembleWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
     const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns 500 when WORKSHEET_BUCKET_NAME env var is missing', async () => {
+    // Remove the bucket env var so uploadToS3 throws the guard error
+    const original = process.env.WORKSHEET_BUCKET_NAME;
+    delete process.env.WORKSHEET_BUCKET_NAME;
+    s3Mock.on(PutObjectCommand).resolves({});
+    const result = await handler(mockEvent(validBody), mockContext);
+    // Restore before assertion so subsequent tests are not affected
+    process.env.WORKSHEET_BUCKET_NAME = original;
+    expect(result.statusCode).toBe(500);
+  });
+
+  it('returns CORS headers when WORKSHEET_BUCKET_NAME env var is missing', async () => {
+    const original = process.env.WORKSHEET_BUCKET_NAME;
+    delete process.env.WORKSHEET_BUCKET_NAME;
+    s3Mock.on(PutObjectCommand).resolves({});
+    const result = await handler(mockEvent(validBody), mockContext);
+    process.env.WORKSHEET_BUCKET_NAME = original;
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 

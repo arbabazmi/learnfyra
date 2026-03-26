@@ -157,7 +157,7 @@ app.get('/api/download', (req, res) => {
 // ── OPTIONS preflight for all /api/* routes ───────────────────────────────────
 app.options(/^\/api\/.*$/, (req, res) => {
   res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
-  res.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.set('Access-Control-Allow-Headers', 'Content-Type,X-Amz-Date,Authorization');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.sendStatus(200);
 });
@@ -531,6 +531,109 @@ app.get('/api/rewards/class/:id', async (req, res) => {
     console.error('rewards class route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Lazy-load questionBankHandler ────────────────────────────────────────────
+let _questionBankHandler;
+
+/**
+ * Returns the questionBankHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getQuestionBankHandler = async () => {
+  if (!_questionBankHandler) {
+    const mod = await import('./backend/handlers/questionBankHandler.js');
+    _questionBankHandler = mod.handler;
+  }
+  return _questionBankHandler;
+};
+
+// ── GET /api/qb/questions ─────────────────────────────────────────────────────
+app.get('/api/qb/questions', async (req, res) => {
+  try {
+    const fn = await getQuestionBankHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/qb/questions',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+        pathParameters: null,
+      },
+      { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-qb-local', getRemainingTimeInMillis: () => 30000 },
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('question bank list route error:', err);
+    res.set(corsHeaders).status(500).json({ code: 'QB_INTERNAL', error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/qb/questions ────────────────────────────────────────────────────
+app.post('/api/qb/questions', async (req, res) => {
+  try {
+    const fn = await getQuestionBankHandler();
+    const result = await fn(
+      {
+        httpMethod: 'POST',
+        path: '/api/qb/questions',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        queryStringParameters: null,
+        pathParameters: null,
+      },
+      { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-qb-local', getRemainingTimeInMillis: () => 30000 },
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('question bank add route error:', err);
+    res.set(corsHeaders).status(500).json({ code: 'QB_INTERNAL', error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/qb/questions/:id/reuse ─────────────────────────────────────────
+app.post('/api/qb/questions/:id/reuse', async (req, res) => {
+  try {
+    const fn = await getQuestionBankHandler();
+    const result = await fn(
+      {
+        httpMethod: 'POST',
+        path: `/api/qb/questions/${req.params.id}/reuse`,
+        headers: req.headers,
+        body: null,
+        queryStringParameters: null,
+        pathParameters: { id: req.params.id },
+      },
+      { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-qb-local', getRemainingTimeInMillis: () => 30000 },
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('question bank reuse route error:', err);
+    res.set(corsHeaders).status(500).json({ code: 'QB_INTERNAL', error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/qb/questions/:id ─────────────────────────────────────────────────
+app.get('/api/qb/questions/:id', async (req, res) => {
+  try {
+    const fn = await getQuestionBankHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: `/api/qb/questions/${req.params.id}`,
+        headers: req.headers,
+        body: null,
+        queryStringParameters: null,
+        pathParameters: { id: req.params.id },
+      },
+      { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-qb-local', getRemainingTimeInMillis: () => 30000 },
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('question bank get-by-id route error:', err);
+    res.set(corsHeaders).status(500).json({ code: 'QB_INTERNAL', error: 'Internal server error.' });
   }
 });
 

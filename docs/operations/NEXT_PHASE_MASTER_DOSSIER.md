@@ -161,11 +161,25 @@ Status: partial
 - Canonical backlog and status matrix approved.
 - Top 2-3 slices have owner, contract, and tests mapped.
 - No unresolved blocker decisions for active sprint items.
+- Local validation evidence exists for release candidates.
+- Dev deployment and smoke verification succeeded.
 
 ### No-Go when
 - Spec conflicts remain unresolved on active slices.
 - Test strategy missing for high-priority requirements.
 - Scope includes AWS deployment without explicit promotion approval.
+- Production is requested before local and dev gates complete.
+- No evidence trail exists for local test pass and dev deployment success.
+
+## 11) Environment Promotion Guardrail
+
+Required release path:
+1. Local validation.
+2. Dev deployment and smoke test.
+3. Optional staging verification.
+4. Production deployment with manual approval.
+
+Direct promotion to production as the first deployment target is disallowed.
 
 ## 10) Open Decisions Required
 

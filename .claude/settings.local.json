@@ -60,7 +60,8 @@
       "Bash(grep -E \"\\\\.md$\")",
       "Bash(find C:arbab-githubedusheet-aidocs -name *.md -type f)",
       "Bash(find /c/arbab-github/edusheet-ai/docs -type f -name *.md)",
-      "Bash(find /c/arbab-github/edusheet-ai -maxdepth 1 -type f -name *.md)"
+      "Bash(find /c/arbab-github/edusheet-ai -maxdepth 1 -type f -name *.md)",
+      "Bash(grep -r error /c/arbab-github/edusheet-ai/docs/specs/modules/M02* /c/arbab-github/edusheet-ai/docs/specs/modules/M03*)"
     ]
   }
 }

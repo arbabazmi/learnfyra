@@ -91,14 +91,64 @@ jobs:
         run: |
           FRONTEND_BUCKET=$(jq -r '.["LearnfyraStack-dev"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
           FRONTEND_URL=$(jq -r '.["LearnfyraStack-dev"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
+          API_URL=$(jq -r '.["LearnfyraStack-dev"]["ApiGatewayUrl"]' infra/cdk/cdk-outputs.json)
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
         run: |
           aws s3 sync frontend/ s3://${{ steps.cdk-outputs.outputs.frontend_bucket }}/ \
             --delete \
             --region ${{ vars.AWS_REGION }}
+
+      - name: Smoke check new backend routes
+        run: |
+          set -euo pipefail
+          BASE_API="${{ steps.cdk-outputs.outputs.api_url }}api"
+          FAILURES=0
+
+          check_get() {
+            NAME="$1"
+            URL="$2"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post() {
+            NAME="$1"
+            URL="$2"
+            BODY="$3"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL" -H "Content-Type: application/json" -d "$BODY")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post "auth/register" "$BASE_API/auth/register" '{"email":"smoke+dev@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/login" "$BASE_API/auth/login" '{"email":"smoke+dev@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/logout" "$BASE_API/auth/logout" '{}'
+          check_get "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
+          check_post "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
+          check_post "progress/save" "$BASE_API/progress/save" '{"studentId":"smoke-student","worksheetId":"smoke-worksheet-id","score":0}'
+          check_get "progress/history" "$BASE_API/progress/history"
+          check_post "class/create" "$BASE_API/class/create" '{"name":"Smoke Class"}'
+          check_get "analytics/class/{id}" "$BASE_API/analytics/class/smoke-class-id"
+          check_get "rewards/student/{id}" "$BASE_API/rewards/student/smoke-student"
+          check_get "student/profile" "$BASE_API/student/profile"
+          check_post "student/join-class" "$BASE_API/student/join-class" '{"classCode":"SMOKE123"}'
+          check_get "qb/questions" "$BASE_API/qb/questions"
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "Smoke checks failed: $FAILURES endpoint(s) returned 5xx."
+            exit 1
+          fi
+
+          echo "Smoke checks passed for new backend routes."
 
       - name: Print dev URL
         run: echo "Dev deployed at ${{ steps.cdk-outputs.outputs.frontend_url }}"

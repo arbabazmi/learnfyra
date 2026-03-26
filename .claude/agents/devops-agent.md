@@ -106,10 +106,14 @@ jobs:
 ```yaml
 name: Deploy to Production
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 jobs:
+  verify-promotion:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Verify local checklist and prior successful dev deploy before prod"
   approve:
+    needs: verify-promotion
     runs-on: ubuntu-latest
     environment: production   # GitHub environment with required reviewers
     steps:
@@ -174,10 +178,22 @@ ANTHROPIC_API_KEY_PROD      Anthropic key → AWS Secrets Manager in prod
 ## Branch Strategy
 
 ```
-main      → production  (protected, requires PR + status checks)
-develop   → staging     (push freely, auto-deploys)
+main      → production  (manual dispatch only, requires promotion evidence)
+develop   → dev/staging (auto-deploys per workflow settings)
 feature/* → no deploy   (CI tests only on PR)
 ```
+
+## Mandatory Deployment Guardrail (Do Not Skip)
+1. Local validation must complete first:
+  - local app run and smoke test pass
+  - relevant unit/integration tests pass
+2. Deploy to dev next and verify smoke tests.
+3. Production deploy is allowed only after:
+  - explicit evidence of local validation
+  - successful dev deployment run
+  - manual production approval
+
+Never deploy directly to production as a first environment.
 
 ## Debugging Failed Workflows
 
@@ -201,6 +217,8 @@ curl -X POST https://{cloudfront-domain}/api/generate \
 ## Your Rules
 - Never put secrets in workflow YAML — always ${{ secrets.NAME }}
 - Every deploy runs full tests before proceeding
+- Local validation evidence is required before any production promotion
+- Production promotion requires successful dev deployment evidence
 - Production deploys need manual approval gate (GitHub environment protection)
 - Always invalidate CloudFront cache after frontend deploys
 - All Lambda functions get CloudWatch error rate alarms (> 1% over 5 min)
