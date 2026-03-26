@@ -43,6 +43,35 @@ const FORMAT_EXT = {
   'HTML':       'html',
 };
 
+const DIAGNOSTIC_HEADERS = 'x-request-id,x-client-request-id';
+
+function setDiagnosticHeaders(res, requestId, clientRequestId) {
+  res.set('Access-Control-Expose-Headers', DIAGNOSTIC_HEADERS);
+  res.set('x-request-id', requestId);
+  if (clientRequestId) {
+    res.set('x-client-request-id', clientRequestId);
+  }
+}
+
+function logGenerateEvent(level, message, details) {
+  console[level](JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    ...details,
+  }));
+}
+
+function serializeError(err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  };
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
@@ -55,13 +84,42 @@ app.use('/local-files', express.static(LOCAL_FILES_DIR));
 
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
+  const requestId = randomUUID();
+  const clientRequestId = req.get('x-client-request-id') || null;
+  const requestStart = Date.now();
+  let stage = 'request:start';
+
+  setDiagnosticHeaders(res, requestId, clientRequestId);
+
   try {
+    logGenerateEvent('info', 'server generate request started', {
+      requestId,
+      clientRequestId,
+      stage,
+      method: req.method,
+      path: req.originalUrl,
+    });
+
     // Validate input
     let validated;
     try {
+      stage = 'request:validate-body';
       validated = validateGenerateBody(req.body);
     } catch (err) {
-      return res.status(400).json({ success: false, error: err.message });
+      logGenerateEvent('warn', 'server generate request validation failed', {
+        requestId,
+        clientRequestId,
+        stage,
+        error: serializeError(err),
+      });
+      return res.status(400).json({
+        success: false,
+        error: err.message,
+        errorCode: 'VALIDATION_ERROR',
+        errorStage: stage,
+        requestId,
+        clientRequestId,
+      });
     }
 
     const {
@@ -73,6 +131,19 @@ app.post('/api/generate', async (req, res) => {
     const outputDir = join(LOCAL_FILES_DIR, uuid);
     mkdirSync(outputDir, { recursive: true });
 
+    logGenerateEvent('info', 'server generate request validated', {
+      requestId,
+      clientRequestId,
+      stage,
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      format,
+      includeAnswerKey,
+    });
+
     // Shared export options (including optional student details)
     const exportOpts = {
       grade, subject, topic, difficulty, format,
@@ -81,17 +152,36 @@ app.post('/api/generate', async (req, res) => {
     };
 
     // Generate worksheet JSON via Claude API
+    stage = 'worksheet:generate';
     const worksheet = await generateWorksheet({ grade, subject, topic, difficulty, questionCount });
+    logGenerateEvent('info', 'server worksheet generated', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      totalPoints: worksheet.totalPoints,
+      questionCount: Array.isArray(worksheet.questions) ? worksheet.questions.length : null,
+    });
 
     // Export worksheet file to worksheets-local/
+    stage = 'worksheet:export';
     const worksheetPaths = await exportWorksheet(worksheet, {
       ...exportOpts,
       includeAnswerKey: false,
     });
     const worksheetFilename = worksheetPaths[0].split(/[\\/]/).pop();
     const worksheetKey = `local/${uuid}/${worksheetFilename}`;
+    logGenerateEvent('info', 'server worksheet exported', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      worksheetKey,
+      worksheetPath: worksheetPaths[0],
+    });
 
     // Save solve-data.json for the online solve feature
+    stage = 'worksheet:write-solve-data';
     const solveData = {
       worksheetId: uuid,
       generatedAt: new Date().toISOString(),
@@ -107,31 +197,77 @@ app.post('/api/generate', async (req, res) => {
       questions: worksheet.questions,
     };
     writeFileSync(join(outputDir, 'solve-data.json'), JSON.stringify(solveData, null, 2));
+    logGenerateEvent('info', 'server solve data written', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      solveDataPath: join(outputDir, 'solve-data.json'),
+    });
 
     // Export answer key if requested
     let answerKeyKey = null;
     if (includeAnswerKey) {
+      stage = 'answer-key:export';
       const answerKeyPaths = await exportAnswerKey(worksheet, exportOpts);
       if (answerKeyPaths.length > 0) {
         const answerKeyFilename = answerKeyPaths[0].split(/[\\/]/).pop();
         answerKeyKey = `local/${uuid}/${answerKeyFilename}`;
+        logGenerateEvent('info', 'server answer key exported', {
+          requestId,
+          clientRequestId,
+          stage,
+          elapsedMs: Date.now() - requestStart,
+          answerKeyKey,
+          answerKeyPath: answerKeyPaths[0],
+        });
       }
     }
 
+    const now = new Date();
+    stage = 'response:success';
     res.json({
       success: true,
       worksheetKey,
       answerKeyKey,
+      requestId,
+      clientRequestId,
       metadata: {
         id: uuid,
         solveUrl: `/solve.html?id=${uuid}`,
-        generatedAt: new Date().toISOString(),
-        grade, subject, topic, difficulty, questionCount, format,
+        generatedAt: now.toISOString(),
+        grade,
+        subject,
+        topic,
+        difficulty,
+        questionCount,
+        format,
+        studentDetails: {
+          studentName,
+          worksheetDate,
+          teacherName,
+          period,
+          className,
+        },
+        expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       },
     });
   } catch (err) {
-    console.error('Generate error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    logGenerateEvent('error', 'server generate request failed', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      error: serializeError(err),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Worksheet generation failed. Please try again.',
+      errorCode: 'GENERATION_FAILED',
+      errorStage: stage,
+      requestId,
+      clientRequestId,
+    });
   }
 });
 

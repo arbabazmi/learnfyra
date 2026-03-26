@@ -106,6 +106,7 @@ const errorSection       = document.getElementById('errorSection');
 const downloadButtons    = document.getElementById('downloadButtons');
 const resultsDescription = document.getElementById('resultsDescription');
 const errorMessage       = document.getElementById('errorMessage');
+const errorRequestId     = document.getElementById('errorRequestId');
 const generateAnotherBtn = document.getElementById('generateAnotherBtn');
 const dismissErrorBtn    = document.getElementById('dismissErrorBtn');
 
@@ -331,13 +332,51 @@ function showResults(data, requestedAnswerKey, selectedFormat) {
  * Shows the error section with the given message.
  *
  * @param {string} message
+ * @param {Object} diagnostics
  */
-function showError(message) {
+function showError(message, diagnostics = {}) {
   errorMessage.textContent = message;
+
+  const detailParts = [];
+  if (diagnostics.requestId) detailParts.push(`Request ID: ${diagnostics.requestId}`);
+  if (diagnostics.clientRequestId) detailParts.push(`Client Request ID: ${diagnostics.clientRequestId}`);
+  if (diagnostics.errorCode) detailParts.push(`Code: ${diagnostics.errorCode}`);
+  if (diagnostics.errorStage) detailParts.push(`Stage: ${diagnostics.errorStage}`);
+  if (typeof diagnostics.status === 'number') detailParts.push(`HTTP: ${diagnostics.status}`);
+
+  if (errorRequestId) {
+    if (detailParts.length > 0) {
+      errorRequestId.textContent = detailParts.join(' · ');
+      errorRequestId.hidden = false;
+    } else {
+      errorRequestId.textContent = '';
+      errorRequestId.hidden = true;
+    }
+  }
+
   loadingSection.hidden = true;
   resultsSection.hidden = true;
   formSection.hidden    = true;
   errorSection.hidden   = false;
+}
+
+function createClientRequestId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildGenerateError({ message, status, requestId, clientRequestId, errorCode, errorStage, responseBody }) {
+  const error = new Error(message);
+  error.status = status;
+  error.requestId = requestId;
+  error.clientRequestId = clientRequestId;
+  error.errorCode = errorCode;
+  error.errorStage = errorStage;
+  error.responseBody = responseBody;
+  return error;
 }
 
 /* =============================================================
@@ -424,31 +463,84 @@ async function triggerDownload(s3Key) {
  * @param {Object} payload
  * @returns {Promise<Object>} Parsed response body
  */
-async function callGenerateApi(payload) {
+async function callGenerateApi(payload, clientRequestId) {
   const res = await fetch('/api/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-client-request-id': clientRequestId,
+    },
     body: JSON.stringify(payload),
   });
 
-  let data;
+  const rawText = await res.text();
+  let data = null;
   try {
-    data = await res.json();
+    data = rawText ? JSON.parse(rawText) : null;
   } catch {
-    throw new Error(`The server returned an unexpected response (HTTP ${res.status}). Make sure the backend is running.`);
+    throw buildGenerateError({
+      message: `The server returned an unexpected response (HTTP ${res.status}). Make sure the backend is running.`,
+      status: res.status,
+      requestId: res.headers.get('x-request-id'),
+      clientRequestId,
+      responseBody: rawText,
+    });
   }
 
+  const requestId = res.headers.get('x-request-id') || data?.requestId || null;
+  const echoedClientRequestId = res.headers.get('x-client-request-id') || data?.clientRequestId || clientRequestId;
+
   if (!res.ok) {
-    throw new Error(data.error || `Server error (${res.status}). Please try again.`);
+    throw buildGenerateError({
+      message: data?.error || `Server error (${res.status}). Please try again.`,
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: data?.errorCode || null,
+      errorStage: data?.errorStage || null,
+      responseBody: data,
+    });
   }
 
   if (data.success === false) {
-    throw new Error(data.error || 'Worksheet generation failed. Please try again.');
+    throw buildGenerateError({
+      message: data.error || 'Worksheet generation failed. Please try again.',
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: data.errorCode || null,
+      errorStage: data.errorStage || null,
+      responseBody: data,
+    });
   }
 
   if (!data.worksheetKey) {
-    throw new Error('No worksheet was returned by the server. Please try again.');
+    throw buildGenerateError({
+      message: 'No worksheet was returned by the server. Please try again.',
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: 'MISSING_WORKSHEET_KEY',
+      errorStage: 'response:validate-body',
+      responseBody: data,
+    });
   }
+
+  console.info('Learnfyra generate request succeeded', {
+    requestId,
+    clientRequestId: echoedClientRequestId,
+    worksheetKey: data.worksheetKey,
+    answerKeyKey: data.answerKeyKey,
+    metadata: data.metadata ? {
+      id: data.metadata.id,
+      grade: data.metadata.grade,
+      subject: data.metadata.subject,
+      topic: data.metadata.topic,
+      difficulty: data.metadata.difficulty,
+      questionCount: data.metadata.questionCount,
+      format: data.metadata.format,
+    } : null,
+  });
 
   return data;
 }
@@ -495,13 +587,44 @@ async function handleFormSubmit(event) {
     className,
   };
 
+  const clientRequestId = createClientRequestId();
+
+  console.info('Learnfyra generate request started', {
+    clientRequestId,
+    payload: {
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      format,
+      includeAnswerKey: wantsAnswerKey,
+    },
+  });
+
   showLoading();
 
   try {
-    const data = await callGenerateApi(payload);
+    const data = await callGenerateApi(payload, clientRequestId);
     showResults(data, wantsAnswerKey, format);
   } catch (err) {
-    showError(err.message);
+    console.error('Learnfyra generate request failed', {
+      message: err.message,
+      status: err.status,
+      requestId: err.requestId || null,
+      clientRequestId: err.clientRequestId || clientRequestId,
+      errorCode: err.errorCode || null,
+      errorStage: err.errorStage || null,
+      responseBody: err.responseBody || null,
+    });
+
+    showError(err.message, {
+      status: err.status,
+      requestId: err.requestId || null,
+      clientRequestId: err.clientRequestId || clientRequestId,
+      errorCode: err.errorCode || null,
+      errorStage: err.errorStage || null,
+    });
   }
 }
 
