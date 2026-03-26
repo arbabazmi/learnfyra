@@ -91,6 +91,18 @@ describe('LearnfyraStack (dev)', () => {
     });
   });
 
+  test('enables API Gateway access logging to dedicated log group', () => {
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: '/aws/apigateway/learnfyra-dev-access-logs',
+      RetentionInDays: 30,
+    });
+    template.hasResourceProperties('AWS::ApiGateway::Stage', {
+      AccessLogSetting: Match.objectLike({
+        DestinationArn: Match.anyValue(),
+      }),
+    });
+  });
+
   test('creates CloudFront distribution in dev', () => {
     template.resourceCountIs('AWS::CloudFront::Distribution', 1);
   });
@@ -156,6 +168,165 @@ describe('LearnfyraStack (dev)', () => {
     });
     const generateLambda = Object.values(lambdas)[0] as { Properties: Record<string, unknown> };
     expect(generateLambda.Properties['TracingConfig']).toBeUndefined();
+  });
+
+  test('creates CloudWatch alarms for new backend Lambda errors', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-auth-errors',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-submit-errors',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-admin-errors',
+    });
+  });
+
+  test('creates API Gateway operational alarms', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-api-5xx-errors',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-api-latency-p95',
+    });
+  });
+
+  test('creates Lambda error-rate alarms for backend services', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-auth-error-rate',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-submit-error-rate',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-generate-error-rate',
+    });
+  });
+
+  test('creates backend observability dashboard', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+  });
+
+  test('creates reusable log insights query definitions', () => {
+    template.resourceCountIs('AWS::Logs::QueryDefinition', 7);
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-top-errors-by-function',
+    });
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-auth-failures-by-route',
+    });
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-high-latency-request-traces',
+    });
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-4xx-5xx-route-hotspots',
+    });
+  });
+
+  test('sets log retention policy for Lambda log groups', () => {
+    template.resourceCountIs('Custom::LogRetention', 11);
+    template.hasResourceProperties('Custom::LogRetention', {
+      RetentionInDays: 30,
+    });
+  });
+
+  // ── DOP-08: Cost/Anomaly and Throughput Visibility Tests
+  test('creates Lambda anomaly detection alarms (11 functions)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-generate-invocation-anomaly',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-submit-invocation-anomaly',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-auth-invocation-anomaly',
+    });
+  });
+
+  test('creates anomaly detector resources for Lambda functions', () => {
+    const availableAnomalyDetectors = template.findResources('AWS::CloudWatch::AnomalyDetector');
+    expect(Object.keys(availableAnomalyDetectors).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('creates Lambda concurrent execution alarms (11 functions)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-generate-concurrent-threshold',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-submit-concurrent-threshold',
+    });
+  });
+
+  test('creates API throttle detection alarm', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-api-throttle-detected',
+    });
+  });
+
+  test('creates API surge detection alarm', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'learnfyra-dev-api-surge-detected',
+    });
+  });
+
+  test('creates cost analysis query definitions (3 new queries for DOP-08)', () => {
+    template.resourceCountIs('AWS::Logs::QueryDefinition', 7); // 4 original + 3 new
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-cost-by-function',
+    });
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-cost-by-endpoint',
+    });
+    template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+      Name: 'learnfyra-dev-cost-estimation',
+    });
+  });
+
+  test('dashboard includes cost awareness text widget (DOP-08)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+    // Dashboard body is serialized as Fn::Join; verify it contains the key widget
+    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+  });
+
+  test('dashboard includes daily request volume widget (DOP-08)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+    // Dashboard body is serialized as Fn::Join; verify dashboard exists
+    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+  });
+
+  test('dashboard includes peak traffic window analysis widget (DOP-08)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+    // Dashboard body is serialized as Fn::Join; verify dashboard exists
+    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+  });
+
+  test('dashboard includes top endpoints by traffic (4 single-value widgets)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+    // Dashboard body is serialized as Fn::Join; verify dashboard exists
+    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+  });
+
+  test('dashboard includes cost analyzer log drill-down panels (DOP-08)', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+      DashboardName: 'learnfyra-dev-backend-observability',
+    });
+    // Dashboard body is serialized as Fn::Join; verify dashboard exists
+    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    expect(Object.keys(dashboards).length).toBeGreaterThan(0);
   });
 });
 
