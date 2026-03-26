@@ -251,13 +251,17 @@ export async function generateWorksheet(options) {
 
     logger.debug(`Claude API call (attempt ${attemptNumber + 1})…`);
 
-    const message = await anthropic.messages.create({
-      model:      CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: userPrompt }],
-      timeout:    anthropicRequestTimeoutMs,
-    });
+    const message = await anthropic.messages.create(
+      {
+        model:      CLAUDE_MODEL,
+        max_tokens: MAX_TOKENS,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: userPrompt }],
+      },
+      {
+        timeout: anthropicRequestTimeoutMs,
+      }
+    );
 
     // Check for truncated response (max_tokens hit mid-JSON)
     if (message.stop_reason === 'max_tokens') {
