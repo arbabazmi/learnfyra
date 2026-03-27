@@ -45,6 +45,18 @@ This document defines the complete Phase 1 module structure for Learnfyra, an AI
 - JWT-based session management
 - Auth gate for online features
 
+**Auth Environment Configuration (Google OAuth metadata):**
+
+| Environment | Client ID | Project ID | Auth URL | Token URL | Cert URL | JavaScript Origins |
+|---|---|---|---|---|---|---|
+| Prod | 1079696386286-edsmfmdk6j8073qnm05ui6b2c6o655o.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | https://www.learnfyra.com, https://admin.learnfyra.com |
+| Dev | 1079696386286-m95l3vrmh157sgji4njii0afftoglc9b.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | https://dev.learnfyra.com |
+| QA | 1079696386286-hjn155lvt8sr4cc0g1e3f8mfvs6mgbk.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | TBD |
+
+**Security Note:**
+- OAuth client secrets and signing keys MUST be stored outside this repository (AWS Secrets Manager or equivalent secure store).
+- Only non-secret OAuth metadata (client ID, endpoints, allowed origins) is documented here.
+
 **Key Services:** AWS Cognito, Lambda Authorizer, SES/SendGrid  
 **Data Storage:** DynamoDB Users table  
 
