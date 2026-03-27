@@ -341,8 +341,8 @@ describe('generateHandler — 400 validation errors', () => {
     expect(result.statusCode).toBe(400);
   });
 
-  it('returns 400 for questionCount 31 (above maximum)', async () => {
-    const result = await handler(mockEvent({ ...validBody, questionCount: 31 }), mockContext);
+  it('returns 400 for questionCount 11 (above maximum)', async () => {
+    const result = await handler(mockEvent({ ...validBody, questionCount: 11 }), mockContext);
     expect(result.statusCode).toBe(400);
   });
 

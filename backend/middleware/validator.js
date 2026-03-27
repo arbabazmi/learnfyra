@@ -72,10 +72,10 @@ export function validateGenerateBody(body) {
     throw new Error(`difficulty must be one of: ${VALID_DIFFICULTIES.join(', ')}.`);
   }
 
-  // questionCount: required, integer 5–30
+  // questionCount: required, integer 5–10
   const questionCount = Number(body.questionCount);
-  if (!Number.isInteger(questionCount) || questionCount < 5 || questionCount > 30) {
-    throw new Error('questionCount must be an integer between 5 and 30.');
+  if (!Number.isInteger(questionCount) || questionCount < 5 || questionCount > 10) {
+    throw new Error('questionCount must be an integer between 5 and 10.');
   }
 
   // format: required, one of valid list

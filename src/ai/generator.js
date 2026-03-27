@@ -223,7 +223,7 @@ function validateQuestions(data, expectedCount) {
  * @param {string}  options.subject       - Subject name (Math | ELA | Science | Social Studies | Health)
  * @param {string}  options.topic         - Specific topic within subject
  * @param {string}  options.difficulty    - Easy | Medium | Hard | Mixed
- * @param {number}  options.questionCount - Number of questions (5–30)
+ * @param {number}  options.questionCount - Number of questions (5–10)
  * @returns {Promise<Object>} Parsed, coerced, and validated worksheet object
  * @throws {Error} If validation fails after all retry attempts
  */

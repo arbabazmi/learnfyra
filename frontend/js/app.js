@@ -120,6 +120,9 @@ const fieldErrors = {
   format:        document.getElementById('formatError'),
 };
 
+const MIN_QUESTION_COUNT = 5;
+const MAX_QUESTION_COUNT = 10;
+
 /* =============================================================
    Dropdown Population Helpers
    ============================================================= */
@@ -236,6 +239,14 @@ function validateForm() {
   if (g < 1 || g > 10) {
     showFieldError('grade', 'Grade must be between 1 and 10.');
     gradeSelect.classList.add('is-invalid');
+    valid = false;
+  }
+
+  /* Question count range guard (defends against DOM manipulation) */
+  const q = Number(questionCountSelect.value);
+  if (q < MIN_QUESTION_COUNT || q > MAX_QUESTION_COUNT) {
+    showFieldError('questionCount', `Question count must be between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.`);
+    questionCountSelect.classList.add('is-invalid');
     valid = false;
   }
 

@@ -44,20 +44,20 @@ describe('validator', () => {
       expect(validateQuestionCount(5)).toBe(true);
     });
 
-    it('accepts boundary value of 30', () => {
-      expect(validateQuestionCount(30)).toBe(true);
+    it('accepts boundary value of 10', () => {
+      expect(validateQuestionCount(10)).toBe(true);
     });
 
-    it('accepts value in range (15)', () => {
-      expect(validateQuestionCount(15)).toBe(true);
+    it('accepts value in range (7)', () => {
+      expect(validateQuestionCount(7)).toBe(true);
     });
 
     it('throws on count below minimum (4)', () => {
-      expect(() => validateQuestionCount(4)).toThrow('Question count must be between 5 and 30');
+      expect(() => validateQuestionCount(4)).toThrow('Question count must be between 5 and 10');
     });
 
-    it('throws on count above maximum (31)', () => {
-      expect(() => validateQuestionCount(31)).toThrow('Question count must be between 5 and 30');
+    it('throws on count above maximum (11)', () => {
+      expect(() => validateQuestionCount(11)).toThrow('Question count must be between 5 and 10');
     });
 
     it('throws on zero', () => {

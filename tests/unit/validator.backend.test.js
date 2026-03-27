@@ -233,8 +233,8 @@ describe('validateGenerateBody() — questionCount boundaries', () => {
     expect(validateGenerateBody(validBody({ questionCount: 5 })).questionCount).toBe(5);
   });
 
-  it('accepts questionCount 30 (upper boundary)', () => {
-    expect(validateGenerateBody(validBody({ questionCount: 30 })).questionCount).toBe(30);
+  it('accepts questionCount 10 (upper boundary)', () => {
+    expect(validateGenerateBody(validBody({ questionCount: 10 })).questionCount).toBe(10);
   });
 
   it('throws for questionCount 4 (below minimum)', () => {
@@ -243,8 +243,8 @@ describe('validateGenerateBody() — questionCount boundaries', () => {
     );
   });
 
-  it('throws for questionCount 31 (above maximum)', () => {
-    expect(() => validateGenerateBody(validBody({ questionCount: 31 }))).toThrow(
+  it('throws for questionCount 11 (above maximum)', () => {
+    expect(() => validateGenerateBody(validBody({ questionCount: 11 }))).toThrow(
       'questionCount must be'
     );
   });
