@@ -1,0 +1,632 @@
+{
+  "info": {
+    "_postman_id": "learnfyra-complete-api-2026",
+    "name": "Learnfyra Complete API — All Ready Endpoints",
+    "description": "Comprehensive test collection for Learnfyra API. Tests all implemented endpoints for local dev and AWS Lambda deployments.\n\n**Setup Instructions:**\n1. Set `baseUrl` variable to test environment (http://localhost:3000 for local, CloudFront URL for AWS)\n2. Run Auth endpoints first to populate token variables\n3. Use generated tokens in protected endpoints\n4. For local testing: ensure `npm run dev` is running\n5. For AWS testing: update environment variables and use deployed API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "studentToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "worksheetId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "classId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "certificateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inviteCode",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "Auth flow: Register → Login → Capture tokens for protected endpoints",
+      "item": [
+        {
+          "name": "Register (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"Passw0rd123!\",\n  \"role\": \"student\",\n  \"displayName\": \"Test Student\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Register (Teacher)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"teacher@example.com\",\n  \"password\": \"Passw0rd123!\",\n  \"role\": \"teacher\",\n  \"displayName\": \"Test Teacher\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Register (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Passw0rd123!\",\n  \"role\": \"teacher\",\n  \"displayName\": \"Admin User\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Student)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var responseBody = pm.response.json();",
+                  "  if (responseBody.token) {",
+                  "    pm.collectionVariables.set('studentToken', responseBody.token);",
+                  "    pm.collectionVariables.set('studentId', responseBody.userId);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"Passw0rd123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Teacher)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var responseBody = pm.response.json();",
+                  "  if (responseBody.token) {",
+                  "    pm.collectionVariables.set('teacherToken', responseBody.token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"teacher@example.com\",\n  \"password\": \"Passw0rd123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/api/auth/logout"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Worksheet Generation & Delivery",
+      "description": "Worksheet lifecycle: Generate → Solve → Submit → Download",
+      "item": [
+        {
+          "name": "Generate Worksheet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var responseBody = pm.response.json();",
+                  "  if (responseBody.metadata && responseBody.metadata.id) {",
+                  "    pm.collectionVariables.set('worksheetId', responseBody.metadata.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors and Multiples\",\n  \"difficulty\": \"Easy\",\n  \"questionCount\": 10,\n  \"format\": \"HTML\",\n  \"includeAnswerKey\": true,\n  \"studentName\": \"Test Student\",\n  \"teacherName\": \"Test Teacher\",\n  \"period\": \"Period 1\",\n  \"className\": \"Test Class\"\n}"
+            },
+            "url": "{{baseUrl}}/api/generate"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Solve Page (No Answers)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/solve/{{worksheetId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Answers & Score",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var responseBody = pm.response.json();",
+                  "  console.log('Score: ' + responseBody.percentage + '%');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"worksheetId\": \"{{worksheetId}}\",\n  \"studentName\": \"Test Student\",\n  \"answers\": [\n    { \"number\": 1, \"answer\": \"B\" },\n    { \"number\": 2, \"answer\": \"True\" },\n    { \"number\": 3, \"answer\": \"42\" }\n  ],\n  \"timeTaken\": 600,\n  \"timed\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/submit"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Worksheet File",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/download?key=local/{{worksheetId}}/worksheet.html"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Student Routes",
+      "description": "Student profile management and class joining",
+      "item": [
+        {
+          "name": "Get Student Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/profile"
+          },
+          "response": []
+        },
+        {
+          "name": "Join Class (by Invite Code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"{{inviteCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/student/join-class"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Teacher Routes",
+      "description": "Class management and student oversight (requires teacher role)",
+      "item": [
+        {
+          "name": "Create Class",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var responseBody = pm.response.json();",
+                  "  if (responseBody.classId) {",
+                  "    pm.collectionVariables.set('classId', responseBody.classId);",
+                  "    pm.collectionVariables.set('inviteCode', responseBody.inviteCode);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{teacherToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"4th Grade Math\",\n  \"subject\": \"Math\",\n  \"gradeLevel\": 4,\n  \"period\": \"Period 1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/class/create"
+          },
+          "response": []
+        },
+        {
+          "name": "List Class Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{teacherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/class/{{classId}}/students"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Progress Tracking",
+      "description": "Student attempt history and aggregate performance",
+      "item": [
+        {
+          "name": "Save Progress (After Attempt)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"worksheetId\": \"{{worksheetId}}\",\n  \"subject\": \"Math\",\n  \"topic\": \"Factors and Multiples\",\n  \"difficulty\": \"Easy\",\n  \"score\": 8,\n  \"totalPoints\": 10,\n  \"timeTakenSeconds\": 600\n}"
+            },
+            "url": "{{baseUrl}}/api/progress/save"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Progress History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/progress/history"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics (Teacher)",
+      "description": "Class-level performance analytics and weak topic identification",
+      "item": [
+        {
+          "name": "Get Class Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{teacherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/analytics/class/{{classId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Rewards & Gamification",
+      "description": "Student rewards, badges, and streaks",
+      "item": [
+        {
+          "name": "Get Student Rewards Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/rewards/student/{{studentId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Class Rewards Aggregate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{teacherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/rewards/class/{{classId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Certificates",
+      "description": "Student certificate management and generation",
+      "item": [
+        {
+          "name": "List Student Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/certificates/list?limit=10&offset=0"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Certificate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/certificates/{{certificateId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Question Bank (QA/Admin)",
+      "description": "Question bank CRUD and reuse tracking",
+      "item": [
+        {
+          "name": "List Questions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/qb/questions?grade=4&subject=Math&limit=20&offset=0"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Fractions\",\n  \"difficulty\": \"Medium\",\n  \"type\": \"multiple-choice\",\n  \"question\": \"What is 1/2 of 20?\",\n  \"options\": [\"A. 8\", \"B. 10\", \"C. 12\", \"D. 15\"],\n  \"answer\": \"B\",\n  \"explanation\": \"1/2 multiplied by 20 equals 10\",\n  \"standards\": [\"4.NF.B.3\"],\n  \"author\": \"Test Author\"\n}"
+            },
+            "url": "{{baseUrl}}/api/qb/questions"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Question by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/qb/questions/{{questionId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Track Question Reuse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/api/qb/questions/{{questionId}}/reuse"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Admin Control Plane",
+      "description": "System policies and configuration (admin role required)",
+      "item": [
+        {
+          "name": "Get Global Policies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/policies"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Policies",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "test-update-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budgetUsage\": {\n    \"dailyUsdSoftLimit\": 100,\n    \"dailyUsdHardLimit\": 150,\n    \"monthlyUsdSoftLimit\": 2500,\n    \"monthlyUsdHardLimit\": 3000,\n    \"softLimitBehavior\": \"log-only\",\n    \"hardLimitBehavior\": \"block-premium\"\n  },\n  \"repeatCapPolicy\": {\n    \"enabled\": true,\n    \"defaultPercent\": 10,\n    \"minPercent\": 0,\n    \"maxPercent\": 100\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
