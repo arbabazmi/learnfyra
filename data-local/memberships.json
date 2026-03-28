@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": "c29c320c-c015-4e25-9788-3485f0b99de7#e6a3e864-fadf-4f33-9085-675da2948515",
+    "classId": "c29c320c-c015-4e25-9788-3485f0b99de7",
+    "studentId": "e6a3e864-fadf-4f33-9085-675da2948515",
+    "joinedAt": "2026-03-27T22:05:06.965Z",
+    "status": "active"
+  },
+  {
+    "id": "8246a72a-58a4-482f-95dd-6731875fb404#cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "classId": "8246a72a-58a4-482f-95dd-6731875fb404",
+    "studentId": "cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "joinedAt": "2026-03-27T22:05:37.419Z",
+    "status": "active"
+  },
+  {
+    "id": "cecd2bd5-b107-4b50-b73a-dff8afa171a8#2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "classId": "cecd2bd5-b107-4b50-b73a-dff8afa171a8",
+    "studentId": "2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "joinedAt": "2026-03-27T22:06:09.158Z",
+    "status": "active"
+  },
+  {
+    "id": "a6ed73a1-bcaf-4a48-8229-8a63afbc7e70#2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "classId": "a6ed73a1-bcaf-4a48-8229-8a63afbc7e70",
+    "studentId": "2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "joinedAt": "2026-03-27T22:09:13.685Z",
+    "status": "active"
+  }
+]

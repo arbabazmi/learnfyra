@@ -1,0 +1,50 @@
+[
+  {
+    "id": "e6a3e864-fadf-4f33-9085-675da2948515#Math",
+    "studentId": "e6a3e864-fadf-4f33-9085-675da2948515",
+    "subject": "Math",
+    "attemptCount": 1,
+    "totalScore": 8,
+    "totalPoints": 10,
+    "averagePercentage": 80,
+    "lastAttemptAt": "2026-03-27T22:05:07.036Z",
+    "createdAt": "2026-03-27T22:05:07.036Z",
+    "updatedAt": "2026-03-27T22:05:07.036Z"
+  },
+  {
+    "id": "cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7#Math",
+    "studentId": "cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "subject": "Math",
+    "attemptCount": 1,
+    "totalScore": 8,
+    "totalPoints": 10,
+    "averagePercentage": 80,
+    "lastAttemptAt": "2026-03-27T22:05:37.478Z",
+    "createdAt": "2026-03-27T22:05:37.478Z",
+    "updatedAt": "2026-03-27T22:05:37.478Z"
+  },
+  {
+    "id": "2c2f594f-fa04-47e1-9a49-f8816e983566#Math",
+    "studentId": "2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "subject": "Math",
+    "attemptCount": 1,
+    "totalScore": 8,
+    "totalPoints": 10,
+    "averagePercentage": 80,
+    "lastAttemptAt": "2026-03-27T22:06:09.223Z",
+    "createdAt": "2026-03-27T22:06:09.223Z",
+    "updatedAt": "2026-03-27T22:06:09.223Z"
+  },
+  {
+    "id": "2adf7a73-cbb8-4d35-ad5a-864f44386559#Math",
+    "studentId": "2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "subject": "Math",
+    "attemptCount": 1,
+    "totalScore": 8,
+    "totalPoints": 10,
+    "averagePercentage": 80,
+    "lastAttemptAt": "2026-03-27T22:09:13.793Z",
+    "createdAt": "2026-03-27T22:09:13.793Z",
+    "updatedAt": "2026-03-27T22:09:13.793Z"
+  }
+]
