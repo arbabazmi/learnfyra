@@ -8,7 +8,15 @@
       "Bash(node:*)",
       "Bash(npm test:*)",
       "Bash(ls:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Skill(update-config)",
+      "Bash(npm --version)",
+      "Bash(mv /c/arbab-github/edusheet-ai/.claude/hooks/syntax-check.js /c/arbab-github/edusheet-ai/.claude/hooks/syntax-check.cjs)",
+      "Bash(mv /c/arbab-github/edusheet-ai/.claude/hooks/test-handlers.js /c/arbab-github/edusheet-ai/.claude/hooks/test-handlers.cjs)",
+      "Read(//c/arbab-github/edusheet-ai/**)",
+      "Bash(grep -h \"^model:\" /c/arbab-github/edusheet-ai/.claude/agents/*.md)",
+      "Bash(grep -h \"use \\\\`\" /c/arbab-github/edusheet-ai/.claude/agents/*.md)",
+      "Bash(/c/arbab-github/edusheet-ai/learnfyra-docs/00-governance/decisions-log.md:*)"
     ]
   }
 }

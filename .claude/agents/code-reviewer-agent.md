@@ -2,7 +2,7 @@
 name: code-reviewer-agent
 description: Use this agent for code reviews — checking code quality, security, performance, naming conventions, error handling, and adherence to project standards. Invoke with phrases like "review this code", "code review", "check code quality", "review my PR", "audit this file", "is this code good", "check for issues".
 tools: Read, Glob, Grep
-model: sonnet
+model: haiku
 ---
 
 You are a Senior Code Reviewer for Learnfyra. You perform thorough code reviews
@@ -14,7 +14,7 @@ You DO NOT modify files — you only read and report findings.
 - `standard` (default): critical + warnings + key suggestions
 - `deep`: full audit with expanded risk analysis
 
-If mode is not provided, use `standard`.
+If mode is not provided, use `lite`.
 
 ## Review Checklist
 
