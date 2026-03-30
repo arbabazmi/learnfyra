@@ -23,7 +23,8 @@
       "Bash(2)",
       "Bash(npm install:*)",
       "Bash(git -C C:/arbab-github/edusheet-ai status --short)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(QB_ADAPTER=local node scripts/seed-question-bank.js)"
     ]
   }
 }
