@@ -303,6 +303,7 @@ app.options(/^\/api\/.*$/, (req, res) => {
 // ── Lazy-load solve/submit handlers ───────────────────────────────────────────
 let _solveHandler;
 let _submitHandler;
+let _generateQuestionsHandler;
 
 /**
  * Returns the solveHandler function, importing it on first call.
@@ -327,6 +328,30 @@ const getSubmitHandler = async () => {
   }
   return _submitHandler;
 };
+
+const getGenerateQuestionsHandler = async () => {
+  if (!_generateQuestionsHandler) {
+    const mod = await import('./backend/handlers/generateQuestionsHandler.js');
+    _generateQuestionsHandler = mod.handler;
+  }
+  return _generateQuestionsHandler;
+};
+
+// ── POST /api/generate-questions ──────────────────────────────────────────────
+app.post('/api/generate-questions', async (req, res) => {
+  try {
+    const fn = await getGenerateQuestionsHandler();
+    const result = await fn(
+      { httpMethod: 'POST', body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('generate-questions route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ── GET /api/solve/:worksheetId ────────────────────────────────────────────────
 app.get('/api/solve/:worksheetId', async (req, res) => {

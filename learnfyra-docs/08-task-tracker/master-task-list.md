@@ -1,5 +1,5 @@
 # Master Task List
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-29
 
 ## Status Legend
 - DONE — Completed and tested
@@ -16,8 +16,8 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| SETUP-001 | Start dynamodb-local Docker container | TODO | `docker run -p 8000:8000 amazon/dynamodb-local` | Pre-Sprint 3 |
-| SETUP-002 | Create DynamoDB local tables (bootstrap script) | TODO | `node scripts/bootstrap-local-db.js` — creates all local tables for M02/M05/M06 | Pre-Sprint 3 |
+| SETUP-001 | Start dynamodb-local Docker container | Done | `docker run -p 8000:8000 amazon/dynamodb-local` | Pre-Sprint 3 |
+| SETUP-002 | Create DynamoDB local tables (bootstrap script) | Done | `node scripts/bootstrap-local-db.js` — creates all local tables for M02/M05/M06 | Pre-Sprint 3 |
 | SETUP-003 | Verify Google OAuth `http://localhost:3000` callback works end-to-end | TODO | Confirm redirect URI configured in Google Cloud Console | Pre-Sprint 8 |
 | SETUP-004 | Seed question-bank.json with sample questions | TODO | `node scripts/seed-question-bank.js` — seeds `worksheets-local/question-bank/` for QB local adapter testing | Pre-Sprint 3 |
 
@@ -189,3 +189,26 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | CDK-009 | Domain routing (Route 53 + ACM) | DONE | | — |
 | CDK-010 | DynamoDB tables for M02-M07 | TODO | Blocked until each module designed; broken into per-module CDK tasks above | AWS sprints |
 | CDK-011 | GitHub Actions CI/CD pipelines | DONE | | — |
+
+---
+
+## Module M08 — LLM Generation & Routing System
+
+| Task ID | Task | Status | Notes | Sprint |
+|---|---|---|---|---|
+| M08-BE-01 | `src/ai/routing/modelRouter.js` — selectModel() with haiku/sonnet routing rules | TODO | AC-1, AC-2, AC-3, AC-7 | Sprint 11 |
+| M08-BE-02 | `src/ai/validation/answerValidator.js` — validateAnswer() using Sonnet | TODO | AC-4 | Sprint 11 |
+| M08-BE-03 | `src/ai/cache/questionCache.js` — in-memory TTL cache | TODO | AC-5 | Sprint 11 |
+| M08-BE-04 | `src/ai/prompts/questionPrompts.js` — structured question generation prompts | TODO | | Sprint 11 |
+| M08-BE-05 | `src/ai/prompts/validationPrompts.js` — answer validation prompts | TODO | | Sprint 11 |
+| M08-BE-06 | `src/ai/prompts/explanationPrompts.js` — explanation generation prompts | TODO | | Sprint 11 |
+| M08-BE-07 | `src/ai/pipeline/questionPipeline.js` — 4-step generation pipeline | TODO | AC-4 | Sprint 11 |
+| M08-BE-08 | `src/ai/pipeline/batchGenerator.js` — parallel batch generation | TODO | AC-6 | Sprint 11 |
+| M08-BE-09 | `backend/handlers/generateQuestionsHandler.js` — POST /api/generate-questions | TODO | AC-6 | Sprint 11 |
+| M08-BE-10 | Add POST /api/generate-questions route to server.js | TODO | | Sprint 11 |
+| M08-TEST-01 | `tests/unit/modelRouter.test.js` — all routing rules + edge cases | TODO | | Sprint 11 |
+| M08-TEST-02 | `tests/unit/answerValidator.test.js` — validation pass/fail/retry | TODO | | Sprint 11 |
+| M08-TEST-03 | `tests/unit/questionCache.test.js` — hit/miss/TTL/flush | TODO | | Sprint 11 |
+| M08-TEST-04 | `tests/unit/questionPipeline.test.js` — pipeline steps, retry escalation | TODO | | Sprint 11 |
+| M08-TEST-05 | `tests/unit/batchGenerator.test.js` — batch of 10, concurrency limit | TODO | | Sprint 11 |
+| M08-TEST-06 | `tests/unit/generateQuestionsHandler.test.js` — handler validation, 200/400/500 | TODO | | Sprint 11 |

@@ -1,6 +1,6 @@
 # Module Status
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-29
 
 ---
 
@@ -28,6 +28,7 @@ These four setup tasks gate all sprint work. SETUP-001 and SETUP-002 are require
 | M05 Progress & Reporting | TODO | BLOCKED (UI template) | TODO | TODO | Blocked on M04 — Sprint 4 |
 | M06 Class Management | TODO | BLOCKED (UI template) | TODO | TODO | Ready to start (M01 auth done) — Sprint 6 |
 | M07 Admin Control Plane | TODO | BLOCKED (UI template) | TODO | TODO | Ready to start (M01 auth done) — Sprint 9 |
+| M08 LLM Generation & Routing | IN PROGRESS | N/A | TODO | N/A | Ready to start — Sprint 11 |
 
 ---
 

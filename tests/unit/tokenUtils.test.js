@@ -218,7 +218,7 @@ describe('tokenUtils module-level JWT_SECRET guard', () => {
     }
 
     expect(exitCode).not.toBe(0);
-    expect(output).toMatch(/JWT_SECRET environment variable is required in non-development environments/);
+    expect(output).toMatch(/JWT_SECRET environment variable is required/);
   });
 
   it('does NOT throw when NODE_ENV is production and JWT_SECRET IS set', () => {

@@ -110,6 +110,13 @@ const errorRequestId     = document.getElementById('errorRequestId');
 const generateAnotherBtn = document.getElementById('generateAnotherBtn');
 const dismissErrorBtn    = document.getElementById('dismissErrorBtn');
 
+const modeOnlineRadio    = document.getElementById('modeOnline');
+const modeDownloadRadio  = document.getElementById('modeDownload');
+const modeCardOnline     = document.getElementById('modeCardOnline');
+const modeCardDownload   = document.getElementById('modeCardDownload');
+const formatGroup        = document.getElementById('formatGroup');
+const answerKeyGroup     = document.getElementById('answerKeyGroup');
+
 /* Field-error spans */
 const fieldErrors = {
   grade:         document.getElementById('gradeError'),
@@ -196,16 +203,28 @@ const REQUIRED_SELECTS = [
   { el: topicSelect,         key: 'topic',          label: 'Topic' },
   { el: difficultySelect,    key: 'difficulty',     label: 'Difficulty' },
   { el: questionCountSelect, key: 'questionCount',  label: 'Number of Questions' },
-  { el: formatSelect,        key: 'format',         label: 'Output Format' },
 ];
 
 /**
- * Returns true if every required select has a non-empty value.
+ * Returns true when the user has selected Download mode.
+ *
+ * @returns {boolean}
+ */
+function isDownloadMode() {
+  return modeDownloadRadio && modeDownloadRadio.checked;
+}
+
+/**
+ * Returns true if every required select has a non-empty value,
+ * and format is filled when download mode is active.
  *
  * @returns {boolean}
  */
 function allFieldsFilled() {
-  return REQUIRED_SELECTS.every(({ el }) => el.value !== '');
+  const baseOk = REQUIRED_SELECTS.every(({ el }) => el.value !== '');
+  if (!baseOk) return false;
+  if (isDownloadMode() && formatSelect.value === '') return false;
+  return true;
 }
 
 /**
@@ -233,6 +252,18 @@ function validateForm() {
       el.classList.remove('is-invalid');
     }
   });
+
+  /* Format required only in download mode */
+  if (isDownloadMode()) {
+    if (!formatSelect.value) {
+      showFieldError('format', 'File Format is required.');
+      if (formatSelect) formatSelect.classList.add('is-invalid');
+      valid = false;
+    } else {
+      clearFieldError('format');
+      if (formatSelect) formatSelect.classList.remove('is-invalid');
+    }
+  }
 
   /* Grade range guard (defends against DOM manipulation) */
   const g = Number(gradeSelect.value);
@@ -575,8 +606,9 @@ async function handleFormSubmit(event) {
   const topic           = topicSelect.value;
   const difficulty      = difficultySelect.value;
   const questionCount   = Number(questionCountSelect.value);
-  const format          = formatSelect.value;
-  const wantsAnswerKey  = includeAnswerKey.checked;
+  const deliveryMode    = isDownloadMode() ? 'download' : 'online';
+  const format          = isDownloadMode() ? formatSelect.value : 'HTML';
+  const wantsAnswerKey  = isDownloadMode() ? includeAnswerKey.checked : false;
   const studentName     = studentNameInput.value.trim();
   const worksheetDate   = worksheetDateInput.value;
   const teacherName     = teacherNameInput.value.trim();
@@ -617,7 +649,11 @@ async function handleFormSubmit(event) {
 
   try {
     const data = await callGenerateApi(payload, clientRequestId);
-    showResults(data, wantsAnswerKey, format);
+    if (deliveryMode === 'online' && data.metadata && data.metadata.id) {
+      window.location.href = `/solve.html?id=${data.metadata.id}`;
+    } else {
+      showResults(data, wantsAnswerKey, format);
+    }
   } catch (err) {
     console.error('Learnfyra generate request failed', {
       message: err.message,
@@ -685,6 +721,27 @@ subjectSelect.addEventListener('change', () => {
     syncGenerateButton();
   });
 });
+
+/* Delivery mode toggle — show/hide format + answer key groups */
+function handleModeChange() {
+  const download = isDownloadMode();
+  formatGroup.hidden     = !download;
+  answerKeyGroup.hidden  = !download;
+  modeCardOnline.classList.toggle('is-selected',   !download);
+  modeCardDownload.classList.toggle('is-selected',  download);
+  // Reset format error when switching to online mode
+  if (!download) {
+    clearFieldError('format');
+    if (formatSelect) formatSelect.classList.remove('is-invalid');
+  }
+  syncGenerateButton();
+}
+
+modeOnlineRadio.addEventListener('change', handleModeChange);
+modeDownloadRadio.addEventListener('change', handleModeChange);
+// Also allow clicking anywhere on the card label
+modeCardOnline.addEventListener('click', () => { modeOnlineRadio.checked = true; handleModeChange(); });
+modeCardDownload.addEventListener('click', () => { modeDownloadRadio.checked = true; handleModeChange(); });
 
 /* Form submit */
 worksheetForm.addEventListener('submit', handleFormSubmit);

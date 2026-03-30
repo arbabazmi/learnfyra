@@ -14,10 +14,13 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/unit",
     "test:integration": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/integration",
     "test:coverage": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "db:bootstrap": "node scripts/bootstrap-local-db.js",
+    "db:reset": "node scripts/bootstrap-local-db.js --delete"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
+    "@aws-sdk/client-dynamodb": "^3.1019.0",
     "@aws-sdk/client-s3": "^3.1014.0",
     "@aws-sdk/client-ssm": "^3.1015.0",
     "@aws-sdk/s3-request-presigner": "^3.1014.0",

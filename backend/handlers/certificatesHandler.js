@@ -49,14 +49,20 @@ function parseIntParam(value, fallback, min, max) {
 
 /**
  * Returns configured signing secret for download tokens.
+ * Mirrors the fallback logic in src/auth/tokenUtils.js: local dev gets a
+ * predictable default; staging/prod/AWS must have JWT_SECRET set explicitly.
  * @returns {string}
  */
 function getSigningSecret() {
   const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET is required for certificate download tokens.');
+  if (secret) return secret;
+
+  const isAwsRuntime = process.env.APP_RUNTIME === 'aws';
+  const isProdLike = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+  if (isAwsRuntime || isProdLike) {
+    throw new Error('JWT_SECRET environment variable is required in staging/production and AWS runtimes.');
   }
-  return secret;
+  return 'learnfyra-local-dev-secret';
 }
 
 /**

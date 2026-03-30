@@ -4,10 +4,10 @@
 
 | Table | PK | SK | GSIs | Purpose |
 |---|---|---|---|---|
-| LearnfyraQuestionBank-{env} | questionId | — | GSI-1 (lookupKey + typeDifficulty) | Reusable questions |
+| LearnfyraQuestionBank-{env} | questionId | — | GSI-1 (lookupKey+typeDifficulty), dedupeHash-index | Reusable questions |
 | LearnfyraUsers-{env} | userId | — | email-index | User accounts, roles, progress aggregates |
 | LearnfyraWorksheetAttempt-{env} | userId | sortKey (worksheetId#{timestamp}) | — | Student solve attempts |
-| LearnfyraClasses-{env} | classId | — | teacherId-index | Class definitions |
+| LearnfyraClasses-{env} | classId | — | teacherId-index, joinCode-index | Class definitions |
 | LearnfyraClassMemberships-{env} | classId | studentId | studentId-index | Class enrollment |
 | LearnfyraCertificates-{env} | certificateId | — | userId-index | Completion certificates |
 | LearnfyraGenerationLog-{env} | worksheetId | — | — | AI generation audit trail |
@@ -31,8 +31,9 @@ All tables: `BillingMode: PAY_PER_REQUEST`. Point-in-time recovery enabled on pr
 | type | S | Yes | Question type enum |
 | difficulty | S | Yes | Easy \| Medium \| Hard |
 | question | S | Yes | Question text |
-| options | L | Multiple-choice only | ["A. ...", "B. ...", "C. ...", "D. ..."] |
-| answer | S | Yes | Correct answer string |
+| options | L | multiple-choice only | ["A. ...", "B. ...", "C. ...", "D. ..."] |
+| pairs | L | matching only | `[{ "left": "term", "right": "definition" }, ...]` — see ADR-012 |
+| answer | S | Yes | Correct answer. For `short-answer`: pipe-delimited keywords e.g. `"osmosis\|membrane"`. For `matching`: sentinel string `"pairs"`. All other types: exact answer string. |
 | explanation | S | Yes | Answer key explanation |
 | points | N | Yes | Default: 1 |
 | standards | SS | Yes | CCSS/NGSS/NHES codes |
@@ -51,6 +52,17 @@ Example PK: `"grade#3#subject#Math#topic#Multiplication"`
 Example SK: `"multiple-choice#Medium"`
 
 This GSI supports the primary access pattern: "give me N questions of type X, difficulty Y, for grade G, subject S, topic T."
+
+### GSI-2: dedupeHash-index (ADR-011)
+
+| | Attribute | Notes |
+|---|---|---|
+| PK | dedupeHash | SHA256(grade\|subject\|topic\|type\|normalizedQuestion) |
+| Projection | KEYS_ONLY | Stores only `dedupeHash` + `questionId` |
+
+Used by `questionBank/adapter.js` `questionExists(dedupeHash)` before saving a new question. Point-lookup only — no sort key. Prevents duplicate questions from accumulating in the bank across multiple generation runs.
+
+**Local adapter:** iterates `worksheets-local/question-bank.json` and compares `dedupeHash` in-process. No GSI infrastructure needed locally.
 
 ---
 
@@ -140,6 +152,17 @@ Used during authentication to look up userId by email.
 | PK | teacherId |
 
 Used to list all classes for a given teacher.
+
+### GSI: joinCode-index (ADR-014)
+
+| | Attribute | Notes |
+|---|---|---|
+| PK | joinCode | 6-char alphanumeric |
+| Projection | KEYS_ONLY | Stores only `joinCode` + `classId` |
+
+Used by `POST /api/classes/join` to resolve a student's join code to a `classId` in O(1). `joinCode` belongs on `LearnfyraClasses` (not Memberships) because it is a class attribute.
+
+**Local adapter:** iterates `worksheets-local/classes.json` to find the matching joinCode in-process.
 
 ---
 

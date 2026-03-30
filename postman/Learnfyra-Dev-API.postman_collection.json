@@ -67,6 +67,72 @@
       ]
     },
     {
+      "name": "Generate Questions (M08)",
+      "description": "LLM question generation pipeline — POST /api/generate-questions\nValid questionTypes: multiple-choice | true-false | fill-in-the-blank | short-answer | word-problem | show-your-work\ncount: 1–30, difficulty: Easy | Medium | Hard | Mixed",
+      "item": [
+        {
+          "name": "Multiple Choice (Easy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors and Multiples\",\n  \"difficulty\": \"Easy\",\n  \"questionType\": \"multiple-choice\",\n  \"count\": 3\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "True/False (Medium)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 5,\n  \"subject\": \"Science\",\n  \"topic\": \"Ecosystems\",\n  \"difficulty\": \"Medium\",\n  \"questionType\": \"true-false\",\n  \"count\": 2\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "Short Answer (Hard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 7,\n  \"subject\": \"ELA\",\n  \"topic\": \"Literary Devices\",\n  \"difficulty\": \"Hard\",\n  \"questionType\": \"short-answer\",\n  \"count\": 2\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "Fill-in-Blank (Mixed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 3,\n  \"subject\": \"Math\",\n  \"topic\": \"Addition and Subtraction\",\n  \"difficulty\": \"Mixed\",\n  \"questionType\": \"fill-in-the-blank\",\n  \"count\": 3\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        }
+      ]
+    },
+    {
       "name": "Auth",
       "item": [
         {
@@ -359,6 +425,48 @@
               { "key": "Authorization", "value": "Bearer {{adminToken}}" }
             ],
             "url": "{{baseUrl}}/api/admin/audit/events?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Get Repeat Cap Policy",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap?scope=global"
+          }
+        },
+        {
+          "name": "Update Repeat Cap Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization",   "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "repeat-cap-001" },
+              { "key": "Content-Type",    "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"defaultPercent\": 10,\n  \"minPercent\": 0,\n  \"maxPercent\": 100,\n  \"reason\": \"LF-1004 set global repeat cap.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap"
+          }
+        },
+        {
+          "name": "Set Repeat Cap Override",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization",   "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "repeat-cap-override-001" },
+              { "key": "Content-Type",    "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"student\",\n  \"scopeId\": \"{{studentId}}\",\n  \"repeatCapPercent\": 15,\n  \"isActive\": true,\n  \"reason\": \"LF-1005 student-level override.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap/overrides"
           }
         }
       ]

@@ -1,5 +1,5 @@
 # Sprint Plan
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-29
 **Strategy:** Backend-first, local-first, module by module
 
 ---
@@ -281,6 +281,58 @@ curl http://localhost:3000/api/solve/{worksheetId}
 
 ---
 
+---
+
+## Sprint 11 — M08 Backend: LLM Generation & Routing System
+
+**Goal:** Production-ready question generation pipeline with model routing, answer validation, caching, and batch generation. Exposed via POST /api/generate-questions.
+**Blocking:** None. Uses existing Anthropic SDK client. No DynamoDB required.
+**Local env vars required:** `ANTHROPIC_API_KEY`, `NODE_ENV=development`
+
+### Tasks
+
+| Task ID | Description |
+|---|---|
+| M08-BE-01 | `src/ai/routing/modelRouter.js` — routing rules: haiku for MCQ/easy/explanations, sonnet for word-problems/hard/validation/grades 9-10 |
+| M08-BE-02 | `src/ai/validation/answerValidator.js` — validates answers using Sonnet; returns is_correct, confidence, corrected_answer |
+| M08-BE-03 | `src/ai/cache/questionCache.js` — in-memory Map cache, TTL 1 hour, keyed by grade:subject:type:difficulty |
+| M08-BE-04 | `src/ai/prompts/questionPrompts.js` — strict JSON prompt templates per question type |
+| M08-BE-05 | `src/ai/prompts/validationPrompts.js` — validation prompt with confidence scoring |
+| M08-BE-06 | `src/ai/prompts/explanationPrompts.js` — concise explanation prompt |
+| M08-BE-07 | `src/ai/pipeline/questionPipeline.js` — 4-step pipeline: generate, answer, validate, explain; retry/escalation logic |
+| M08-BE-08 | `src/ai/pipeline/batchGenerator.js` — batch N questions with max 3 concurrent pipeline calls |
+| M08-BE-09 | `backend/handlers/generateQuestionsHandler.js` — Lambda-compatible handler for POST /api/generate-questions |
+| M08-BE-10 | Wire POST /api/generate-questions into server.js Express routes |
+| M08-TEST-01 through M08-TEST-06 | Unit tests for all modules (all mock LLM calls) |
+
+### Done When
+
+- [ ] `POST /api/generate-questions` with grade=3, Math, multiplication, 10 MCQ questions returns valid JSON with 10 questions
+- [ ] Each question has type, question, options (for MCQ), answer, explanation, points
+- [ ] Response includes costTracking with model breakdown
+- [ ] Router sends MCQ/Easy to haiku, word-problem/Hard/validation to sonnet
+- [ ] Cache returns cached questions on second identical request (no LLM calls)
+- [ ] Validation retries up to 2 times when is_correct=false
+- [ ] All unit tests pass with mocked LLM calls
+- [ ] `npm run test:coverage` still above 80%
+
+### Local Verification
+
+```bash
+# Start dev server
+npm run dev
+
+# Generate 10 Math MCQ questions
+curl -X POST http://localhost:3000/api/generate-questions \
+  -H "Content-Type: application/json" \
+  -d '{"grade":3,"subject":"Math","topic":"Multiplication Facts (1-10)","difficulty":"Medium","questionCount":10,"questionType":"multiple-choice"}'
+
+# Verify response has 10 questions and costTracking
+# Repeat request -- second call should show cacheHits > 0
+```
+
+---
+
 ## AWS Deploy Sprints (Phase 2 — after all local sprints pass)
 
 These sprints are not scheduled until all local backend sprints are complete and all tests pass. The handlers are already Lambda-compatible — AWS deployment is purely infrastructure work.
@@ -313,3 +365,4 @@ Each AWS sprint follows the promotion path: dev → staging (smoke tests pass) �
 | Sprint 8 | M01 | Frontend | BLOCKED — awaiting UI template |
 | Sprint 9 | M07 | Backend (local) | Ready to start (M01 auth done) |
 | Sprint 10 | M07 | Frontend | BLOCKED — awaiting UI template |
+| Sprint 11 | M08 | Backend (local) | Ready to start (no blockers) |

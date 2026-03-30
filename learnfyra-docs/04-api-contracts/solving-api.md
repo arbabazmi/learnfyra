@@ -52,9 +52,35 @@ Fetch worksheet questions for online solve. Answers and explanations are strippe
 }
 ```
 
+**Question type field reference:**
+
+| Type | Fields present in response | Fields absent |
+|---|---|---|
+| multiple-choice | `number`, `type`, `question`, `options`, `points` | `answer`, `explanation`, `pairs` |
+| true-false | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+| fill-in-the-blank | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+| short-answer | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+| matching | `number`, `type`, `question`, `leftItems`, `rightItems`, `points` | `answer`, `explanation`, `pairs` (server-side only) |
+| show-your-work | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+| word-problem | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+
+For `matching`, the response exposes the left and right items as separate shuffled arrays so the student can draw connections — the correct pairings (`pairs`) are **never** sent to the client:
+```json
+{
+  "number": 4,
+  "type": "matching",
+  "question": "Match each planet to its position from the Sun.",
+  "leftItems": ["Mercury", "Venus", "Earth", "Mars"],
+  "rightItems": ["1st", "4th", "2nd", "3rd"],
+  "points": 4
+}
+```
+The `rightItems` array is shuffled server-side on every request. The student's submit answer for matching is an array of `{ left, right }` pairs.
+
 **Invariants:**
 - `answer` field is NEVER included in any question in this response
 - `explanation` field is NEVER included in any question in this response
+- `pairs` (the correct pairings) are NEVER sent to the client — only `leftItems` and `rightItems`
 - `options` is ONLY present for `type: "multiple-choice"`
 - `worksheetId` is validated as UUID v4 format (rejects path traversal attempts)
 
@@ -177,8 +203,8 @@ Note: `attemptId` is only present in the response when the student is authentica
 | multiple-choice | `studentAnswer.trim().toUpperCase() === correctAnswer.trim().toUpperCase()` | Letter only (A/B/C/D) |
 | true-false | `studentAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase()` | "true" or "false" |
 | fill-in-the-blank | `studentAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase()` | Exact match, case-insensitive |
-| short-answer | Any keyword from `correctAnswer` keywords array appears in student answer | Case-insensitive containment |
-| matching | All pairs must match exactly | Case-insensitive per pair |
+| short-answer | Any keyword from pipe-delimited `answer` field appears in student answer | `answer.split('\|')` → keyword list; case-insensitive containment check |
+| matching | Student submits `[{ left, right }]`; each pair scored independently | Case-insensitive per pair; partial credit = pairs correct / total pairs |
 | show-your-work | Score `finalAnswer` field only (same as fill-in-the-blank) | workShown stored but not scored |
 | word-problem | Score `finalAnswer` field only (same as fill-in-the-blank) | workShown stored but not scored |
 

@@ -23,6 +23,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Local frontend config (copy of config.local.example.js with real values)
+frontend/config.local.js
+
 # CDK generated output
 cdk.out/
 infra/cdk/cdk.out/

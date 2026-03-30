@@ -24,7 +24,36 @@ To support fast dashboard queries, aggregates are precomputed and stored in the 
 | strongAreas | topics with avgScore > 85% | Users table (list) |
 | subjectAvgScores | avgScore per subject | Users table (map) |
 
-These fields are updated by a DynamoDB Streams trigger (or inline within submitHandler) after each attempt.
+These fields are updated **inline within `submitHandler`** (not via DynamoDB Streams) after each attempt, by calling `aggregator.js`.
+
+### aggregator.js — Concurrent Write Safety (ADR-013)
+
+`avgScore` is updated using the **incremental mean formula** applied atomically via a DynamoDB `UpdateItem` with `ConditionExpression`:
+
+```
+newAvg = oldAvg + (newPercentage - oldAvg) / newTotalAttempts
+```
+
+The `UpdateExpression` uses DynamoDB `ADD` for `totalAttempts` (atomic counter) and sets `avgScore` using the formula above. A `ConditionExpression` on the pre-update `totalAttempts` value prevents two concurrent submits from corrupting the average:
+
+```javascript
+// aggregator.js pattern
+await dynamodb.update({
+  Key: { userId },
+  UpdateExpression: 'ADD totalAttempts :one SET avgScore = :newAvg, lastActive = :now',
+  ConditionExpression: 'totalAttempts = :expectedTotal',
+  ExpressionAttributeValues: {
+    ':one': 1,
+    ':expectedTotal': currentTotal,
+    ':newAvg': currentAvg + (newPct - currentAvg) / (currentTotal + 1),
+    ':now': new Date().toISOString()
+  }
+});
+```
+
+If the condition fails (another write changed `totalAttempts`), `aggregator.js` retries using `withRetry` from `src/utils/retryUtils.js` (max 3 retries, exponential backoff).
+
+**Local dev:** The same `UpdateItem` call runs against `dynamodb-local` on `http://localhost:8000`. Set `DYNAMODB_ENDPOINT=http://localhost:8000` in `.env` to route the DynamoDB client to local Docker.
 
 ## Student Progress API
 

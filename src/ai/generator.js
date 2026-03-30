@@ -22,6 +22,7 @@ import { buildSystemPrompt, buildUserPrompt, buildStrictUserPrompt } from './pro
 import { withRetry } from '../utils/retryUtils.js';
 import { validateGrade, validateQuestionCount, validateSubject } from '../cli/validator.js';
 import { logger } from '../utils/logger.js';
+import { mockGenerateWorksheet } from './mockAi.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -231,6 +232,10 @@ function validateQuestions(data, expectedCount) {
  * @throws {Error} If validation fails after all retry attempts
  */
 export async function generateWorksheet(options) {
+  if (process.env.MOCK_AI === 'true') {
+    return mockGenerateWorksheet(options);
+  }
+
   const { grade, subject, questionCount } = options;
   const isLambdaRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
   const anthropicRequestTimeoutMs = parseInt(

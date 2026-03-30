@@ -107,8 +107,8 @@ export const handler = async (event, context) => {
       };
     }
 
-    // Local dev: resolve path 2 levels up from backend/handlers/ to project root
-    const baseDir = resolve(join(__dirname, '../../worksheets-local'));
+    // Local dev: process.cwd() is already the project root
+    const baseDir = resolve(join(__dirname, 'worksheets-local'));
     const localDir = resolve(join(baseDir, worksheetId));
 
     // Ensure the resolved path stays within the worksheets-local directory
