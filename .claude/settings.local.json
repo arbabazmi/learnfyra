@@ -20,7 +20,8 @@
       "Bash(head -20 echo \"---\" grep -n \"ADR-010\\\\|ADR-011\\\\|ADR-012\\\\|ADR-013\\\\|ADR-014\" /c/arbab-github/edusheet-ai/learnfyra-docs/00-governance/decisions-log.md)",
       "Bash(sort echo:*)",
       "Bash(grep -c \"^| \" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md echo \"---\" grep \"| TODO\\\\|| BLOCKED\\\\|| IN PROGRESS\\\\|| DONE\" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md)",
-      "Bash(2)"
+      "Bash(2)",
+      "Bash(npm install:*)"
     ]
   }
 }

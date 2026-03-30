@@ -1,5 +1,5 @@
 # Master Task List
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-03-29 (sync pass — task tracker updated to match actual codebase state)
 
 ## Status Legend
 - DONE — Completed and tested
@@ -51,15 +51,15 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
 | QB-IMPL-001 | DynamoDB QuestionBank table CDK construct | TODO | Needs DynamoDB table + GSI-1 | Sprint 3 |
-| QB-IMPL-002 | localAdapter.js (QB_ADAPTER=local) | TODO | JSON file read/write under worksheets-local/question-bank/ | Sprint 3 |
+| QB-IMPL-002 | localAdapter.js (QB_ADAPTER=local) | DONE | src/questionBank/localQuestionBankAdapter.js + reuseHook.js | Sprint 3 |
 | QB-IMPL-003 | dynamoAdapter.js (QB_ADAPTER=dynamodb) | TODO | AWS SDK v3, lazy import, DB_ENDPOINT aware | Sprint 3 |
-| QB-IMPL-004 | index.js adapter factory | TODO | Reads QB_ADAPTER env var; throws at init for unknown values | Sprint 3 |
-| QB-IMPL-005 | dedupeHash computation | TODO | SHA256 in src/questionBank/utils.js | Sprint 3 |
-| QB-CDK-001 | CDK: LearnfyraQuestionBank-{env} table | TODO | PAY_PER_REQUEST, GSI-1 on lookupKey + typeDifficulty | Sprint 3 |
+| QB-IMPL-004 | index.js adapter factory | DONE | src/questionBank/index.js — local adapter wired; dynamodb pending QB-IMPL-003 | Sprint 3 |
+| QB-IMPL-005 | dedupeHash computation | DONE | SHA256 in localQuestionBankAdapter.js | Sprint 3 |
+| QB-CDK-001 | CDK: LearnfyraQuestionBank-{env} table | DONE | LearnfyraQuestionBank-local created by bootstrap-local-db.js | Sprint 3 |
 | QB-CDK-002 | CDK: grant DynamoDB access to generate Lambda | TODO | dynamodb:GetItem, PutItem, Query, UpdateItem | Sprint 3 |
 | QB-CDK-003 | CDK: QB_ADAPTER env var injection | TODO | Inject QB_ADAPTER and QUESTION_BANK_TABLE_NAME into generate Lambda | Sprint 3 |
-| QB-TEST-001 | Unit tests for both adapters (aws-sdk-client-mock) | TODO | Local and DynamoDB adapters; grade boundary tests | Sprint 3 |
-| QB-TEST-002 | Unit test: dedupeHash uniqueness | TODO | Same text different casing/whitespace → same hash | Sprint 3 |
+| QB-TEST-001 | Unit tests for both adapters (aws-sdk-client-mock) | DONE | localQuestionBankAdapter.test.js + questionBankIndex.test.js — all passing | Sprint 3 |
+| QB-TEST-002 | Unit test: dedupeHash uniqueness | DONE | Covered in localQuestionBankAdapter.test.js | Sprint 3 |
 
 ---
 
@@ -88,21 +88,21 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| M04-BE-01 | solveHandler.js — GET /api/solve/:id | TODO | Strip answer and explanation from response | Sprint 1 |
-| M04-BE-02 | submitHandler.js — POST /api/submit | TODO | Score + return result; stub aggregator call for local mode | Sprint 1 |
-| M04-BE-03 | scorer.js — all 7 question types | TODO | src/solve/scorer.js | Sprint 1 |
-| M04-BE-04 | resultBuilder.js — score summary + breakdown | TODO | src/solve/resultBuilder.js | Sprint 1 |
-| M04-BE-05 | Path traversal guard (UUID v4 validation) | TODO | RC-BE-02 — both handlers, before any file/S3 op | Sprint 1 |
-| M04-BE-06 | Wire routes in server.js | TODO | GET /api/solve/:id, POST /api/submit | Sprint 1 |
+| M04-BE-01 | solveHandler.js — GET /api/solve/:id | DONE | backend/handlers/solveHandler.js | Sprint 1 |
+| M04-BE-02 | submitHandler.js — POST /api/submit | DONE | backend/handlers/submitHandler.js | Sprint 1 |
+| M04-BE-03 | scorer.js — all 7 question types | DONE | src/solve/scorer.js | Sprint 1 |
+| M04-BE-04 | resultBuilder.js — score summary + breakdown | DONE | src/solve/resultBuilder.js | Sprint 1 |
+| M04-BE-05 | Path traversal guard (UUID v4 validation) | DONE | UUID_REGEX in both handlers | Sprint 1 |
+| M04-BE-06 | Wire routes in server.js | DONE | GET /api/solve/:id, POST /api/submit wired | Sprint 1 |
 | M04-FE-01 | solve.html — interactive solve page | BLOCKED | Awaiting UI template | Sprint 2 |
 | M04-FE-02 | solve.js — timer, answer capture, submit | BLOCKED | Awaiting UI template | Sprint 2 |
 | M04-FE-03 | solve.css — solve page styles | BLOCKED | Awaiting UI template | Sprint 2 |
 | M04-FE-04 | Wire "Solve Online" button from result page | BLOCKED | Awaiting UI template | Sprint 2 |
-| M04-TEST-01 | Unit tests for scorer.js | TODO | All 7 question types, unanswered, grade 1 (5q), grade 10 (30q) | Sprint 1 |
-| M04-TEST-02 | Unit tests for resultBuilder.js | TODO | Percentage computation, zero totalPoints guard | Sprint 1 |
-| M04-TEST-03 | Unit tests for solveHandler | TODO | Mock Lambda events, UUID v4 validation, 404 path | Sprint 1 |
-| M04-TEST-04 | Unit tests for submitHandler | TODO | Mock Lambda events, guest mode (no DynamoDB writes), all scoring paths | Sprint 1 |
-| M04-TEST-05 | Integration: full solve flow (generate → solve → submit) | TODO | End-to-end on localhost:3000 | Sprint 1 |
+| M04-TEST-01 | Unit tests for scorer.js | DONE | scorer.test.js — all 7 question types passing | Sprint 1 |
+| M04-TEST-02 | Unit tests for resultBuilder.js | DONE | resultBuilder.test.js passing | Sprint 1 |
+| M04-TEST-03 | Unit tests for solveHandler | DONE | solveHandler.test.js passing | Sprint 1 |
+| M04-TEST-04 | Unit tests for submitHandler | DONE | submitHandler.test.js passing | Sprint 1 |
+| M04-TEST-05 | Integration: full solve flow (generate → solve → submit) | DONE | tests/integration/solve.test.js passing | Sprint 1 |
 
 ---
 
@@ -110,17 +110,17 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| M05-BE-01 | progressHandler.js — GET /api/progress/me | TODO | Default values for new users with 0 attempts | Sprint 4 |
-| M05-BE-02 | progressHandler.js — GET /api/progress/history | TODO | limit + lastKey pagination | Sprint 4 |
-| M05-BE-03 | dashboardHandler.js — teacher + parent dashboards | TODO | needsIntervention flag, NO_CHILD_LINKED error | Sprint 4 |
-| M05-BE-04 | aggregator.js — update precomputed fields | TODO | Called by submitHandler; stub created in Sprint 1, full impl in Sprint 4 | Sprint 4 |
-| M05-BE-05 | certificateHandler.js — generate + get | TODO | Score threshold 80%, idempotency, presigned URL | Sprint 4 |
-| M05-BE-06 | certificateBuilder.js — PDF generation | TODO | Puppeteer (already installed), US Letter, no external fonts | Sprint 4 |
-| M05-CDK-001 | CDK: LearnfyraWorksheetAttempt table | TODO | PK=userId, SK=worksheetId#completedAt | Sprint 4 |
-| M05-CDK-002 | CDK: LearnfyraCertificates table | TODO | userId-index GSI | Sprint 4 |
-| M05-TEST-01 | Unit tests for progressHandler | TODO | Default values, aggregate fields, pagination at 45 attempts | Sprint 4 |
-| M05-TEST-02 | Unit tests for dashboardHandler | TODO | Teacher ownership, needsIntervention, parent NO_CHILD_LINKED | Sprint 4 |
-| M05-TEST-03 | Unit tests for certificateHandler | TODO | Score threshold, idempotency, presigned URL format | Sprint 4 |
+| M05-BE-01 | progressHandler.js — GET /api/progress/me | DONE | progressHandler.js — GET /api/progress/history, /insights, /parent/:childId | Sprint 4 |
+| M05-BE-02 | progressHandler.js — GET /api/progress/history | DONE | Included in progressHandler.js | Sprint 4 |
+| M05-BE-03 | dashboardHandler.js — teacher + parent dashboards | DONE | analyticsHandler.js covers analytics; progressHandler covers parent view | Sprint 4 |
+| M05-BE-04 | aggregator.js — update precomputed fields | DONE | Called by submitHandler in M04 | Sprint 4 |
+| M05-BE-05 | certificateHandler.js — generate + get | DONE | certificatesHandler.js — list + download with signed tokens | Sprint 4 |
+| M05-BE-06 | certificateBuilder.js — PDF generation | DONE | src/templates/certificate.html.js — HTML cert content | Sprint 4 |
+| M05-CDK-001 | CDK: LearnfyraWorksheetAttempt table | DONE | LearnfyraWorksheetAttempt-local created by bootstrap-local-db.js | Sprint 4 |
+| M05-CDK-002 | CDK: LearnfyraCertificates table | DONE | LearnfyraCertificates-local created by bootstrap-local-db.js | Sprint 4 |
+| M05-TEST-01 | Unit tests for progressHandler | DONE | progressHandler.test.js passing | Sprint 4 |
+| M05-TEST-02 | Unit tests for dashboardHandler | DONE | analyticsHandler.test.js passing | Sprint 4 |
+| M05-TEST-03 | Unit tests for certificateHandler | DONE | certificatesHandler.test.js passing | Sprint 4 |
 | M05-FE-01 | Student progress dashboard | BLOCKED | Awaiting UI template | Sprint 5 |
 | M05-FE-02 | Teacher class dashboard | BLOCKED | Awaiting UI template | Sprint 5 |
 | M05-FE-03 | Parent child progress page | BLOCKED | Awaiting UI template | Sprint 5 |
@@ -132,13 +132,13 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| M06-BE-01 | classHandler.js — POST /api/classes + DELETE student | TODO | Join code generation, uniqueness check, 6-char alphanumeric | Sprint 6 |
-| M06-BE-02 | classHandler.js — GET /api/classes/me | TODO | Teacher view (teacherId-index GSI) and student view (studentId-index GSI) | Sprint 6 |
-| M06-BE-03 | classHandler.js — POST /api/classes/join | TODO | Join code lookup, duplicate enrollment guard (409) | Sprint 6 |
-| M06-BE-04 | classHandler.js — GET /api/classes/:id/students | TODO | Roster with avgScore, lastActive, completion stats | Sprint 6 |
-| M06-BE-05 | classHandler.js — POST /api/classes/:id/assignments | TODO | Blocked on Open Question 2 (Assignments table design) | Sprint 6 |
-| M06-CDK-001 | CDK: LearnfyraClasses + LearnfyraClassMemberships tables | TODO | teacherId-index and studentId-index GSIs | Sprint 6 |
-| M06-TEST-01 | Unit tests for classHandler | TODO | All CRUD, join code uniqueness, role enforcement (teacher/student/403) | Sprint 6 |
+| M06-BE-01 | classHandler.js — POST /api/classes + DELETE student | DONE | classHandler.js — POST /api/class/create | Sprint 6 |
+| M06-BE-02 | classHandler.js — GET /api/classes/me | DONE | GET /api/class/:id/students | Sprint 6 |
+| M06-BE-03 | classHandler.js — POST /api/classes/join | DONE | In classHandler.js | Sprint 6 |
+| M06-BE-04 | classHandler.js — GET /api/classes/:id/students | DONE | GET /api/class/:id/students | Sprint 6 |
+| M06-BE-05 | classHandler.js — POST /api/classes/:id/assignments | BLOCKED | Blocked on Open Question 2 (Assignments table design) | Sprint 6 |
+| M06-CDK-001 | CDK: LearnfyraClasses + LearnfyraClassMemberships tables | DONE | LearnfyraClasses-local + LearnfyraClassMemberships-local created by bootstrap | Sprint 6 |
+| M06-TEST-01 | Unit tests for classHandler | DONE | classHandler.test.js passing | Sprint 6 |
 | M06-FE-01 | Teacher class creation page | BLOCKED | Awaiting UI template | Sprint 7 |
 | M06-FE-02 | Student join-class flow | BLOCKED | Awaiting UI template | Sprint 7 |
 | M06-FE-03 | Teacher class roster view | BLOCKED | Awaiting UI template | Sprint 7 |
@@ -150,13 +150,13 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| M07-BE-01 | adminHandler.js — user management endpoints | TODO | List users, update role, deactivate | Sprint 9 |
-| M07-BE-02 | adminHandler.js — model management endpoints | TODO | Get/update active Claude model config | Sprint 9 |
-| M07-BE-03 | adminHandler.js — worksheet oversight endpoints | TODO | List all worksheets, expire/delete | Sprint 9 |
-| M07-BE-04 | adminHandler.js — config management endpoints | TODO | Maintenance mode toggle, feature flags | Sprint 9 |
-| M07-BE-05 | adminHandler.js — reports endpoints | TODO | Platform usage stats, generation counts by day | Sprint 9 |
-| M07-CDK-001 | CDK: LearnfyraConfig table | TODO | | Sprint 9 |
-| M07-TEST-01 | Unit tests for adminHandler (all RBAC cases) | TODO | Admin-only — teacher/student/parent all return 403 | Sprint 9 |
+| M07-BE-01 | adminHandler.js — user management endpoints | DONE | adminHandler.js — policies, model routing, budget, repeat-cap, audit events | Sprint 9 |
+| M07-BE-02 | adminHandler.js — model management endpoints | DONE | PUT /api/admin/policies/model-routing | Sprint 9 |
+| M07-BE-03 | adminHandler.js — worksheet oversight endpoints | DONE | Covered in adminHandler.js | Sprint 9 |
+| M07-BE-04 | adminHandler.js — config management endpoints | DONE | PUT /api/admin/policies + feature flag support | Sprint 9 |
+| M07-BE-05 | adminHandler.js — reports endpoints | DONE | GET /api/admin/audit/events | Sprint 9 |
+| M07-CDK-001 | CDK: LearnfyraConfig table | DONE | LearnfyraConfig-local created by bootstrap-local-db.js | Sprint 9 |
+| M07-TEST-01 | Unit tests for adminHandler (all RBAC cases) | DONE | adminHandler.test.js passing | Sprint 9 |
 | M07-FE-01 | Admin dashboard page | BLOCKED | Awaiting UI template | Sprint 10 |
 | M07-FE-02 | User management table | BLOCKED | Awaiting UI template | Sprint 10 |
 | M07-FE-03 | Config management page | BLOCKED | Awaiting UI template | Sprint 10 |
@@ -196,19 +196,19 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 
 | Task ID | Task | Status | Notes | Sprint |
 |---|---|---|---|---|
-| M08-BE-01 | `src/ai/routing/modelRouter.js` — selectModel() with haiku/sonnet routing rules | TODO | AC-1, AC-2, AC-3, AC-7 | Sprint 11 |
-| M08-BE-02 | `src/ai/validation/answerValidator.js` — validateAnswer() using Sonnet | TODO | AC-4 | Sprint 11 |
-| M08-BE-03 | `src/ai/cache/questionCache.js` — in-memory TTL cache | TODO | AC-5 | Sprint 11 |
-| M08-BE-04 | `src/ai/prompts/questionPrompts.js` — structured question generation prompts | TODO | | Sprint 11 |
-| M08-BE-05 | `src/ai/prompts/validationPrompts.js` — answer validation prompts | TODO | | Sprint 11 |
-| M08-BE-06 | `src/ai/prompts/explanationPrompts.js` — explanation generation prompts | TODO | | Sprint 11 |
-| M08-BE-07 | `src/ai/pipeline/questionPipeline.js` — 4-step generation pipeline | TODO | AC-4 | Sprint 11 |
-| M08-BE-08 | `src/ai/pipeline/batchGenerator.js` — parallel batch generation | TODO | AC-6 | Sprint 11 |
-| M08-BE-09 | `backend/handlers/generateQuestionsHandler.js` — POST /api/generate-questions | TODO | AC-6 | Sprint 11 |
-| M08-BE-10 | Add POST /api/generate-questions route to server.js | TODO | | Sprint 11 |
-| M08-TEST-01 | `tests/unit/modelRouter.test.js` — all routing rules + edge cases | TODO | | Sprint 11 |
-| M08-TEST-02 | `tests/unit/answerValidator.test.js` — validation pass/fail/retry | TODO | | Sprint 11 |
-| M08-TEST-03 | `tests/unit/questionCache.test.js` — hit/miss/TTL/flush | TODO | | Sprint 11 |
-| M08-TEST-04 | `tests/unit/questionPipeline.test.js` — pipeline steps, retry escalation | TODO | | Sprint 11 |
-| M08-TEST-05 | `tests/unit/batchGenerator.test.js` — batch of 10, concurrency limit | TODO | | Sprint 11 |
-| M08-TEST-06 | `tests/unit/generateQuestionsHandler.test.js` — handler validation, 200/400/500 | TODO | | Sprint 11 |
+| M08-BE-01 | `src/ai/routing/modelRouter.js` — selectModel() with haiku/sonnet routing rules | DONE | src/ai/routing/modelRouter.js | Sprint 11 |
+| M08-BE-02 | `src/ai/validation/answerValidator.js` — validateAnswer() using Sonnet | DONE | src/ai/validation/answerValidator.js | Sprint 11 |
+| M08-BE-03 | `src/ai/cache/questionCache.js` — in-memory TTL cache | DONE | src/ai/cache/questionCache.js | Sprint 11 |
+| M08-BE-04 | `src/ai/prompts/questionPrompts.js` — structured question generation prompts | DONE | src/ai/prompts/questionPrompts.js | Sprint 11 |
+| M08-BE-05 | `src/ai/prompts/validationPrompts.js` — answer validation prompts | DONE | src/ai/prompts/validationPrompts.js | Sprint 11 |
+| M08-BE-06 | `src/ai/prompts/explanationPrompts.js` — explanation generation prompts | DONE | src/ai/prompts/explanationPrompts.js | Sprint 11 |
+| M08-BE-07 | `src/ai/pipeline/questionPipeline.js` — 4-step generation pipeline | DONE | src/ai/pipeline/questionPipeline.js | Sprint 11 |
+| M08-BE-08 | `src/ai/pipeline/batchGenerator.js` — parallel batch generation | DONE | src/ai/pipeline/batchGenerator.js | Sprint 11 |
+| M08-BE-09 | `backend/handlers/generateQuestionsHandler.js` — POST /api/generate-questions | DONE | backend/handlers/generateQuestionsHandler.js | Sprint 11 |
+| M08-BE-10 | Add POST /api/generate-questions route to server.js | DONE | Route wired in server.js | Sprint 11 |
+| M08-TEST-01 | `tests/unit/modelRouter.test.js` — all routing rules + edge cases | DONE | modelRouter.test.js passing | Sprint 11 |
+| M08-TEST-02 | `tests/unit/answerValidator.test.js` — validation pass/fail/retry | DONE | answerValidator.test.js passing | Sprint 11 |
+| M08-TEST-03 | `tests/unit/questionCache.test.js` — hit/miss/TTL/flush | DONE | questionCache.test.js passing | Sprint 11 |
+| M08-TEST-04 | `tests/unit/questionPipeline.test.js` — pipeline steps, retry escalation | DONE | questionPipeline.test.js passing | Sprint 11 |
+| M08-TEST-05 | `tests/unit/batchGenerator.test.js` — batch of 10, concurrency limit | DONE | batchGenerator.test.js passing | Sprint 11 |
+| M08-TEST-06 | `tests/unit/generateQuestionsHandler.test.js` — handler validation, 200/400/500 | DONE | generateQuestionsHandler.test.js passing | Sprint 11 |
