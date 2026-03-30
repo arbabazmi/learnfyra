@@ -21,7 +21,9 @@
       "Bash(sort echo:*)",
       "Bash(grep -c \"^| \" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md echo \"---\" grep \"| TODO\\\\|| BLOCKED\\\\|| IN PROGRESS\\\\|| DONE\" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md)",
       "Bash(2)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git -C C:/arbab-github/edusheet-ai status --short)",
+      "Bash(grep:*)"
     ]
   }
 }

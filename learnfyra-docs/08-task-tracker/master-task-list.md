@@ -52,14 +52,14 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 |---|---|---|---|---|
 | QB-IMPL-001 | DynamoDB QuestionBank table CDK construct | TODO | Needs DynamoDB table + GSI-1 | Sprint 3 |
 | QB-IMPL-002 | localAdapter.js (QB_ADAPTER=local) | DONE | src/questionBank/localQuestionBankAdapter.js + reuseHook.js | Sprint 3 |
-| QB-IMPL-003 | dynamoAdapter.js (QB_ADAPTER=dynamodb) | TODO | AWS SDK v3, lazy import, DB_ENDPOINT aware | Sprint 3 |
-| QB-IMPL-004 | index.js adapter factory | DONE | src/questionBank/index.js — local adapter wired; dynamodb pending QB-IMPL-003 | Sprint 3 |
+| QB-IMPL-003 | dynamoAdapter.js (QB_ADAPTER=dynamodb) | DONE | src/questionBank/dynamoAdapter.js + utils.js (dedupeHash GSI, lookupKey GSI, SELECT COUNT) | Sprint 3 |
+| QB-IMPL-004 | index.js adapter factory | DONE | src/questionBank/index.js — local + dynamodb adapters wired | Sprint 3 |
 | QB-IMPL-005 | dedupeHash computation | DONE | SHA256 in localQuestionBankAdapter.js | Sprint 3 |
 | QB-CDK-001 | CDK: LearnfyraQuestionBank-{env} table | DONE | LearnfyraQuestionBank-local created by bootstrap-local-db.js | Sprint 3 |
 | QB-CDK-002 | CDK: grant DynamoDB access to generate Lambda | TODO | dynamodb:GetItem, PutItem, Query, UpdateItem | Sprint 3 |
 | QB-CDK-003 | CDK: QB_ADAPTER env var injection | TODO | Inject QB_ADAPTER and QUESTION_BANK_TABLE_NAME into generate Lambda | Sprint 3 |
-| QB-TEST-001 | Unit tests for both adapters (aws-sdk-client-mock) | DONE | localQuestionBankAdapter.test.js + questionBankIndex.test.js — all passing | Sprint 3 |
-| QB-TEST-002 | Unit test: dedupeHash uniqueness | DONE | Covered in localQuestionBankAdapter.test.js | Sprint 3 |
+| QB-TEST-001 | Unit tests for both adapters (aws-sdk-client-mock) | DONE | questionBankDynamoAdapter.test.js + questionBankUtils.test.js + questionBankIndex.test.js | Sprint 3 |
+| QB-TEST-002 | Unit test: dedupeHash uniqueness | DONE | questionBankUtils.test.js — 12 cases including case/whitespace insensitivity | Sprint 3 |
 
 ---
 
@@ -71,8 +71,8 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | M03-BE-02 | generator.js — generateWorksheet() pipeline | DONE | | — |
 | M03-BE-03 | promptBuilder.js — system + user + strict prompts | DONE | | — |
 | M03-BE-04 | topics.js — CURRICULUM map v1.1.0 | DONE | 410 topic combos | — |
-| M03-BE-05 | Bank-first assembly (integrate M02) | BLOCKED | Depends on QB-IMPL-001 through QB-IMPL-004 | Sprint 3 |
-| M03-BE-06 | generationMode + provenanceLevel fields | BLOCKED | Depends on M03-BE-05 | Sprint 3 |
+| M03-BE-05 | Bank-first assembly (integrate M02) | DONE | src/ai/generator.js — bank-only / mixed / ai-only modes with error tolerance | Sprint 3 |
+| M03-BE-06 | generationMode + provenanceLevel fields | DONE | Added to generateWorksheet() return value | Sprint 3 |
 | M03-BE-07 | solve-data.json written alongside worksheet | DONE | | — |
 | M03-BE-08 | metadata.json written alongside worksheet | DONE | | — |
 | M03-BE-09 | downloadHandler.js — GET /api/download | DONE | | — |
@@ -80,7 +80,7 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | M03-TEST-01 | Unit tests for generator.js | DONE | 88 tests passing | — |
 | M03-TEST-02 | Unit tests for promptBuilder.js | DONE | | — |
 | M03-TEST-03 | Unit tests for exporters | DONE | | — |
-| M03-TEST-04 | Integration: bank-first generate flow | BLOCKED | Depends on M02 | Sprint 3 |
+| M03-TEST-04 | Integration: bank-first generate flow | DONE | Covered in generator.test.js bank-first test cases | Sprint 3 |
 
 ---
 
