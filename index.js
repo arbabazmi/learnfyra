@@ -1,6 +1,6 @@
 /**
  * @file index.js
- * @description CLI entry point for EduSheet AI worksheet generator
+ * @description CLI entry point for Learnfyra worksheet generator
  * @agent DEV
  */
 

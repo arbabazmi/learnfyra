@@ -146,7 +146,7 @@ export async function exportDOCX(worksheet, options) {
           ...worksheet.questions.flatMap(buildQuestionParagraphs),
           new Paragraph({
             children: [
-              new TextRun({ text: `EduSheet AI — Generated ${new Date().toLocaleDateString('en-US')} — © ${new Date().getFullYear()} — For Educational Use`, font: 'Arial', size: 16, color: '888888' }),
+              new TextRun({ text: `Learnfyra — Generated ${new Date().toLocaleDateString('en-US')} — © ${new Date().getFullYear()} — For Educational Use`, font: 'Arial', size: 16, color: '888888' }),
             ],
             alignment: AlignmentType.CENTER,
             spacing: { before: 400 },

@@ -22,7 +22,7 @@ const sampleWorksheet = JSON.parse(
 const tempFiles = [];
 
 function writeTempJSON(name, content) {
-  const filePath = join(tmpdir(), `edusheet-test-${name}-${Date.now()}.json`);
+  const filePath = join(tmpdir(), `learnfyra-test-${name}-${Date.now()}.json`);
   writeFileSync(filePath, typeof content === 'string' ? content : JSON.stringify(content), 'utf-8');
   tempFiles.push(filePath);
   return filePath;

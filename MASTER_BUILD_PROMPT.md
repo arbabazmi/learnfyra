@@ -1,4 +1,4 @@
-# EduSheet AI — Master Build Prompt
+# Learnfyra — Master Build Prompt
 # Paste this entire prompt into Claude Code to start the Agent Teams session.
 # Make sure CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 is set in ~/.claude/settings.json
 
@@ -6,7 +6,7 @@
 
 ## YOUR MISSION
 
-You are the Team Lead for EduSheet AI. Before writing a single line of new code,
+You are the Team Lead for Learnfyra. Before writing a single line of new code,
 you must audit the entire project to understand exactly what exists and what works.
 Then build everything missing, in the correct order, using specialized teammates.
 
@@ -39,7 +39,7 @@ Then read every file in:
 
 ### Step 2 — Run all existing tests
 ```
-cd C:/arbab-github/edusheet-ai
+cd C:/arbab-github/learnfyra
 npm install
 npm test
 npm run test:coverage
@@ -75,7 +75,7 @@ Look inside infra/ and answer:
 Before doing ANYTHING else, write a clear audit report in this format:
 
 ```
-=== EDUSHEET AI — AUDIT REPORT ===
+=== LEARNFYRA — AUDIT REPORT ===
 
 CLI APPLICATION
   Status: [WORKING / BROKEN / PARTIAL]
@@ -223,9 +223,9 @@ infra/cdk/
 ├── bin/
 │   └── app.ts
 ├── lib/
-│   └── edusheet-stack.ts
+│   └── learnfyra-stack.ts
 ├── test/
-│   └── edusheet-stack.test.ts
+│   └── learnfyra-stack.test.ts
 ├── cdk.json
 ├── tsconfig.json
 └── package.json
@@ -247,7 +247,7 @@ The CDK stack must create:
    - /api/* → API Gateway (caching disabled)
 7. SSM Parameter Store — read Anthropic API key (SecureString, pre-created manually)
 
-Tag all resources: { Project: 'edusheet-ai', Environment: env }
+Tag all resources: { Project: 'learnfyra', Environment: env }
 Support env context: dev / staging / prod via --context env=dev
 
 Spawn a devops-agent teammate to also:
@@ -306,7 +306,7 @@ npx cdk deploy --all --context env=dev
 # Step 3 — Note all outputs (CloudFront URL, bucket names, API URL)
 
 # Step 4 — Sync frontend to S3
-aws s3 sync frontend/ s3://edusheet-ai-frontend-dev --delete
+aws s3 sync frontend/ s3://learnfyra-frontend-dev --delete
 
 # Step 5 — Invalidate CloudFront cache
 aws cloudfront create-invalidation --distribution-id DIST_ID --paths "/*"

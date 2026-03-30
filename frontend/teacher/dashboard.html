@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Dashboard — Learnfyra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+
+  <div class="bg-orb bg-orb--one" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb--two" aria-hidden="true"></div>
+
+  <!-- ============================================================
+       Site Header
+       ============================================================ -->
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a href="/" class="logo" aria-label="Learnfyra home">
+          <span class="logo-icon" aria-hidden="true">&#9998;</span>
+          <span class="logo-text">Learn<span class="logo-accent">fyra</span></span>
+        </a>
+        <p class="header-tagline">USA curriculum-aligned worksheets for Grades 1–10</p>
+        <div class="header-auth" id="headerAuth">
+          <!-- injected by inline script below -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       Dashboard Main
+       ============================================================ -->
+  <main class="main-content" id="teacherDashboardMain" aria-label="Teacher dashboard">
+    <div class="dashboard-container">
+
+      <!-- Welcome Banner -->
+      <div class="dashboard-welcome reveal" aria-label="Welcome section">
+        <div class="welcome-inner">
+          <div class="welcome-avatar" id="welcomeAvatar" aria-hidden="true">T</div>
+          <div class="welcome-text">
+            <h1 class="welcome-heading">
+              Welcome back, <span id="welcomeName">Teacher</span>!
+            </h1>
+            <p class="welcome-sub">
+              <span class="role-badge">Teacher</span>
+              &nbsp; Create classes, assign worksheets, and track student progress.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Classes -->
+      <div class="dashboard-card reveal" aria-label="My classes">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-5);">
+          <h2 class="section-heading" style="margin-bottom:0;">My Classes</h2>
+          <button
+            type="button"
+            id="openCreateClassBtn"
+            class="btn btn--primary btn--sm"
+            aria-haspopup="dialog"
+            aria-controls="createClassModal"
+          >
+            + Create New Class
+          </button>
+        </div>
+
+        <div id="classListContainer" aria-live="polite" aria-label="Class list">
+          <!-- Rendered by dashboard.js -->
+          <div class="empty-state">
+            <span class="empty-state-icon" aria-hidden="true">&#127979;</span>
+            Loading your classes&hellip;
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="dashboard-card reveal" aria-label="Recent activity">
+        <h2 class="section-heading">Recent Activity</h2>
+        <div class="coming-soon">
+          <div class="coming-soon-badge" aria-label="Coming soon">Coming Soon</div>
+          <p>
+            Analytics coming soon &mdash; assign worksheets to your class to see student results here.
+          </p>
+        </div>
+      </div>
+
+      <!-- Dashboard Actions -->
+      <div class="dashboard-actions reveal" role="group" aria-label="Dashboard actions">
+        <a href="/" class="btn btn--primary">
+          &#9997;&nbsp; Generate a Worksheet
+        </a>
+      </div>
+
+    </div><!-- /.dashboard-container -->
+  </main>
+
+  <!-- ============================================================
+       Create Class Modal
+       ============================================================ -->
+  <div
+    id="createClassModal"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="createClassModalTitle"
+    hidden
+  >
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="createClassModalTitle">Create a New Class</h2>
+        <button
+          type="button"
+          id="closeClassModalBtn"
+          class="modal-close"
+          aria-label="Close modal"
+        >&#215;</button>
+      </div>
+
+      <form id="createClassForm" novalidate aria-label="Create class form">
+        <div class="modal-body">
+
+          <div class="form-group">
+            <label class="form-label" for="classNameInput">
+              Class Name <span class="required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="classNameInput"
+              name="classNameInput"
+              type="text"
+              class="form-input"
+              placeholder="e.g., Algebra Readiness — Period 3"
+              required
+              aria-required="true"
+              maxlength="100"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="classGradeInput">
+              Grade <span class="required" aria-hidden="true">*</span>
+            </label>
+            <select
+              id="classGradeInput"
+              name="classGradeInput"
+              class="form-select"
+              required
+              aria-required="true"
+            >
+              <option value="">Select grade…</option>
+              <option value="1">Grade 1</option>
+              <option value="2">Grade 2</option>
+              <option value="3">Grade 3</option>
+              <option value="4">Grade 4</option>
+              <option value="5">Grade 5</option>
+              <option value="6">Grade 6</option>
+              <option value="7">Grade 7</option>
+              <option value="8">Grade 8</option>
+              <option value="9">Grade 9</option>
+              <option value="10">Grade 10</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="classSubjectInput">
+              Primary Subject <span class="required" aria-hidden="true">*</span>
+            </label>
+            <select
+              id="classSubjectInput"
+              name="classSubjectInput"
+              class="form-select"
+              required
+              aria-required="true"
+            >
+              <option value="">Select subject…</option>
+              <option value="Math">Math</option>
+              <option value="ELA">ELA</option>
+              <option value="Science">Science</option>
+              <option value="Social Studies">Social Studies</option>
+              <option value="Health">Health</option>
+            </select>
+          </div>
+
+          <!-- Invite code shown after successful creation -->
+          <div id="inviteCodeSuccess" class="invite-success" hidden aria-live="polite">
+            <div class="invite-success-label">Class created! Share this invite code with your students:</div>
+            <div class="invite-success-code" id="generatedInviteCode" aria-label="Invite code"></div>
+            <div class="invite-success-hint">Students enter this code when joining your class.</div>
+          </div>
+
+        </div><!-- /.modal-body -->
+
+        <div class="modal-actions">
+          <button type="submit" class="btn btn--primary">
+            Create Class
+          </button>
+          <button
+            type="button"
+            class="btn btn--secondary"
+            id="cancelClassModalBtn"
+            onclick="document.getElementById('createClassModal').hidden=true;"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+
+    </div><!-- /.modal -->
+  </div><!-- /.modal-overlay -->
+
+  <!-- ============================================================
+       Footer
+       ============================================================ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p class="footer-text">Learnfyra &mdash; Aligned to CCSS, NGSS, and NHES standards</p>
+    </div>
+  </footer>
+
+  <!-- Inline auth header injection -->
+  <script>
+    (function() {
+      const token = localStorage.getItem('auth_token');
+      const user  = token ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null;
+      const el    = document.getElementById('headerAuth');
+      if (!el) return;
+      if (user) {
+        el.innerHTML =
+          '<span style="font-size:0.875rem;font-weight:600;color:var(--text-muted)">Hi, ' +
+          (user.displayName || user.email) +
+          '</span>' +
+          '&nbsp;<button onclick="localStorage.removeItem(\'auth_token\');localStorage.removeItem(\'auth_user\');location.href=\'/login.html\';" style="font-size:0.75rem;padding:0.25rem 0.75rem;" class="btn btn--secondary">Sign Out</button>';
+      } else {
+        el.innerHTML = '<a href="/login.html" class="btn btn--secondary" style="font-size:0.875rem;padding:0.4rem 1rem;">Sign In</a>';
+      }
+    })();
+  </script>
+
+  <script type="module">
+    import { loadTeacherDashboard } from '../js/dashboard.js';
+    loadTeacherDashboard();
+  </script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+{
+  "info": {
+    "_postman_id": "3bb8df85-66c7-4ce2-ac4b-9f3b56db6a3d",
+    "name": "Learnfyra Dev API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Manual API test collection for Learnfyra local/dev endpoints. Configure collection variables before use."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "studentToken", "value": "" },
+    { "key": "teacherToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "worksheetId", "value": "12345678-1234-4123-8123-123456789abc" },
+    { "key": "classId", "value": "33333333-3333-4333-8333-333333333333" },
+    { "key": "studentId", "value": "22222222-2222-4222-8222-222222222222" },
+    { "key": "childId", "value": "88888888-8888-4888-8888-888888888888" },
+    { "key": "certificateId", "value": "22222222-2222-4222-8222-222222222222" },
+    { "key": "certificateDownloadToken", "value": "" },
+    { "key": "questionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Worksheet",
+      "item": [
+        {
+          "name": "Generate Worksheet",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors and Multiples\",\n  \"difficulty\": \"Easy\",\n  \"questionCount\": 10,\n  \"format\": \"HTML\",\n  \"includeAnswerKey\": true,\n  \"generationMode\": \"bank-first\",\n  \"provenanceLevel\": \"summary\"\n}"
+            },
+            "url": "{{baseUrl}}/api/generate"
+          }
+        },
+        {
+          "name": "Download Worksheet",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/download?key=worksheets/sample/worksheet.html"
+          }
+        },
+        {
+          "name": "Solve Worksheet",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/solve/{{worksheetId}}"
+          }
+        },
+        {
+          "name": "Submit Worksheet",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"worksheetId\": \"{{worksheetId}}\",\n  \"answers\": [\n    { \"number\": 1, \"answer\": \"B\" },\n    { \"number\": 2, \"answer\": \"42\" }\n  ],\n  \"timeTaken\": 180,\n  \"timed\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/submit"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Questions (M08)",
+      "description": "LLM question generation pipeline — POST /api/generate-questions\nValid questionTypes: multiple-choice | true-false | fill-in-the-blank | short-answer | word-problem | show-your-work\ncount: 1–30, difficulty: Easy | Medium | Hard | Mixed",
+      "item": [
+        {
+          "name": "Multiple Choice (Easy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors and Multiples\",\n  \"difficulty\": \"Easy\",\n  \"questionType\": \"multiple-choice\",\n  \"count\": 3\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "True/False (Medium)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 5,\n  \"subject\": \"Science\",\n  \"topic\": \"Ecosystems\",\n  \"difficulty\": \"Medium\",\n  \"questionType\": \"true-false\",\n  \"count\": 2\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "Short Answer (Hard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 7,\n  \"subject\": \"ELA\",\n  \"topic\": \"Literary Devices\",\n  \"difficulty\": \"Hard\",\n  \"questionType\": \"short-answer\",\n  \"count\": 2\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        },
+        {
+          "name": "Fill-in-Blank (Mixed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 3,\n  \"subject\": \"Math\",\n  \"topic\": \"Addition and Subtraction\",\n  \"difficulty\": \"Mixed\",\n  \"questionType\": \"fill-in-the-blank\",\n  \"count\": 3\n}"
+            },
+            "url": "{{baseUrl}}/api/generate-questions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student+manual@test.com\",\n  \"password\": \"Passw0rd!\",\n  \"role\": \"student\",\n  \"displayName\": \"Manual Student\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student+manual@test.com\",\n  \"password\": \"Passw0rd!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        },
+        {
+          "name": "OAuth Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"redirectUri\": \"{{baseUrl}}/api/auth/callback/google\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/oauth/google"
+          }
+        },
+        {
+          "name": "OAuth Callback",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/callback/google?code=sample-code"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student",
+      "item": [
+        {
+          "name": "Get Student Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/student/profile"
+          }
+        },
+        {
+          "name": "Join Class",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"ABC123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/student/join-class"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Progress",
+      "item": [
+        {
+          "name": "Save Progress",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"worksheetId\": \"{{worksheetId}}\",\n  \"classId\": \"{{classId}}\",\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors\",\n  \"difficulty\": \"Easy\",\n  \"totalScore\": 8,\n  \"totalPoints\": 10,\n  \"percentage\": 80,\n  \"answers\": [\n    { \"number\": 1, \"answer\": \"B\" }\n  ],\n  \"timeTaken\": 120,\n  \"timed\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/progress/save"
+          }
+        },
+        {
+          "name": "Get History",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/progress/history?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Get Insights",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/progress/insights?limit=20"
+          }
+        },
+        {
+          "name": "Parent View Child Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/progress/parent/{{childId}}?limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Class",
+      "item": [
+        {
+          "name": "Create Class",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"className\": \"Grade 4 Math A\",\n  \"grade\": 4,\n  \"subject\": \"Math\"\n}"
+            },
+            "url": "{{baseUrl}}/api/class/create"
+          }
+        },
+        {
+          "name": "Get Class Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/class/{{classId}}/students"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Class Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/analytics/class/{{classId}}"
+          }
+        },
+        {
+          "name": "Student Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/analytics/student/{{studentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        {
+          "name": "List Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/certificates?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Download Certificate",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/certificates/{{certificateId}}/download?token={{certificateDownloadToken}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Policies",
+      "item": [
+        {
+          "name": "Get Policies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/policies"
+          }
+        },
+        {
+          "name": "Update Model Routing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "model-routing-001" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"defaultMode\": \"auto\",\n  \"allowPremium\": true,\n  \"premiumEscalation\": {\n    \"missingCountThreshold\": 15,\n    \"hardQuestionCountThreshold\": 10\n  },\n  \"fallbackOrder\": [\"low\", \"default\", \"premium\"],\n  \"reason\": \"LF-1001 maintain routing policy.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/model-routing"
+          }
+        },
+        {
+          "name": "Update Budget Usage",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "budget-usage-001" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dailyUsdSoftLimit\": 100,\n  \"dailyUsdHardLimit\": 150,\n  \"monthlyUsdSoftLimit\": 2500,\n  \"monthlyUsdHardLimit\": 3000,\n  \"softLimitBehavior\": \"log-only\",\n  \"hardLimitBehavior\": \"block-premium\",\n  \"reason\": \"LF-1002 tune budget controls.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/budget-usage"
+          }
+        },
+        {
+          "name": "Update Validation Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "validation-profile-001" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"standard\",\n  \"strictness\": \"balanced\",\n  \"rejectOnCountMismatch\": true,\n  \"rejectOnSchemaViolation\": true,\n  \"allowPartialIfRecoverable\": false,\n  \"reason\": \"LF-1003 keep validation profile balanced.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/validation-profile"
+          }
+        },
+        {
+          "name": "Get Audit Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/audit/events?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Get Repeat Cap Policy",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap?scope=global"
+          }
+        },
+        {
+          "name": "Update Repeat Cap Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization",   "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "repeat-cap-001" },
+              { "key": "Content-Type",    "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"defaultPercent\": 10,\n  \"minPercent\": 0,\n  \"maxPercent\": 100,\n  \"reason\": \"LF-1004 set global repeat cap.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap"
+          }
+        },
+        {
+          "name": "Set Repeat Cap Override",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization",   "value": "Bearer {{adminToken}}" },
+              { "key": "Idempotency-Key", "value": "repeat-cap-override-001" },
+              { "key": "Content-Type",    "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"student\",\n  \"scopeId\": \"{{studentId}}\",\n  \"repeatCapPercent\": 15,\n  \"isActive\": true,\n  \"reason\": \"LF-1005 student-level override.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/policies/repeat-cap/overrides"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rewards",
+      "item": [
+        {
+          "name": "Student Rewards",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rewards/student/{{studentId}}"
+          }
+        },
+        {
+          "name": "Class Rewards",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacherToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rewards/class/{{classId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Question Bank",
+      "item": [
+        {
+          "name": "List Questions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/qb/questions?grade=4&subject=Math&difficulty=Easy"
+          }
+        },
+        {
+          "name": "Create Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grade\": 4,\n  \"subject\": \"Math\",\n  \"topic\": \"Factors\",\n  \"difficulty\": \"Easy\",\n  \"type\": \"multiple-choice\",\n  \"question\": \"Which number is a factor of 24?\",\n  \"options\": [\"A. 5\", \"B. 6\", \"C. 7\", \"D. 11\"],\n  \"answer\": \"B\",\n  \"explanation\": \"6 divides 24 evenly.\",\n  \"standards\": [\"CCSS.MATH.CONTENT.4.OA.B.4\"],\n  \"modelUsed\": \"manual-test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/qb/questions"
+          }
+        },
+        {
+          "name": "Get Question by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/qb/questions/{{questionId}}"
+          }
+        },
+        {
+          "name": "Record Reuse",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/qb/questions/{{questionId}}/reuse"
+          }
+        }
+      ]
+    }
+  ]
+}

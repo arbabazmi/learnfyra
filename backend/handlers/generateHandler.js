@@ -16,7 +16,7 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { readFileSync } from 'fs';
+import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import { validateGenerateBody } from '../middleware/validator.js';
 
@@ -26,9 +26,13 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
-const s3   = new S3Client({});
-const ssm  = new SSMClient({});
-const BUCKET = process.env.WORKSHEET_BUCKET_NAME;
+// Lazy AWS client getters — instantiated on first invocation, not at module
+// scope, to keep cold-start overhead minimal and match the project pattern (W4).
+let _s3, _ssm;
+function getS3()  { if (!_s3)  _s3  = new S3Client({});  return _s3;  }
+function getSsm() { if (!_ssm) _ssm = new SSMClient({}); return _ssm; }
+
+const DIAGNOSTIC_HEADERS = 'x-request-id,x-client-request-id';
 
 // Cache the API key in module scope so it is only fetched once per cold start.
 let _apiKeyLoaded = false;
@@ -47,7 +51,7 @@ async function loadApiKey() {
   if (!paramName) {
     throw new Error('SSM_PARAM_NAME env var is not set.');
   }
-  const { Parameter } = await ssm.send(new GetParameterCommand({
+  const { Parameter } = await getSsm().send(new GetParameterCommand({
     Name: paramName,
     WithDecryption: true,
   }));
@@ -56,20 +60,41 @@ async function loadApiKey() {
 }
 
 // Lazy import helpers — only loaded on first real invocation
-let _generateWorksheet;
+let _validateToken;
+let _assertRole;
+let _assembleWorksheet;
 let _exportWorksheet;
 let _exportAnswerKey;
+let _getDbAdapter;
+let _buildStudentKey;
+let _resolveEffectiveRepeatCap;
+let _getSeenQuestionSignatures;
+let _recordExposureHistory;
 
 /**
- * Returns the generateWorksheet function, importing it on first call.
+ * Returns validateToken and assertRole from authMiddleware, importing on first call.
+ * @returns {Promise<{ validateToken: Function, assertRole: Function }>}
+ */
+async function getAuthMiddleware() {
+  if (!_validateToken) {
+    const mod = await import('../middleware/authMiddleware.js');
+    _validateToken = mod.validateToken;
+    _assertRole    = mod.assertRole;
+  }
+  return { validateToken: _validateToken, assertRole: _assertRole };
+}
+
+/**
+ * Returns the assembleWorksheet function (M03 bank-first pipeline),
+ * importing it on first call.
  * @returns {Promise<Function>}
  */
-async function getGenerateWorksheet() {
-  if (!_generateWorksheet) {
-    const mod = await import('../../src/ai/generator.js');
-    _generateWorksheet = mod.generateWorksheet;
+async function getAssembleWorksheet() {
+  if (!_assembleWorksheet) {
+    const mod = await import('../../src/ai/assembler.js');
+    _assembleWorksheet = mod.assembleWorksheet;
   }
-  return _generateWorksheet;
+  return _assembleWorksheet;
 }
 
 /**
@@ -96,6 +121,39 @@ async function getExportAnswerKey() {
   return _exportAnswerKey;
 }
 
+/**
+ * Returns the DB adapter factory, importing on first call.
+ * @returns {Promise<Function>}
+ */
+async function getDbAdapterFactory() {
+  if (!_getDbAdapter) {
+    const mod = await import('../../src/db/index.js');
+    _getDbAdapter = mod.getDbAdapter;
+  }
+  return _getDbAdapter;
+}
+
+/**
+ * Returns repeat-cap helpers, importing on first call.
+ * @returns {Promise<Object>}
+ */
+async function getRepeatCapHelpers() {
+  if (!_buildStudentKey) {
+    const mod = await import('../../src/ai/repeatCapPolicy.js');
+    _buildStudentKey = mod.buildStudentKey;
+    _resolveEffectiveRepeatCap = mod.resolveEffectiveRepeatCap;
+    _getSeenQuestionSignatures = mod.getSeenQuestionSignatures;
+    _recordExposureHistory = mod.recordExposureHistory;
+  }
+
+  return {
+    buildStudentKey: _buildStudentKey,
+    resolveEffectiveRepeatCap: _resolveEffectiveRepeatCap,
+    getSeenQuestionSignatures: _getSeenQuestionSignatures,
+    recordExposureHistory: _recordExposureHistory,
+  };
+}
+
 /** Maps user-facing format names to file extensions */
 const FORMAT_EXT = {
   'PDF': 'pdf',
@@ -105,18 +163,41 @@ const FORMAT_EXT = {
 
 /**
  * Uploads a local /tmp file to S3 and returns the S3 key.
+ * BUCKET is read inside this function (not at module scope) so Lambda does not
+ * fail at cold-start when the env var has not yet been injected (W5).
  * @param {string} localPath - Absolute path to the file in /tmp
  * @param {string} s3Key - Destination S3 key
  * @param {string} contentType - MIME type for the object
  * @returns {Promise<string>} The S3 key that was written
  */
 async function uploadToS3(localPath, s3Key, contentType) {
-  const body = readFileSync(localPath);
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
+  const bucket = process.env.WORKSHEET_BUCKET_NAME;
+  if (!bucket) throw new Error('WORKSHEET_BUCKET_NAME environment variable is not set.');
+  const body = await fs.readFile(localPath);
+  await getS3().send(new PutObjectCommand({
+    Bucket: bucket,
     Key: s3Key,
     Body: body,
     ContentType: contentType,
+  }));
+  return s3Key;
+}
+
+/**
+ * Serialises a JSON object and uploads it directly to S3 (no local temp file).
+ * Used for solve-data.json which is built in memory rather than exported to /tmp.
+ * @param {string} s3Key - Destination S3 key
+ * @param {Object} data  - JSON-serialisable object
+ * @returns {Promise<string>} The S3 key that was written
+ */
+async function uploadJsonToS3(s3Key, data) {
+  const bucket = process.env.WORKSHEET_BUCKET_NAME;
+  if (!bucket) throw new Error('WORKSHEET_BUCKET_NAME environment variable is not set.');
+  await getS3().send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: s3Key,
+    Body: JSON.stringify(data),
+    ContentType: 'application/json',
   }));
   return s3Key;
 }
@@ -135,39 +216,189 @@ function mimeType(ext) {
   }
 }
 
+/**
+ * Maps thrown errors to stable machine-readable error codes.
+ * @param {Error & { code?: string }} err
+ * @returns {string}
+ */
+function mapGenerationErrorCode(err) {
+  if (err?.code) return err.code;
+  const message = String(err?.message || '').toLowerCase();
+  if (message.includes('empty response')) return 'WG_GENERATION_EMPTY_RESPONSE';
+  if (message.includes('max_tokens') || message.includes('truncated')) return 'WG_GENERATION_TRUNCATED';
+  if (message.includes('expected exactly')) return 'WG_GENERATION_COUNT_MISMATCH';
+  if (message.includes('refused')) return 'WG_GENERATION_REFUSED';
+  if (message.includes('validation')) return 'WG_VALIDATION_FAILED';
+  if (message.includes('repeat cap')) return 'WG_REPEAT_CAP_CONSTRAINT';
+  if (message.includes('bucket') || message.includes('upload')) return 'WG_UPLOAD_FAILED';
+  return 'WG_GENERATION_FAILED';
+}
+
+function getHeader(headers, key) {
+  if (!headers) return null;
+
+  const target = key.toLowerCase();
+  for (const [headerName, headerValue] of Object.entries(headers)) {
+    if (headerName.toLowerCase() === target) {
+      return headerValue;
+    }
+  }
+
+  return null;
+}
+
+function buildHeaders(requestId, clientRequestId) {
+  return {
+    ...corsHeaders,
+    'Access-Control-Expose-Headers': DIAGNOSTIC_HEADERS,
+    'x-request-id': requestId,
+    ...(clientRequestId ? { 'x-client-request-id': clientRequestId } : {}),
+  };
+}
+
+function logEvent(level, message, details) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    ...details,
+  };
+
+  console[level](JSON.stringify(entry));
+}
+
+function serializeError(err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  const out = { name: error.name, message: error.message };
+  if (process.env.NODE_ENV !== 'production') {
+    out.stack = error.stack;
+  }
+  return out;
+}
+
+function createErrorResponse({ requestId, clientRequestId, statusCode, error, errorCode, code, stage }) {
+  return {
+    statusCode,
+    headers: buildHeaders(requestId, clientRequestId),
+    body: JSON.stringify({
+      success: false,
+      error,
+      errorCode,
+      ...(code ? { code } : {}),
+      errorStage: stage,
+      requestId,
+      clientRequestId,
+    }),
+  };
+}
+
 export const handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
+  const requestStart = Date.now();
+  const requestId = event?.requestContext?.requestId || context?.awsRequestId || randomUUID();
+  const rawClientRequestId = getHeader(event?.headers, 'x-client-request-id');
+  const clientRequestId = (typeof rawClientRequestId === 'string')
+    ? rawClientRequestId.replace(/[^A-Za-z0-9\-_]/g, '').slice(0, 64) || null
+    : null;
+  let stage = 'request:start';
 
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: corsHeaders, body: '' };
+    return { statusCode: 200, headers: buildHeaders(requestId, clientRequestId), body: '' };
   }
 
   try {
-    // 0. Ensure API key is available (fetches from SSM on first cold start)
+    logEvent('info', 'generateHandler request started', {
+      requestId,
+      clientRequestId,
+      stage,
+      httpMethod: event?.httpMethod,
+      path: event?.path || event?.resource,
+    });
+
+    // 0a. Auth enforcement — teacher or admin JWT required
+    let decoded;
+    try {
+      stage = 'auth:validate-token';
+      const { validateToken: doValidate, assertRole: doAssertRole } = await getAuthMiddleware();
+      decoded = await doValidate(event);
+      doAssertRole(decoded, ['teacher', 'admin']);
+    } catch (err) {
+      return createErrorResponse({
+        requestId,
+        clientRequestId,
+        statusCode: err.statusCode || 401,
+        error: err.message,
+        errorCode: err.statusCode === 403 ? 'FORBIDDEN' : 'UNAUTHORIZED',
+        code: err.statusCode === 403 ? 'WG_FORBIDDEN' : 'WG_UNAUTHORIZED',
+        stage,
+      });
+    }
+    const teacherId = decoded.sub;
+    if (typeof teacherId !== 'string' || !/^[\w\-]{1,128}$/.test(teacherId)) {
+      return createErrorResponse({
+        requestId,
+        clientRequestId,
+        statusCode: 401,
+        error: 'Invalid token subject.',
+        errorCode: 'UNAUTHORIZED',
+        code: 'WG_UNAUTHORIZED',
+        stage,
+      });
+    }
+
+    // 0b. Ensure API key is available (fetches from SSM on first cold start)
+    stage = 'auth:load-api-key';
     await loadApiKey();
+    logEvent('info', 'generateHandler api key ready', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+    });
 
     // 1. Parse and validate request body
     let body;
     try {
+      stage = 'request:parse-body';
       body = JSON.parse(event.body || '{}');
     } catch {
-      return {
+      logEvent('warn', 'generateHandler invalid JSON body', {
+        requestId,
+        clientRequestId,
+        stage,
+      });
+      return createErrorResponse({
+        requestId,
+        clientRequestId,
         statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: 'Invalid JSON in request body.' }),
-      };
+        error: 'Invalid JSON in request body.',
+        errorCode: 'INVALID_JSON',
+        code: 'WG_INVALID_REQUEST',
+        stage,
+      });
     }
 
     let validated;
     try {
+      stage = 'request:validate-body';
       validated = validateGenerateBody(body);
     } catch (err) {
-      return {
+      logEvent('warn', 'generateHandler request validation failed', {
+        requestId,
+        clientRequestId,
+        stage,
+        error: serializeError(err),
+      });
+      return createErrorResponse({
+        requestId,
+        clientRequestId,
         statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: err.message }),
-      };
+        error: err.message,
+        errorCode: 'VALIDATION_ERROR',
+        code: 'WG_INVALID_REQUEST',
+        stage,
+      });
     }
 
     const {
@@ -178,11 +409,15 @@ export const handler = async (event, context) => {
       questionCount,
       format,
       includeAnswerKey,
+      generationMode,
+      provenanceLevel,
       studentName,
       worksheetDate,
       teacherName,
       period,
       className,
+      studentId,
+      parentId,
     } = validated;
     const ext = FORMAT_EXT[format];
     const uuid = randomUUID();
@@ -191,11 +426,72 @@ export const handler = async (event, context) => {
     const baseKey = `worksheets/${datePath}/${uuid}`;
     const outputDir = '/tmp';
 
-    // 2. Generate worksheet JSON via Claude API
-    const generateWorksheet = await getGenerateWorksheet();
-    const worksheet = await generateWorksheet({ grade, subject, topic, difficulty, questionCount });
+    logEvent('info', 'generateHandler request validated', {
+      requestId,
+      clientRequestId,
+      stage,
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      format,
+      includeAnswerKey,
+      generationMode,
+      provenanceLevel,
+      hasStudentKeyInput: Boolean(studentId || studentName),
+    });
+
+    // 1.5 Resolve repeat-cap policy and history context before assembly.
+    const getDbAdapter = await getDbAdapterFactory();
+    const db = getDbAdapter();
+    const {
+      buildStudentKey,
+      resolveEffectiveRepeatCap,
+      getSeenQuestionSignatures,
+      recordExposureHistory,
+    } = await getRepeatCapHelpers();
+
+    const studentKey = buildStudentKey({ studentId, studentName, teacherId });
+    const repeatPolicy = await resolveEffectiveRepeatCap({
+      db,
+      studentId,
+      parentId,
+      teacherId,
+    });
+
+    const seenQuestionSignatures = await getSeenQuestionSignatures({
+      db,
+      studentKey,
+      grade,
+      difficulty,
+    });
+
+        // 2. Assemble worksheet JSON via M03 bank-first pipeline
+    stage = 'worksheet:generate';
+        const assembleWorksheet = await getAssembleWorksheet();
+        const { worksheet, bankStats, provenance } = await assembleWorksheet({
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      generationMode,
+      provenanceLevel,
+      repeatCapPercent: repeatPolicy.capPercent,
+      seenQuestionSignatures,
+        });
+    logEvent('info', 'generateHandler worksheet generated', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      totalPoints: worksheet.totalPoints,
+      questionCount: Array.isArray(worksheet.questions) ? worksheet.questions.length : null,
+    });
 
     // 3. Export worksheet file to /tmp
+    stage = 'worksheet:export';
     const exportWorksheet = await getExportWorksheet();
     const worksheetPaths = await exportWorksheet(worksheet, {
       grade, subject, topic, difficulty,
@@ -209,14 +505,57 @@ export const handler = async (event, context) => {
       outputDir,
     });
     const worksheetLocalPath = worksheetPaths[0];
+    logEvent('info', 'generateHandler worksheet exported', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      worksheetFilename: worksheetLocalPath.split(/[\\/]/).pop(),
+    });
 
     // 4. Upload worksheet to S3
+    stage = 'worksheet:upload';
     const worksheetKey = `${baseKey}/worksheet.${ext}`;
     await uploadToS3(worksheetLocalPath, worksheetKey, mimeType(ext));
+    logEvent('info', 'generateHandler worksheet uploaded', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      worksheetKey,
+      bucket: process.env.WORKSHEET_BUCKET_NAME,
+    });
 
-    // 5. Export and upload answer key (if requested)
+    // 5. Upload solve-data.json to S3 — full worksheet with answers for online scoring
+    stage = 'solve-data:upload';
+    const solveData = {
+      worksheetId: uuid,
+      generatedAt: now.toISOString(),
+      teacherId,
+      studentId: studentId || null,
+      parentId: parentId || null,
+      studentKey,
+      repeatCapPolicy: {
+        effectiveCapPercent: repeatPolicy.capPercent,
+        appliedBy: repeatPolicy.appliedBy,
+        sourceId: repeatPolicy.sourceId,
+      },
+      ...worksheet,
+    };
+    const solveDataKey = `${baseKey}/solve-data.json`;
+    await uploadJsonToS3(solveDataKey, solveData);
+    logEvent('info', 'generateHandler solve-data uploaded', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      solveDataKey,
+    });
+
+    // 7. Export and upload answer key (if requested)
     let answerKeyKey = null;
     if (includeAnswerKey) {
+      stage = 'answer-key:export';
       const exportAnswerKey = await getExportAnswerKey();
       const answerKeyPaths = await exportAnswerKey(worksheet, {
         grade, subject, topic, difficulty,
@@ -229,23 +568,68 @@ export const handler = async (event, context) => {
         outputDir,
       });
       if (answerKeyPaths.length > 0) {
+        stage = 'answer-key:upload';
         answerKeyKey = `${baseKey}/answer-key.${ext}`;
         await uploadToS3(answerKeyPaths[0], answerKeyKey, mimeType(ext));
+        logEvent('info', 'generateHandler answer key uploaded', {
+          requestId,
+          clientRequestId,
+          stage,
+          elapsedMs: Date.now() - requestStart,
+          answerKeyKey,
+          bucket: process.env.WORKSHEET_BUCKET_NAME,
+        });
       }
     }
 
-    // 6. Build metadata and return
+    // 8. Build metadata and return
+    stage = 'response:success';
+
+    // Record exposure only after successful generation and storage writes.
+    // Best-effort: generation success should not be rolled back if history write fails.
+    try {
+      await recordExposureHistory({
+        db,
+        studentKey,
+        grade,
+        difficulty,
+        teacherId,
+        parentId,
+        worksheetId: uuid,
+        questions: worksheet.questions,
+      });
+    } catch (historyErr) {
+      logEvent('warn', 'generateHandler exposure history write failed', {
+        requestId,
+        clientRequestId,
+        stage,
+        error: serializeError(historyErr),
+      });
+    }
+
     const metadata = {
       id: uuid,
+      solveUrl: `/solve.html?id=${uuid}`,
       generatedAt: now.toISOString(),
+      teacherId,
       grade,
       subject,
       topic,
       difficulty,
       questionCount,
       format,
+      bankStats,
+      repeatCapPolicy: {
+        effectiveCapPercent: repeatPolicy.capPercent,
+        appliedBy: repeatPolicy.appliedBy,
+        sourceId: repeatPolicy.sourceId,
+        studentTracked: Boolean(studentKey),
+      },
+      ...(provenance ? { provenanceSummary: provenance } : {}),
       studentDetails: {
         studentName,
+        studentId,
+        parentId,
         worksheetDate,
         teacherName,
         period,
@@ -256,23 +640,33 @@ export const handler = async (event, context) => {
 
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: buildHeaders(requestId, clientRequestId),
       body: JSON.stringify({
         success: true,
         worksheetKey,
         answerKeyKey,
         metadata,
+        requestId,
+        clientRequestId,
       }),
     };
   } catch (err) {
-    console.error('generateHandler error:', err);
-    return {
+    logEvent('error', 'generateHandler request failed', {
+      requestId,
+      clientRequestId,
+      stage,
+      elapsedMs: Date.now() - requestStart,
+      error: serializeError(err),
+    });
+
+    return createErrorResponse({
+      requestId,
+      clientRequestId,
       statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        success: false,
-        error: 'Worksheet generation failed. Please try again.',
-      }),
-    };
+      error: 'Worksheet generation failed. Please try again.',
+      errorCode: 'GENERATION_FAILED',
+      code: mapGenerationErrorCode(err),
+      stage,
+    });
   }
 };

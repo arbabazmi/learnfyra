@@ -1,6 +1,6 @@
 /**
  * @file src/ai/topics.js
- * @description Authoritative Grade/Subject/Topic curriculum mapping for EduSheet AI.
+ * @description Authoritative Grade/Subject/Topic curriculum mapping for Learnfyra.
  *   Aligned to:
  *     - CCSS (Common Core State Standards) for Math and ELA
  *     - NGSS (Next Generation Science Standards) for Science

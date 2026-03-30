@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solve Worksheet — Learnfyra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/solve.css" />
+  <link rel="stylesheet" href="css/rewards.css" />
+</head>
+<body>
+
+  <div class="bg-orb bg-orb--one" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb--two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a href="/" class="logo" style="text-decoration:none;">
+          <span class="logo-icon" aria-hidden="true">&#9998;</span>
+          <span class="logo-text">Learn<span class="logo-accent">fyra</span></span>
+        </a>
+        <p class="header-tagline" id="worksheetMeta">Loading worksheet&hellip;</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+
+      <!-- Loading State -->
+      <section id="loadingSection" class="card card--center reveal" aria-live="polite" aria-label="Loading worksheet">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="loading-text">Loading worksheet&hellip;</p>
+      </section>
+
+      <!-- Error State -->
+      <section id="errorSection" class="error-box reveal" hidden role="alert" aria-live="assertive">
+        <div class="error-box__inner">
+          <strong class="error-box__title">Could not load worksheet</strong>
+          <p class="error-box__message" id="errorMessage"></p>
+        </div>
+        <div class="form-actions">
+          <a href="/" class="btn btn--secondary">Back to Generator</a>
+        </div>
+      </section>
+
+      <!-- Auth Gate (shown when not logged in) -->
+      <section id="authGateSection" class="card reveal" hidden aria-label="Sign in required">
+        <div class="card-header" style="text-align:center;">
+          <div class="success-badge" aria-hidden="true" style="background:var(--color-sun);font-size:1.5rem;">🔒</div>
+          <div>
+            <h2 class="card-title">Sign in to Solve Online</h2>
+            <p class="card-subtitle">Create a free account to practice online and track your progress.</p>
+          </div>
+        </div>
+        <div class="form-actions" style="justify-content:center;gap:1rem;flex-wrap:wrap;">
+          <a href="/login.html" class="btn btn--primary">Sign In / Create Account</a>
+          <button type="button" id="continueAsGuestBtn" class="btn btn--secondary">Continue as Guest</button>
+        </div>
+        <p style="text-align:center;margin-top:1rem;font-size:0.875rem;color:var(--text-muted);">
+          Guest results are shown but not saved.
+        </p>
+      </section>
+
+      <!-- Mode Selection Screen -->
+      <section id="modeSection" class="card reveal" hidden aria-label="Choose solve mode">
+        <div class="card-header" style="text-align:center;">
+          <h2 class="card-title" id="modeTitleText">Ready to solve?</h2>
+          <p class="card-subtitle" id="modeSubtitleText"></p>
+        </div>
+        <div class="mode-selection" id="modeSelection">
+          <button type="button" id="timedModeBtn" class="mode-btn mode-btn--timed">
+            <span class="mode-btn__icon" aria-hidden="true">&#9201;</span>
+            <div>
+              <span class="mode-btn__label">Timed Mode</span>
+              <span class="mode-btn__desc" id="timedDesc">Race the clock</span>
+            </div>
+          </button>
+          <button type="button" id="untimedModeBtn" class="mode-btn mode-btn--untimed">
+            <span class="mode-btn__icon" aria-hidden="true">&#128214;</span>
+            <div>
+              <span class="mode-btn__label">Untimed Mode</span>
+              <span class="mode-btn__desc">Solve at your own pace</span>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <!-- Solve Section -->
+      <section id="solveSection" hidden aria-label="Worksheet questions">
+
+        <!-- Timer Bar (shown only in timed mode) -->
+        <div id="timerBar" class="timer-bar" hidden aria-live="polite" aria-label="Time remaining">
+          <span class="timer-label">Time remaining</span>
+          <span class="timer-display" id="timerDisplay">00:00</span>
+        </div>
+
+        <form id="solveForm" novalidate>
+          <div id="questionsContainer">
+            <!-- Question cards injected by solve.js -->
+          </div>
+
+          <div class="form-actions solve-actions">
+            <button type="submit" id="submitBtn" class="btn btn--primary">
+              Submit Answers
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Results Section -->
+      <section id="resultsSection" class="card reveal" hidden aria-label="Your results">
+        <div class="results-score-header" id="scoreHeader">
+          <!-- Score header injected by solve.js -->
+        </div>
+
+        <div id="resultsBreakdown" class="results-breakdown">
+          <!-- Per-question results injected by solve.js -->
+        </div>
+
+        <div id="rewardSummary" hidden></div>
+
+        <div class="form-actions">
+          <button type="button" id="tryAgainBtn" class="btn btn--secondary">
+            Try Again
+          </button>
+          <a href="/" class="btn btn--secondary">
+            Generate New Worksheet
+          </a>
+        </div>
+      </section>
+
+    </div><!-- /.container -->
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p class="footer-text">Learnfyra &mdash; Aligned to CCSS, NGSS, and NHES standards</p>
+    </div>
+  </footer>
+
+  <script src="js/solve.js"></script>
+</body>
+</html>

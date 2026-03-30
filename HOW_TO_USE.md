@@ -1,9 +1,9 @@
-# 🚀 How to Use Claude Code with Multi-Agent Mode
-## Beginner's Guide for EduSheet AI
+# How to Use Claude Code with Multi-Agent Mode
+## Beginner's Guide for Learnfyra
 
 ---
 
-## ✅ New Product Direction (Web App on AWS)
+## New Product Direction (Web App on AWS)
 
 You can still use the CLI, but the next phase is a full web app:
 
@@ -53,7 +53,7 @@ If you see a version number, you're good. ✅
 1. Go to → https://console.anthropic.com
 2. Sign in (or create a free account)
 3. Click "API Keys" in the left sidebar
-4. Click "Create Key" → give it a name like "edusheet-ai"
+4. Click "Create Key" → give it a name like "learnfyra"
 5. Copy the key (it starts with `sk-ant-...`)
 6. Keep it safe — you only see it once!
 
@@ -63,8 +63,8 @@ If you see a version number, you're good. ✅
 
 ```bash
 # Create your project folder
-mkdir edusheet-ai
-cd edusheet-ai
+mkdir learnfyra
+cd learnfyra
 
 # Initialize a git repo
 git init
@@ -88,7 +88,7 @@ system. Claude Code reads this file automatically every time it starts.
 cp /path/to/CLAUDE.md ./CLAUDE.md
 
 # Your folder should now look like:
-# edusheet-ai/
+# learnfyra/
 # └── CLAUDE.md    ← Claude Code reads this automatically
 ```
 
@@ -100,7 +100,7 @@ That's it! The file is the "brain" of your multi-agent system.
 
 ```bash
 # Make sure you're in your project folder
-cd edusheet-ai
+cd learnfyra
 
 # Start Claude Code
 claude
@@ -109,7 +109,7 @@ claude
 You'll see a prompt like this:
 ```
 Welcome to Claude Code!
-Working directory: /Users/yourname/edusheet-ai
+Working directory: /Users/yourname/learnfyra
 >
 ```
 
@@ -122,13 +122,13 @@ You're now talking directly to Claude as your AI agent team! 🎉
 Copy and paste these commands ONE AT A TIME. Wait for Claude to finish
 each one before sending the next.
 
-## 🌐 Web App Build Commands (Use These Next)
+## Web App Build Commands (Use These Next)
 
 Use these prompts in Claude Code to transition this project into a complete web app.
 
 ### Command A — Web app feature specification
 ```
-Act as the BA agent. Write a complete feature spec for converting EduSheet AI
+Act as the BA agent. Write a complete feature spec for converting Learnfyra
 from CLI to a web app with S3-hosted frontend and Lambda backend. Include user
 stories, acceptance criteria (Given/When/Then), scope, edge cases, and non-functional
 requirements (latency, security, file retention, and cost constraints).
@@ -184,7 +184,7 @@ security, observability, scaling, cost controls, retries, and rollback strategy.
 
 ### Command 1 — Set up the project
 ```
-Initialize the edusheet-ai Node.js project. Create package.json with
+Initialize the learnfyra Node.js project. Create package.json with
 all dependencies from REQUIREMENTS.md, create .env.example, .gitignore,
 and the full src/ folder structure. Use Node ESM modules.
 ```
@@ -250,7 +250,7 @@ Target 80%+ coverage. Run the tests and fix any failures.
 ### Command 9 — Write the README
 ```
 Act as the BA agent. Write a comprehensive README.md for the
-github.com/arbabazmi/edusheet-ai repository. Include: project description,
+github.com/arbabazmi/learnfyra repository. Include: project description,
 prerequisites, installation steps, usage examples for interactive and
 batch mode, the grade/subject coverage table, a contributing section,
 and MIT license badge. Format it for GitHub with proper markdown.
@@ -357,7 +357,7 @@ Before writing any code, explain your plan for building the batch mode feature.
 
 ```bash
 # Link your local project to your GitHub repo
-git remote add origin https://github.com/arbabazmi/edusheet-ai.git
+git remote add origin https://github.com/arbabazmi/learnfyra.git
 
 # Add all files
 git add .
@@ -370,7 +370,7 @@ git push -u origin main
 ```
 
 Your project will be live and publicly downloadable at:
-https://github.com/arbabazmi/edusheet-ai
+https://github.com/arbabazmi/learnfyra
 
 ---
 
@@ -432,7 +432,7 @@ https://github.com/arbabazmi/edusheet-ai
 ## File Checklist — What You Should Have
 
 ```
-edusheet-ai/
+learnfyra/
 ├── CLAUDE.md           ← The multi-agent brain (from this package)
 ├── REQUIREMENTS.md     ← Full project requirements (from this package)
 ├── HOW_TO_USE.md       ← This guide (from this package)
@@ -446,7 +446,7 @@ edusheet-ai/
 For the web app phase, extend it to:
 
 ```
-edusheet-ai/
+learnfyra/
 ├── frontend/           ← Web UI hosted on S3
 ├── backend/            ← Lambda handlers + API logic
 ├── infra/              ← Deployment config (SAM/CDK/Serverless)

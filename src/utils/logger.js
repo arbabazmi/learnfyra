@@ -14,11 +14,11 @@ const BOLD = '\x1b[1m';
 
 export const logger = {
   /**
-   * Prints the EduSheet AI banner on startup
+   * Prints the Learnfyra banner on startup
    */
   banner() {
     console.log(`\n${BOLD}${CYAN}╔═══════════════════════════════════════╗
-║       📚 EduSheet AI v1.0             ║
+║         📚 Learnfyra v1.0             ║
 ║   AI-Powered Worksheet Generator     ║
 ╚═══════════════════════════════════════╝${RESET}\n`);
   },

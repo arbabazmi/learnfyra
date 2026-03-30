@@ -1,6 +1,6 @@
 /**
  * @file src/templates/styles.css.js
- * @description Complete print-ready CSS for EduSheet AI worksheets and answer keys.
+ * @description Complete print-ready CSS for Learnfyra worksheets and answer keys.
  *
  *   Layout target: US Letter (8.5" × 11"), portrait.
  *   Print engine:  Puppeteer (Chrome) for PDF; any modern browser for HTML.
@@ -160,15 +160,19 @@ body {
   gap: 2px;
 }
 .sf-label {
-  font-size: 8pt;
+  font-size: 9pt;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-light);
 }
 .sf-line {
   border-bottom: 1pt solid var(--color-ink);
   height: 18px;
   width: 100%;
+  line-height: 16px;       /* ensures text fits within the 18px box */
+  overflow: visible;       /* pre-filled text must not be clipped by PDF renderer */
+  color: var(--color-ink); /* explicit colour — not left to inheritance in print mode */
 }
 /* Score field spans both columns */
 .sf-row.score {

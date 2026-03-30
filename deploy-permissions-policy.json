@@ -1,0 +1,384 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormationForLearnfyraAndCdkToolkit",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:GetTemplate",
+        "cloudformation:ListStacks",
+        "cloudformation:ListStackResources",
+        "cloudformation:ValidateTemplate",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:SetStackPolicy",
+        "cloudformation:TagResource",
+        "cloudformation:UntagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3ForLearnfyraAndCdkAssets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:GetLifecycleConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListBucketMultipartUploads",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::learnfyra-*",
+        "arn:aws:s3:::learnfyra-*/*",
+        "arn:aws:s3:::cdk-hnb659fds-assets-*",
+        "arn:aws:s3:::cdk-hnb659fds-assets-*/*"
+      ]
+    },
+    {
+      "Sid": "LambdaForLearnfyraStacks",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:PublishVersion",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:ListTags"
+      ],
+      "Resource": "arn:aws:lambda:*:*:function:learnfyra-*"
+    },
+    {
+      "Sid": "ApiGatewayCloudFrontAndLogs",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE",
+        "cloudfront:CreateDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:CreateInvalidation",
+        "cloudfront:ListDistributions",
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy",
+        "logs:DescribeLogGroups",
+        "logs:TagResource",
+        "logs:UntagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IamForCdkBootstrapAndStackRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/learnfyra-*",
+        "arn:aws:iam::*:role/cdk-hnb659fds-*",
+        "arn:aws:iam::*:policy/learnfyra-*",
+        "arn:aws:iam::*:policy/cdk-hnb659fds-*"
+      ]
+    },
+    {
+      "Sid": "StsAssumeCdkRoles",
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/cdk-hnb659fds-*"
+    },
+    {
+      "Sid": "SsmParameterForAnthropicKeys",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:DeleteParameter",
+        "ssm:AddTagsToResource",
+        "ssm:ListTagsForResource",
+        "ssm:DescribeParameters"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*:*:parameter/learnfyra/*/anthropic-api-key",
+        "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+      ]
+    },
+    {
+      "Sid": "SecretsManagerForLearnfyra",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource",
+        "secretsmanager:RotateSecret",
+        "secretsmanager:ListSecrets"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:*:secret:learnfyra/*"
+    },
+    {
+      "Sid": "DynamoDbForLearnfyra",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:UpdateTable",
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:BatchGetItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:*:*:table/learnfyra-*",
+        "arn:aws:dynamodb:*:*:table/learnfyra-*/index/*"
+      ]
+    },
+    {
+      "Sid": "CognitoForPlatformAuth",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:CreateUserPool",
+        "cognito-idp:DeleteUserPool",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:UpdateUserPool",
+        "cognito-idp:CreateUserPoolClient",
+        "cognito-idp:DeleteUserPoolClient",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:UpdateUserPoolClient",
+        "cognito-idp:CreateGroup",
+        "cognito-idp:DeleteGroup",
+        "cognito-idp:UpdateGroup",
+        "cognito-idp:TagResource",
+        "cognito-idp:UntagResource",
+        "cognito-idp:ListUserPools"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EventBridgeForSchedules",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource",
+        "events:ListTargetsByRule",
+        "events:ListRules"
+      ],
+      "Resource": "arn:aws:events:*:*:rule/learnfyra-*"
+    },
+    {
+      "Sid": "CloudWatchOpsVisibility",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutDashboard",
+        "cloudwatch:DeleteDashboards",
+        "cloudwatch:GetDashboard",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SnsForAlerts",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:TagResource",
+        "sns:UntagResource",
+        "sns:Publish",
+        "sns:ListSubscriptionsByTopic"
+      ],
+      "Resource": "arn:aws:sns:*:*:learnfyra-*"
+    },
+    {
+      "Sid": "WafV2ForCloudFrontApi",
+      "Effect": "Allow",
+      "Action": [
+        "wafv2:CreateWebACL",
+        "wafv2:DeleteWebACL",
+        "wafv2:GetWebACL",
+        "wafv2:UpdateWebACL",
+        "wafv2:AssociateWebACL",
+        "wafv2:DisassociateWebACL",
+        "wafv2:CreateIPSet",
+        "wafv2:DeleteIPSet",
+        "wafv2:GetIPSet",
+        "wafv2:UpdateIPSet",
+        "wafv2:TagResource",
+        "wafv2:UntagResource",
+        "wafv2:ListWebACLs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CostExplorerReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
+        "ce:GetDimensionValues",
+        "ce:GetReservationUtilization",
+        "ce:GetSavingsPlansUtilization",
+        "ce:GetAnomalies",
+        "ce:GetAnomalyMonitors"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudTrailForAudit",
+      "Effect": "Allow",
+      "Action": [
+        "cloudtrail:CreateTrail",
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:DescribeTrails",
+        "cloudtrail:GetTrail",
+        "cloudtrail:GetTrailStatus",
+        "cloudtrail:UpdateTrail",
+        "cloudtrail:StartLogging",
+        "cloudtrail:StopLogging",
+        "cloudtrail:PutEventSelectors",
+        "cloudtrail:PutInsightSelectors",
+        "cloudtrail:AddTags",
+        "cloudtrail:RemoveTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "GuardDutyForThreatDetection",
+      "Effect": "Allow",
+      "Action": [
+        "guardduty:CreateDetector",
+        "guardduty:DeleteDetector",
+        "guardduty:GetDetector",
+        "guardduty:UpdateDetector",
+        "guardduty:CreateFilter",
+        "guardduty:DeleteFilter",
+        "guardduty:GetFilter",
+        "guardduty:UpdateFilter",
+        "guardduty:TagResource",
+        "guardduty:UntagResource",
+        "guardduty:ListDetectors"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AthenaAndGlueForArchiveAnalytics",
+      "Effect": "Allow",
+      "Action": [
+        "athena:CreateWorkGroup",
+        "athena:DeleteWorkGroup",
+        "athena:GetWorkGroup",
+        "athena:UpdateWorkGroup",
+        "athena:StartQueryExecution",
+        "athena:StopQueryExecution",
+        "athena:GetQueryExecution",
+        "athena:GetQueryResults",
+        "athena:CreateDataCatalog",
+        "athena:DeleteDataCatalog",
+        "athena:TagResource",
+        "athena:UntagResource",
+        "glue:CreateDatabase",
+        "glue:DeleteDatabase",
+        "glue:GetDatabase",
+        "glue:CreateTable",
+        "glue:DeleteTable",
+        "glue:GetTable",
+        "glue:UpdateTable"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "XRayTracingPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords",
+        "xray:GetSamplingRules",
+        "xray:GetSamplingTargets",
+        "xray:GetSamplingStatisticSummaries"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

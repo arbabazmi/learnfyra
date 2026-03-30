@@ -1,6 +1,6 @@
 /**
  * @file frontend/js/app.js
- * @description EduSheet AI — single-page worksheet generator frontend.
+ * @description Learnfyra — single-page worksheet generator frontend.
  *
  * Responsibilities:
  *  - Populates Grade / Subject / Topic dropdowns from embedded curriculum data
@@ -106,8 +106,16 @@ const errorSection       = document.getElementById('errorSection');
 const downloadButtons    = document.getElementById('downloadButtons');
 const resultsDescription = document.getElementById('resultsDescription');
 const errorMessage       = document.getElementById('errorMessage');
+const errorRequestId     = document.getElementById('errorRequestId');
 const generateAnotherBtn = document.getElementById('generateAnotherBtn');
 const dismissErrorBtn    = document.getElementById('dismissErrorBtn');
+
+const modeOnlineRadio    = document.getElementById('modeOnline');
+const modeDownloadRadio  = document.getElementById('modeDownload');
+const modeCardOnline     = document.getElementById('modeCardOnline');
+const modeCardDownload   = document.getElementById('modeCardDownload');
+const formatGroup        = document.getElementById('formatGroup');
+const answerKeyGroup     = document.getElementById('answerKeyGroup');
 
 /* Field-error spans */
 const fieldErrors = {
@@ -118,6 +126,9 @@ const fieldErrors = {
   questionCount: document.getElementById('questionCountError'),
   format:        document.getElementById('formatError'),
 };
+
+const MIN_QUESTION_COUNT = 5;
+const MAX_QUESTION_COUNT = 30;
 
 /* =============================================================
    Dropdown Population Helpers
@@ -192,16 +203,28 @@ const REQUIRED_SELECTS = [
   { el: topicSelect,         key: 'topic',          label: 'Topic' },
   { el: difficultySelect,    key: 'difficulty',     label: 'Difficulty' },
   { el: questionCountSelect, key: 'questionCount',  label: 'Number of Questions' },
-  { el: formatSelect,        key: 'format',         label: 'Output Format' },
 ];
 
 /**
- * Returns true if every required select has a non-empty value.
+ * Returns true when the user has selected Download mode.
+ *
+ * @returns {boolean}
+ */
+function isDownloadMode() {
+  return modeDownloadRadio && modeDownloadRadio.checked;
+}
+
+/**
+ * Returns true if every required select has a non-empty value,
+ * and format is filled when download mode is active.
  *
  * @returns {boolean}
  */
 function allFieldsFilled() {
-  return REQUIRED_SELECTS.every(({ el }) => el.value !== '');
+  const baseOk = REQUIRED_SELECTS.every(({ el }) => el.value !== '');
+  if (!baseOk) return false;
+  if (isDownloadMode() && formatSelect.value === '') return false;
+  return true;
 }
 
 /**
@@ -230,11 +253,31 @@ function validateForm() {
     }
   });
 
+  /* Format required only in download mode */
+  if (isDownloadMode()) {
+    if (!formatSelect.value) {
+      showFieldError('format', 'File Format is required.');
+      if (formatSelect) formatSelect.classList.add('is-invalid');
+      valid = false;
+    } else {
+      clearFieldError('format');
+      if (formatSelect) formatSelect.classList.remove('is-invalid');
+    }
+  }
+
   /* Grade range guard (defends against DOM manipulation) */
   const g = Number(gradeSelect.value);
   if (g < 1 || g > 10) {
     showFieldError('grade', 'Grade must be between 1 and 10.');
     gradeSelect.classList.add('is-invalid');
+    valid = false;
+  }
+
+  /* Question count range guard (defends against DOM manipulation) */
+  const q = Number(questionCountSelect.value);
+  if (q < MIN_QUESTION_COUNT || q > MAX_QUESTION_COUNT) {
+    showFieldError('questionCount', `Question count must be between ${MIN_QUESTION_COUNT} and ${MAX_QUESTION_COUNT}.`);
+    questionCountSelect.classList.add('is-invalid');
     valid = false;
   }
 
@@ -308,6 +351,19 @@ function showResults(data, requestedAnswerKey, selectedFormat) {
     downloadButtons.appendChild(answerKeyBtn);
   }
 
+  /* Solve Online button — always shown when a worksheetId is available */
+  if (metadata && metadata.id) {
+    const solveBtn = document.createElement('button');
+    solveBtn.type = 'button';
+    solveBtn.className = 'btn btn--solve download-btn';
+    solveBtn.textContent = 'Solve Online';
+    solveBtn.setAttribute('role', 'listitem');
+    solveBtn.addEventListener('click', () => {
+      window.open(`/solve.html?id=${metadata.id}`, '_blank', 'noopener,noreferrer');
+    });
+    downloadButtons.appendChild(solveBtn);
+  }
+
   loadingSection.hidden = true;
   formSection.hidden    = true;
   errorSection.hidden   = true;
@@ -318,13 +374,51 @@ function showResults(data, requestedAnswerKey, selectedFormat) {
  * Shows the error section with the given message.
  *
  * @param {string} message
+ * @param {Object} diagnostics
  */
-function showError(message) {
+function showError(message, diagnostics = {}) {
   errorMessage.textContent = message;
+
+  const detailParts = [];
+  if (diagnostics.requestId) detailParts.push(`Request ID: ${diagnostics.requestId}`);
+  if (diagnostics.clientRequestId) detailParts.push(`Client Request ID: ${diagnostics.clientRequestId}`);
+  if (diagnostics.errorCode) detailParts.push(`Code: ${diagnostics.errorCode}`);
+  if (diagnostics.errorStage) detailParts.push(`Stage: ${diagnostics.errorStage}`);
+  if (typeof diagnostics.status === 'number') detailParts.push(`HTTP: ${diagnostics.status}`);
+
+  if (errorRequestId) {
+    if (detailParts.length > 0) {
+      errorRequestId.textContent = detailParts.join(' · ');
+      errorRequestId.hidden = false;
+    } else {
+      errorRequestId.textContent = '';
+      errorRequestId.hidden = true;
+    }
+  }
+
   loadingSection.hidden = true;
   resultsSection.hidden = true;
   formSection.hidden    = true;
   errorSection.hidden   = false;
+}
+
+function createClientRequestId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildGenerateError({ message, status, requestId, clientRequestId, errorCode, errorStage, responseBody }) {
+  const error = new Error(message);
+  error.status = status;
+  error.requestId = requestId;
+  error.clientRequestId = clientRequestId;
+  error.errorCode = errorCode;
+  error.errorStage = errorStage;
+  error.responseBody = responseBody;
+  return error;
 }
 
 /* =============================================================
@@ -411,31 +505,84 @@ async function triggerDownload(s3Key) {
  * @param {Object} payload
  * @returns {Promise<Object>} Parsed response body
  */
-async function callGenerateApi(payload) {
+async function callGenerateApi(payload, clientRequestId) {
   const res = await fetch('/api/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-client-request-id': clientRequestId,
+    },
     body: JSON.stringify(payload),
   });
 
-  let data;
+  const rawText = await res.text();
+  let data = null;
   try {
-    data = await res.json();
+    data = rawText ? JSON.parse(rawText) : null;
   } catch {
-    throw new Error(`The server returned an unexpected response (HTTP ${res.status}). Make sure the backend is running.`);
+    throw buildGenerateError({
+      message: `The server returned an unexpected response (HTTP ${res.status}). Make sure the backend is running.`,
+      status: res.status,
+      requestId: res.headers.get('x-request-id'),
+      clientRequestId,
+      responseBody: rawText,
+    });
   }
 
+  const requestId = res.headers.get('x-request-id') || data?.requestId || null;
+  const echoedClientRequestId = res.headers.get('x-client-request-id') || data?.clientRequestId || clientRequestId;
+
   if (!res.ok) {
-    throw new Error(data.error || `Server error (${res.status}). Please try again.`);
+    throw buildGenerateError({
+      message: data?.error || `Server error (${res.status}). Please try again.`,
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: data?.errorCode || null,
+      errorStage: data?.errorStage || null,
+      responseBody: data,
+    });
   }
 
   if (data.success === false) {
-    throw new Error(data.error || 'Worksheet generation failed. Please try again.');
+    throw buildGenerateError({
+      message: data.error || 'Worksheet generation failed. Please try again.',
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: data.errorCode || null,
+      errorStage: data.errorStage || null,
+      responseBody: data,
+    });
   }
 
   if (!data.worksheetKey) {
-    throw new Error('No worksheet was returned by the server. Please try again.');
+    throw buildGenerateError({
+      message: 'No worksheet was returned by the server. Please try again.',
+      status: res.status,
+      requestId,
+      clientRequestId: echoedClientRequestId,
+      errorCode: 'MISSING_WORKSHEET_KEY',
+      errorStage: 'response:validate-body',
+      responseBody: data,
+    });
   }
+
+  console.info('Learnfyra generate request succeeded', {
+    requestId,
+    clientRequestId: echoedClientRequestId,
+    worksheetKey: data.worksheetKey,
+    answerKeyKey: data.answerKeyKey,
+    metadata: data.metadata ? {
+      id: data.metadata.id,
+      grade: data.metadata.grade,
+      subject: data.metadata.subject,
+      topic: data.metadata.topic,
+      difficulty: data.metadata.difficulty,
+      questionCount: data.metadata.questionCount,
+      format: data.metadata.format,
+    } : null,
+  });
 
   return data;
 }
@@ -459,8 +606,9 @@ async function handleFormSubmit(event) {
   const topic           = topicSelect.value;
   const difficulty      = difficultySelect.value;
   const questionCount   = Number(questionCountSelect.value);
-  const format          = formatSelect.value;
-  const wantsAnswerKey  = includeAnswerKey.checked;
+  const deliveryMode    = isDownloadMode() ? 'download' : 'online';
+  const format          = isDownloadMode() ? formatSelect.value : 'HTML';
+  const wantsAnswerKey  = isDownloadMode() ? includeAnswerKey.checked : false;
   const studentName     = studentNameInput.value.trim();
   const worksheetDate   = worksheetDateInput.value;
   const teacherName     = teacherNameInput.value.trim();
@@ -482,13 +630,48 @@ async function handleFormSubmit(event) {
     className,
   };
 
+  const clientRequestId = createClientRequestId();
+
+  console.info('Learnfyra generate request started', {
+    clientRequestId,
+    payload: {
+      grade,
+      subject,
+      topic,
+      difficulty,
+      questionCount,
+      format,
+      includeAnswerKey: wantsAnswerKey,
+    },
+  });
+
   showLoading();
 
   try {
-    const data = await callGenerateApi(payload);
-    showResults(data, wantsAnswerKey, format);
+    const data = await callGenerateApi(payload, clientRequestId);
+    if (deliveryMode === 'online' && data.metadata && data.metadata.id) {
+      window.location.href = `/solve.html?id=${data.metadata.id}`;
+    } else {
+      showResults(data, wantsAnswerKey, format);
+    }
   } catch (err) {
-    showError(err.message);
+    console.error('Learnfyra generate request failed', {
+      message: err.message,
+      status: err.status,
+      requestId: err.requestId || null,
+      clientRequestId: err.clientRequestId || clientRequestId,
+      errorCode: err.errorCode || null,
+      errorStage: err.errorStage || null,
+      responseBody: err.responseBody || null,
+    });
+
+    showError(err.message, {
+      status: err.status,
+      requestId: err.requestId || null,
+      clientRequestId: err.clientRequestId || clientRequestId,
+      errorCode: err.errorCode || null,
+      errorStage: err.errorStage || null,
+    });
   }
 }
 
@@ -538,6 +721,27 @@ subjectSelect.addEventListener('change', () => {
     syncGenerateButton();
   });
 });
+
+/* Delivery mode toggle — show/hide format + answer key groups */
+function handleModeChange() {
+  const download = isDownloadMode();
+  formatGroup.hidden     = !download;
+  answerKeyGroup.hidden  = !download;
+  modeCardOnline.classList.toggle('is-selected',   !download);
+  modeCardDownload.classList.toggle('is-selected',  download);
+  // Reset format error when switching to online mode
+  if (!download) {
+    clearFieldError('format');
+    if (formatSelect) formatSelect.classList.remove('is-invalid');
+  }
+  syncGenerateButton();
+}
+
+modeOnlineRadio.addEventListener('change', handleModeChange);
+modeDownloadRadio.addEventListener('change', handleModeChange);
+// Also allow clicking anywhere on the card label
+modeCardOnline.addEventListener('click', () => { modeOnlineRadio.checked = true; handleModeChange(); });
+modeCardDownload.addEventListener('click', () => { modeDownloadRadio.checked = true; handleModeChange(); });
 
 /* Form submit */
 worksheetForm.addEventListener('submit', handleFormSubmit);

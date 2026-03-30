@@ -1,0 +1,58 @@
+[
+  {
+    "id": "c29c320c-c015-4e25-9788-3485f0b99de7#e6a3e864-fadf-4f33-9085-675da2948515",
+    "classId": "c29c320c-c015-4e25-9788-3485f0b99de7",
+    "studentId": "e6a3e864-fadf-4f33-9085-675da2948515",
+    "joinedAt": "2026-03-27T22:05:06.965Z",
+    "status": "active"
+  },
+  {
+    "id": "8246a72a-58a4-482f-95dd-6731875fb404#cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "classId": "8246a72a-58a4-482f-95dd-6731875fb404",
+    "studentId": "cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "joinedAt": "2026-03-27T22:05:37.419Z",
+    "status": "active"
+  },
+  {
+    "id": "cecd2bd5-b107-4b50-b73a-dff8afa171a8#2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "classId": "cecd2bd5-b107-4b50-b73a-dff8afa171a8",
+    "studentId": "2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "joinedAt": "2026-03-27T22:06:09.158Z",
+    "status": "active"
+  },
+  {
+    "id": "a6ed73a1-bcaf-4a48-8229-8a63afbc7e70#2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "classId": "a6ed73a1-bcaf-4a48-8229-8a63afbc7e70",
+    "studentId": "2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "joinedAt": "2026-03-27T22:09:13.685Z",
+    "status": "active"
+  },
+  {
+    "id": "408bfb72-f027-4271-824b-b77b1df821bd#45b5c55b-1961-4bf7-bfef-7ed560e29e45",
+    "classId": "408bfb72-f027-4271-824b-b77b1df821bd",
+    "studentId": "45b5c55b-1961-4bf7-bfef-7ed560e29e45",
+    "joinedAt": "2026-03-30T01:46:56.786Z",
+    "status": "active"
+  },
+  {
+    "id": "5f27d022-ad8c-4e85-ae0c-1e635f281959#2ba7d95f-67ca-4a96-8b63-1c055eb93e1e",
+    "classId": "5f27d022-ad8c-4e85-ae0c-1e635f281959",
+    "studentId": "2ba7d95f-67ca-4a96-8b63-1c055eb93e1e",
+    "joinedAt": "2026-03-30T01:47:52.883Z",
+    "status": "active"
+  },
+  {
+    "id": "a9a426c6-cfd8-46f1-b95e-87775875f7a6#16474926-e734-4434-9884-3778612f23e1",
+    "classId": "a9a426c6-cfd8-46f1-b95e-87775875f7a6",
+    "studentId": "16474926-e734-4434-9884-3778612f23e1",
+    "joinedAt": "2026-03-30T02:17:13.478Z",
+    "status": "active"
+  },
+  {
+    "id": "0de67882-16b5-40fc-9817-63c8c315ddd8#afa499ce-a91a-49e0-aec1-43e2c0029f03",
+    "classId": "0de67882-16b5-40fc-9817-63c8c315ddd8",
+    "studentId": "afa499ce-a91a-49e0-aec1-43e2c0029f03",
+    "joinedAt": "2026-03-30T02:22:01.922Z",
+    "status": "active"
+  }
+]

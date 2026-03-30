@@ -1,5 +1,5 @@
 {
-  "$schema": "edusheet-ai/worksheet/v1",
+  "$schema": "learnfyra/worksheet/v1",
   "title": "Grade 3 Math: Multiplication Facts",
   "grade": 3,
   "subject": "Math",

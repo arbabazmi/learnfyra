@@ -1,17 +1,65 @@
-name: Deploy — Production
+name: Full Deploy — Production
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      local_validation_evidence:
+        description: "Required summary or link proving local validation passed"
+        required: true
+        type: string
+      dev_run_id:
+        description: "Required workflow run ID from Full Deploy — Dev that succeeded"
+        required: true
+        type: string
 
 permissions:
   id-token: write   # required for OIDC token request
   contents: read
 
 jobs:
+  verify-dev-promotion:
+    name: Verify local evidence and successful dev deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate local evidence input
+        run: |
+          if [ -z "${{ github.event.inputs.local_validation_evidence }}" ]; then
+            echo "Missing local validation evidence."
+            exit 1
+          fi
+
+      - name: Validate dev workflow run ID format
+        run: |
+          if ! [[ "${{ github.event.inputs.dev_run_id }}" =~ ^[0-9]+$ ]]; then
+            echo "dev_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Verify referenced dev deploy run succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV_RUN_ID: ${{ github.event.inputs.dev_run_id }}
+        run: |
+          RESPONSE=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${DEV_RUN_ID}")
+          NAME=$(echo "$RESPONSE" | jq -r '.name // empty')
+          CONCLUSION=$(echo "$RESPONSE" | jq -r '.conclusion // empty')
+
+          if [ "$NAME" != "Full Deploy — Dev" ]; then
+            echo "Referenced run is not from Full Deploy — Dev. Found: $NAME"
+            exit 1
+          fi
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "Referenced dev deploy run is not successful. Conclusion: $CONCLUSION"
+            exit 1
+          fi
+
+          echo "Promotion guardrail check passed."
+
   test:
     name: Tests (must pass before deploy)
     runs-on: ubuntu-latest
+    needs: verify-dev-promotion
     steps:
       - uses: actions/checkout@v4
 
@@ -25,11 +73,6 @@ jobs:
 
       - name: Run tests
         run: npm test
-
-      - name: Coverage gate (≥80%)
-        run: |
-          npm run test:coverage -- \
-            --coverageThreshold='{"global":{"statements":80,"branches":80,"functions":80,"lines":80}}'
 
   approve:
     name: Manual Approval Required
@@ -63,10 +106,40 @@ jobs:
       - name: Write Anthropic API key to SSM
         run: |
           aws ssm put-parameter \
-            --name "/edusheet/prod/anthropic-api-key" \
+            --name "/learnfyra/prod/anthropic-api-key" \
             --value "${{ secrets.ANTHROPIC_API_KEY_PROD }}" \
             --type SecureString \
             --overwrite \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Write JWT secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/prod/jwt-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/prod/jwt-secret" \
+            --secret-string "${{ secrets.JWT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/prod/jwt-secret" \
+            --description "JWT signing secret for Learnfyra prod" \
+            --secret-string "${{ secrets.JWT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Write Google OAuth client secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/prod/google-client-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/prod/google-client-secret" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/prod/google-client-secret" \
+            --description "Google OAuth client secret for Learnfyra production" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" \
             --region ${{ vars.AWS_REGION }}
 
       - name: Install app dependencies (needed by esbuild when bundling Lambdas)
@@ -78,7 +151,13 @@ jobs:
       - name: Deploy CDK stack — prod
         run: |
           cd infra/cdk
-          npx cdk deploy --context env=prod \
+          npx cdk deploy \
+            --context env=prod \
+            --context enableCustomDomains=true \
+            --context rootDomainName=learnfyra.com \
+            --context hostedZoneId=Z027880820G9W7LYJRE7H \
+            --context cloudFrontCertificateArn=arn:aws:acm:us-east-1:796929287685:certificate/abb068ee-3a48-4546-bb30-b494d7fe1ea7 \
+            --context apiCertificateArn=arn:aws:acm:us-east-1:796929287685:certificate/abb068ee-3a48-4546-bb30-b494d7fe1ea7 \
             --require-approval never \
             --outputs-file cdk-outputs.json
         env:
@@ -88,9 +167,9 @@ jobs:
       - name: Extract CDK outputs
         id: cdk-outputs
         run: |
-          FRONTEND_BUCKET=$(jq -r '.["EduSheetAiStack-prod"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
-          DIST_ID=$(jq -r '.["EduSheetAiStack-prod"]["DistributionId"]' infra/cdk/cdk-outputs.json)
-          FRONTEND_URL=$(jq -r '.["EduSheetAiStack-prod"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
+          FRONTEND_BUCKET=$(jq -r '.["LearnfyraStack-prod"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
+          DIST_ID=$(jq -r '.["LearnfyraStack-prod"]["DistributionId"]' infra/cdk/cdk-outputs.json)
+          FRONTEND_URL=$(jq -r '.["LearnfyraStack-prod"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "dist_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT

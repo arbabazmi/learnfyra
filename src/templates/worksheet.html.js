@@ -291,7 +291,7 @@ export function buildWorksheetHTML(worksheet, options = {}) {
 
   <!-- ── Screen / print footer ── -->
   <footer class="page-footer">
-    <span>EduSheet AI &mdash; ${dateStr}</span>
+    <span>Learnfyra &mdash; ${dateStr}</span>
     <span class="footer-center">
       Grade ${worksheet.grade} &bull; ${escapeHtml(worksheet.subject)} &bull; ${escapeHtml(worksheet.difficulty)}
     </span>
@@ -372,7 +372,7 @@ export function buildAnswerKeyHTML(worksheet) {
 
   <!-- ── Footer ── -->
   <footer class="page-footer">
-    <span>EduSheet AI &mdash; Answer Key</span>
+    <span>Learnfyra &mdash; Answer Key</span>
     <span class="footer-center">${escapeHtml(worksheet.title)}</span>
     <span>&copy; ${year} &mdash; Teacher Use Only</span>
   </footer>

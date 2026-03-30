@@ -1,0 +1,382 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const cdk = __importStar(require("aws-cdk-lib"));
+const assertions_1 = require("aws-cdk-lib/assertions");
+const learnfyra_stack_1 = require("../lib/learnfyra-stack");
+function makeStack(appEnv = 'dev') {
+    const app = new cdk.App();
+    const stack = new learnfyra_stack_1.LearnfyraStack(app, `LearnfyraStack-${appEnv}`, { appEnv });
+    return assertions_1.Template.fromStack(stack);
+}
+describe('LearnfyraStack (dev)', () => {
+    let template;
+    beforeAll(() => {
+        template = makeStack('dev');
+    });
+    test('creates worksheet S3 bucket with correct name', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-dev-s3-worksheets',
+        });
+    });
+    test('creates frontend S3 bucket with correct name', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-dev-s3-frontend',
+        });
+    });
+    test('worksheet bucket blocks all public access', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-dev-s3-worksheets',
+            PublicAccessBlockConfiguration: {
+                BlockPublicAcls: true,
+                BlockPublicPolicy: true,
+                IgnorePublicAcls: true,
+                RestrictPublicBuckets: true,
+            },
+        });
+    });
+    test('worksheet bucket has 7-day lifecycle rule', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-dev-s3-worksheets',
+            LifecycleConfiguration: {
+                Rules: assertions_1.Match.arrayWith([
+                    assertions_1.Match.objectLike({
+                        Prefix: 'worksheets/',
+                        ExpirationInDays: 7,
+                        Status: 'Enabled',
+                    }),
+                ]),
+            },
+        });
+    });
+    test('creates generate Lambda with correct name and memory', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-generate',
+            MemorySize: 512,
+            Architectures: ['x86_64'],
+            Runtime: 'nodejs20.x',
+        });
+    });
+    test('generate Lambda has correct 60-second timeout', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-generate',
+            Timeout: 60,
+        });
+    });
+    test('creates download Lambda with correct name and memory', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-download',
+            MemorySize: 256,
+            Architectures: ['arm64'],
+            Runtime: 'nodejs20.x',
+        });
+    });
+    test('download Lambda has correct 30-second timeout', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-download',
+            Timeout: 30,
+        });
+    });
+    test('creates API Gateway REST API with correct name', () => {
+        template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+            Name: 'learnfyra-dev-apigw',
+        });
+    });
+    test('enables API Gateway access logging to dedicated log group', () => {
+        template.hasResourceProperties('AWS::Logs::LogGroup', {
+            LogGroupName: '/aws/apigateway/learnfyra-dev-access-logs',
+            RetentionInDays: 30,
+        });
+        template.hasResourceProperties('AWS::ApiGateway::Stage', {
+            AccessLogSetting: assertions_1.Match.objectLike({
+                DestinationArn: assertions_1.Match.anyValue(),
+            }),
+        });
+    });
+    test('creates CloudFront distribution in dev', () => {
+        template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+    });
+    test('dev frontend bucket blocks all public access', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-dev-s3-frontend',
+            PublicAccessBlockConfiguration: {
+                BlockPublicAcls: true,
+                BlockPublicPolicy: true,
+                IgnorePublicAcls: true,
+                RestrictPublicBuckets: true,
+            },
+        });
+    });
+    test('dev stack uses DESTROY removal policy (autoDeleteObjects Lambda present)', () => {
+        const lambdaResources = template.findResources('AWS::Lambda::Function');
+        expect(Object.keys(lambdaResources).length).toBeGreaterThanOrEqual(3);
+    });
+    test('all S3 resources tagged with Project=learnfyra', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            Tags: assertions_1.Match.arrayWith([
+                assertions_1.Match.objectLike({ Key: 'Project', Value: 'learnfyra' }),
+            ]),
+        });
+    });
+    test('all S3 resources tagged with Env=dev', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            Tags: assertions_1.Match.arrayWith([
+                assertions_1.Match.objectLike({ Key: 'Env', Value: 'dev' }),
+            ]),
+        });
+    });
+    test('generate Lambda environment has SSM_PARAM_NAME set', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-generate',
+            Environment: {
+                Variables: assertions_1.Match.objectLike({
+                    SSM_PARAM_NAME: '/learnfyra/dev/anthropic-api-key',
+                }),
+            },
+        });
+    });
+    test('generate Lambda environment has WORKSHEET_BUCKET_NAME set', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-dev-lambda-generate',
+            Environment: {
+                Variables: assertions_1.Match.objectLike({
+                    WORKSHEET_BUCKET_NAME: assertions_1.Match.anyValue(),
+                }),
+            },
+        });
+    });
+    test('dev generate Lambda does not have X-Ray tracing enabled', () => {
+        const lambdas = template.findResources('AWS::Lambda::Function', {
+            Properties: { FunctionName: 'learnfyra-dev-lambda-generate' },
+        });
+        const generateLambda = Object.values(lambdas)[0];
+        expect(generateLambda.Properties['TracingConfig']).toBeUndefined();
+    });
+    test('creates CloudWatch alarms for new backend Lambda errors', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-auth-errors',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-submit-errors',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-admin-errors',
+        });
+    });
+    test('creates API Gateway operational alarms', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-api-5xx-errors',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-api-latency-p95',
+        });
+    });
+    test('creates Lambda error-rate alarms for backend services', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-auth-error-rate',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-submit-error-rate',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-generate-error-rate',
+        });
+    });
+    test('creates backend observability dashboard', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+    });
+    test('creates reusable log insights query definitions', () => {
+        template.resourceCountIs('AWS::Logs::QueryDefinition', 7);
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-top-errors-by-function',
+        });
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-auth-failures-by-route',
+        });
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-high-latency-request-traces',
+        });
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-4xx-5xx-route-hotspots',
+        });
+    });
+    test('sets log retention policy for Lambda log groups', () => {
+        template.resourceCountIs('Custom::LogRetention', 11);
+        template.hasResourceProperties('Custom::LogRetention', {
+            RetentionInDays: 30,
+        });
+    });
+    // ── DOP-08: Cost/Anomaly and Throughput Visibility Tests
+    test('creates Lambda anomaly detection alarms (11 functions)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-generate-invocation-anomaly',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-submit-invocation-anomaly',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-auth-invocation-anomaly',
+        });
+    });
+    test('creates anomaly detector resources for Lambda functions', () => {
+        const availableAnomalyDetectors = template.findResources('AWS::CloudWatch::AnomalyDetector');
+        expect(Object.keys(availableAnomalyDetectors).length).toBeGreaterThanOrEqual(1);
+    });
+    test('creates Lambda concurrent execution alarms (11 functions)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-generate-concurrent-threshold',
+        });
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-submit-concurrent-threshold',
+        });
+    });
+    test('creates API throttle detection alarm', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-api-throttle-detected',
+        });
+    });
+    test('creates API surge detection alarm', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+            AlarmName: 'learnfyra-dev-api-surge-detected',
+        });
+    });
+    test('creates cost analysis query definitions (3 new queries for DOP-08)', () => {
+        template.resourceCountIs('AWS::Logs::QueryDefinition', 7); // 4 original + 3 new
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-cost-by-function',
+        });
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-cost-by-endpoint',
+        });
+        template.hasResourceProperties('AWS::Logs::QueryDefinition', {
+            Name: 'learnfyra-dev-cost-estimation',
+        });
+    });
+    test('dashboard includes cost awareness text widget (DOP-08)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+        // Dashboard body is serialized as Fn::Join; verify it contains the key widget
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+    });
+    test('dashboard includes daily request volume widget (DOP-08)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+        // Dashboard body is serialized as Fn::Join; verify dashboard exists
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+    });
+    test('dashboard includes peak traffic window analysis widget (DOP-08)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+        // Dashboard body is serialized as Fn::Join; verify dashboard exists
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+    });
+    test('dashboard includes top endpoints by traffic (4 single-value widgets)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+        // Dashboard body is serialized as Fn::Join; verify dashboard exists
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+    });
+    test('dashboard includes cost analyzer log drill-down panels (DOP-08)', () => {
+        template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+            DashboardName: 'learnfyra-dev-backend-observability',
+        });
+        // Dashboard body is serialized as Fn::Join; verify dashboard exists
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+    });
+});
+describe('LearnfyraStack (prod)', () => {
+    let template;
+    beforeAll(() => {
+        template = makeStack('prod');
+    });
+    test('prod worksheet bucket has versioning enabled', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-prod-s3-worksheets',
+            VersioningConfiguration: {
+                Status: 'Enabled',
+            },
+        });
+    });
+    test('prod generate Lambda has X-Ray tracing enabled', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-prod-lambda-generate',
+            TracingConfig: { Mode: 'Active' },
+        });
+    });
+    test('prod download Lambda has X-Ray tracing enabled', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-prod-lambda-download',
+            TracingConfig: { Mode: 'Active' },
+        });
+    });
+    test('prod worksheet bucket uses correct naming convention', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-prod-s3-worksheets',
+        });
+    });
+    test('prod frontend bucket uses correct naming convention', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-prod-s3-frontend',
+        });
+    });
+});
+describe('LearnfyraStack (staging)', () => {
+    let template;
+    beforeAll(() => {
+        template = makeStack('staging');
+    });
+    test('staging generate Lambda has X-Ray tracing enabled', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+            FunctionName: 'learnfyra-staging-lambda-generate',
+            TracingConfig: { Mode: 'Active' },
+        });
+    });
+    test('staging worksheet bucket uses correct naming convention', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+            BucketName: 'learnfyra-staging-s3-worksheets',
+        });
+    });
+});

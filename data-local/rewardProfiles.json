@@ -1,0 +1,194 @@
+[
+  {
+    "id": "e6a3e864-fadf-4f33-9085-675da2948515",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-27",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-27",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-27T22:05:07.143Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-27T22:05:07.143Z"
+  },
+  {
+    "id": "cd3dc3ed-36a5-43ae-a34e-1d94c6b0f7c7",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-27",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-27",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-27T22:05:37.492Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-27T22:05:37.493Z"
+  },
+  {
+    "id": "2c2f594f-fa04-47e1-9a49-f8816e983566",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-27",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-27",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-27T22:06:09.239Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-27T22:06:09.240Z"
+  },
+  {
+    "id": "2adf7a73-cbb8-4d35-ad5a-864f44386559",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-27",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-27",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-27T22:09:13.815Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-27T22:09:13.815Z"
+  },
+  {
+    "id": "16474926-e734-4434-9884-3778612f23e1",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-30",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-30",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-30T02:17:13.762Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-30T02:17:13.763Z"
+  },
+  {
+    "id": "afa499ce-a91a-49e0-aec1-43e2c0029f03",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-30",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-30",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-30T02:22:02.018Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-30T02:22:02.018Z"
+  }
+]

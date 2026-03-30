@@ -59,7 +59,7 @@ export async function runInteractiveCLI() {
         type: 'list',
         name: 'questionCount',
         message: 'Number of Questions:',
-        choices: [5, 10, 15, 20, 25, 30],
+        choices: [5, 10],
       },
       {
         type: 'confirm',

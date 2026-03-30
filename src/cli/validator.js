@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/cli/validator.js
  * @description Input validation functions for CLI prompts and batch config
  * @agent DEV
@@ -27,7 +27,7 @@ export function validateGrade(grade) {
 }
 
 /**
- * Validates that question count is within allowed range (5–30)
+ * Validates that question count is within allowed range (5â€“10)
  * @param {number} count - Number of questions
  * @throws {Error} If count is out of range
  * @returns {true}
