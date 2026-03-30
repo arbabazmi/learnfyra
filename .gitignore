@@ -31,3 +31,5 @@ cdk.out/
 infra/cdk/cdk.out/
 infra/cdk/cdk-outputs.json
 cdk.out/cdk.out
+worksheets/
+worksheets-local/
