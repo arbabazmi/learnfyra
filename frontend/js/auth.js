@@ -130,6 +130,28 @@ if (document.getElementById('signInForm')) {
     }
   });
 
+  // --- Google OAuth ---
+  const googleBtn = document.getElementById('googleOAuthBtn');
+  if (googleBtn) {
+    googleBtn.addEventListener('click', async () => {
+      googleBtn.disabled = true;
+      googleBtn.textContent = 'Redirecting to Google…';
+      try {
+        const data = await apiRequest('/api/auth/oauth/google', { method: 'POST', body: JSON.stringify({ provider: 'google' }) });
+        if (data.authorizationUrl) {
+          window.location.href = data.authorizationUrl;
+        } else {
+          throw new Error('No authorization URL returned');
+        }
+      } catch (err) {
+        loginError.textContent = err.data?.error || err.message || 'Google sign-in unavailable. Please try again.';
+        loginError.hidden = false;
+        googleBtn.disabled = false;
+        googleBtn.innerHTML = '<span class="google-icon" aria-hidden="true"></span>Continue with Google';
+      }
+    });
+  }
+
   // --- Create Account ---
   createAccountForm.addEventListener('submit', async (e) => {
     e.preventDefault();

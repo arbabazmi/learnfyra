@@ -1,45 +1,45 @@
 /* =============================================================
-   Learnfyra — Dashboard Styles v1.0
+   Learnfyra — Dashboard Styles v3.0 (KidKinder Bootstrap 4 Theme)
    File: frontend/css/dashboard.css
    Extends: styles.css (all CSS custom properties reused)
    Audience: Students and Teachers — dashboard views
    ============================================================= */
 
 /* ---------------------------------------------------------------
-   Header Auth Nav — show user info and sign-out in header
+   Header Auth Nav
    --------------------------------------------------------------- */
 .header-auth {
-  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 0.5rem;
+  flex-wrap: nowrap;
 }
 
 /* ---------------------------------------------------------------
-   Dashboard Layout — wider container for dashboard pages
+   Dashboard Layout — wider container
    --------------------------------------------------------------- */
 .dashboard-container {
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 0 var(--space-5);
+  padding: 0 1.25rem;
 }
 
 /* ---------------------------------------------------------------
-   Welcome Banner — gradient accent greeting card
+   Welcome Banner — teal gradient greeting card
    --------------------------------------------------------------- */
 .dashboard-welcome {
   background: var(--color-sky-soft);
-  border: 1.5px solid rgb(59 130 246 / 0.22);
+  border: 1.5px solid rgba(23,162,184,0.22);
   border-radius: var(--radius-lg);
-  padding: var(--space-8) 2.25rem;
-  margin-bottom: var(--space-6);
+  padding: 2rem 2.25rem;
+  margin-bottom: 1.5rem;
   position: relative;
   overflow: hidden;
   animation: fadeRise 400ms ease-out both;
 }
 
-/* Accent strip matching site header style */
+/* Accent strip at top */
 .dashboard-welcome::before {
   content: '';
   position: absolute;
@@ -49,14 +49,14 @@
   height: 4px;
   background: linear-gradient(
     90deg,
-    var(--color-sky)   0%   25%,
-    var(--color-sun)   25%  50%,
-    var(--color-leaf)  50%  75%,
-    var(--color-coral) 75%  100%
+    #17a2b8  0%   25%,
+    #ffc107  25%  50%,
+    #28a745  50%  75%,
+    #fd7e14  75%  100%
   );
 }
 
-/* Diagonal stripe decoration in the background */
+/* Subtle diagonal pattern */
 .dashboard-welcome::after {
   content: '';
   position: absolute;
@@ -65,8 +65,8 @@
     -45deg,
     transparent,
     transparent 20px,
-    rgb(59 130 246 / 0.04) 20px,
-    rgb(59 130 246 / 0.04) 21px
+    rgba(23,162,184,0.04) 20px,
+    rgba(23,162,184,0.04) 21px
   );
   pointer-events: none;
 }
@@ -76,7 +76,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: 1.25rem;
   flex-wrap: wrap;
 }
 
@@ -84,29 +84,27 @@
   flex-shrink: 0;
   width: 3.5rem;
   height: 3.5rem;
-  background: linear-gradient(135deg, var(--color-sky) 0%, var(--color-berry) 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--color-berry) 100%);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1.5rem;
   font-weight: 900;
   color: #fff;
-  box-shadow: 0 4px 14px rgb(59 130 246 / 0.35);
+  box-shadow: 0 4px 14px rgba(23,162,184,.35);
 }
 
-.welcome-text {
-  flex: 1;
-}
+.welcome-text { flex: 1; }
 
 .welcome-heading {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: clamp(1.3rem, 3vw, 1.75rem);
   font-weight: 800;
   color: var(--color-ink);
   letter-spacing: -0.025em;
-  margin-bottom: var(--space-1);
+  margin-bottom: 0.25rem;
   line-height: 1.2;
 }
 
@@ -114,84 +112,62 @@
   font-size: 0.9375rem;
   color: var(--text-muted);
   font-weight: 500;
+  margin: 0;
 }
 
-/* Role badge — teacher indicator */
+/* Role badge */
 .role-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 0.25rem;
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-berry-dark);
   background: var(--color-berry-soft);
-  border: 1.5px solid rgb(139 92 246 / 0.28);
+  border: 1.5px solid rgba(111,66,193,.28);
   border-radius: var(--radius-pill);
   padding: 0.25rem 0.75rem;
 }
 
-.role-badge::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-berry);
-}
-
 .role-badge--student {
-  color: var(--color-sky-dark);
+  color: var(--primary-dark);
   background: var(--color-sky-soft);
-  border-color: rgb(59 130 246 / 0.28);
-}
-
-.role-badge--student::before {
-  background: var(--color-sky);
+  border-color: rgba(23,162,184,.28);
 }
 
 /* ---------------------------------------------------------------
-   Dashboard Section Headers
+   Dashboard Section Headings
    --------------------------------------------------------------- */
 .section-heading {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1.1rem;
   font-weight: 800;
   color: var(--color-ink);
   letter-spacing: -0.01em;
-  margin-bottom: var(--space-4);
+  margin-bottom: 1rem;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.section-heading::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-sky);
-  flex-shrink: 0;
+  gap: 0.5rem;
 }
 
 /* ---------------------------------------------------------------
-   Stat Cards Grid — summary numbers at a glance
+   Stat Cards Grid
    --------------------------------------------------------------- */
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .stat-card {
-  background: var(--color-white);
+  background: #fff;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: var(--space-5) var(--space-6);
+  padding: 1.25rem 1.5rem;
   position: relative;
   overflow: hidden;
   transition: box-shadow var(--transition-md), transform var(--transition-md);
@@ -202,7 +178,7 @@
   transform: translateY(-2px);
 }
 
-/* Color accent bar at top of each stat card */
+/* Color accent bar at top */
 .stat-card::before {
   content: '';
   position: absolute;
@@ -213,30 +189,24 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.stat-card--great::before {
-  background: linear-gradient(90deg, var(--color-leaf) 0%, #0d9488 100%);
-}
+.stat-card--great::before  { background: linear-gradient(90deg, var(--color-leaf) 0%, #0d9488 100%); }
+.stat-card--ok::before     { background: linear-gradient(90deg, var(--color-sun) 0%, var(--color-sun-dark) 100%); }
+.stat-card--poor::before   { background: linear-gradient(90deg, var(--color-coral) 0%, var(--color-coral-dark) 100%); }
+.stat-card--neutral::before { background: linear-gradient(90deg, var(--primary) 0%, var(--color-berry) 100%); }
 
-.stat-card--ok::before {
-  background: linear-gradient(90deg, var(--color-sun) 0%, var(--color-sun-dark) 100%);
-}
-
-.stat-card--poor::before {
-  background: linear-gradient(90deg, var(--color-coral) 0%, var(--color-coral-dark) 100%);
-}
-
-.stat-card--neutral::before {
-  background: linear-gradient(90deg, var(--color-sky) 0%, var(--color-berry) 100%);
+.stat-icon {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .stat-number {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 2rem;
   font-weight: 900;
   color: var(--color-ink);
   letter-spacing: -0.04em;
   line-height: 1;
-  margin-bottom: var(--space-1);
+  margin-bottom: 0.25rem;
 }
 
 .stat-card--great .stat-number { color: var(--color-leaf-dark); }
@@ -251,27 +221,27 @@
 }
 
 /* ---------------------------------------------------------------
-   Content Cards — reuse card base from styles.css, add variants
+   Dashboard Content Cards
    --------------------------------------------------------------- */
 .dashboard-card {
-  background: var(--color-white);
+  background: #fff;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: var(--space-6) 2rem;
-  margin-bottom: var(--space-5);
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.25rem;
   position: relative;
 }
 
-/* Left-edge color tab matching main card style */
+/* Left-edge color tab */
 .dashboard-card::before {
   content: '';
   position: absolute;
-  top: var(--space-5);
-  bottom: var(--space-5);
+  top: 1.25rem;
+  bottom: 1.25rem;
   left: -1.5px;
   width: 4px;
-  background: linear-gradient(180deg, var(--color-sky) 0%, var(--color-berry) 100%);
+  background: linear-gradient(180deg, var(--primary) 0%, var(--color-berry) 100%);
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
 
@@ -292,12 +262,12 @@
 }
 
 .attempt-table thead {
-  background: var(--surface-soft);
+  background: #f8f9fa;
 }
 
 .attempt-table th {
   text-align: left;
-  padding: 0.6875rem var(--space-5);
+  padding: 0.6875rem 1.25rem;
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -308,27 +278,18 @@
 }
 
 .attempt-table td {
-  padding: 0.75rem var(--space-5);
+  padding: 0.75rem 1.25rem;
   color: var(--color-ink);
   font-weight: 500;
   vertical-align: middle;
   border-bottom: 1px solid var(--color-cloud);
 }
 
-.attempt-row:last-child td {
-  border-bottom: none;
-}
+.attempt-row:last-child td { border-bottom: none; }
+.attempt-row:nth-child(even) td { background: #fafbfc; }
+.attempt-row:hover td { background: var(--color-sky-soft); }
 
-/* Alternating row shading */
-.attempt-row:nth-child(even) td {
-  background: #FAFBFC;
-}
-
-.attempt-row:hover td {
-  background: var(--color-sky-soft);
-}
-
-/* Score badge — inline pill showing percentage */
+/* Score badge */
 .score-badge {
   display: inline-flex;
   align-items: center;
@@ -338,7 +299,6 @@
   border-radius: var(--radius-pill);
   padding: 0.2rem 0.65rem;
   min-width: 3.5rem;
-  letter-spacing: 0.01em;
 }
 
 .score-badge--great {
@@ -350,7 +310,7 @@
 .score-badge--ok {
   color: #92400e;
   background: var(--color-sun-soft);
-  border: 1.5px solid #FCD34D;
+  border: 1.5px solid #fcd34d;
 }
 
 .score-badge--poor {
@@ -360,11 +320,11 @@
 }
 
 /* ---------------------------------------------------------------
-   Empty State — friendly, guides user to next action
+   Empty State
    --------------------------------------------------------------- */
 .empty-state {
   text-align: center;
-  padding: var(--space-12) var(--space-8);
+  padding: 3rem 2rem;
   color: var(--text-muted);
   font-size: 0.9375rem;
   font-weight: 500;
@@ -374,33 +334,33 @@
 .empty-state-icon {
   font-size: 2.5rem;
   display: block;
-  margin-bottom: var(--space-3);
+  margin-bottom: 0.75rem;
   opacity: 0.5;
 }
 
 .empty-state-hint {
   display: block;
-  margin-top: var(--space-3);
+  margin-top: 0.75rem;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 600;
-  color: var(--color-sky);
+  color: var(--primary);
 }
 
 /* ---------------------------------------------------------------
-   Subject Breakdown Cards — per-subject average scores
+   Subject Breakdown
    --------------------------------------------------------------- */
 .subject-breakdown {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .subject-stat {
-  background: var(--surface-soft);
+  background: #f8f9fa;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
+  padding: 1rem;
   text-align: center;
   transition: box-shadow var(--transition), transform var(--transition);
 }
@@ -416,11 +376,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: var(--space-2);
+  margin-bottom: 0.5rem;
 }
 
 .subject-avg {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1.5rem;
   font-weight: 900;
   color: var(--color-ink);
@@ -429,53 +389,50 @@
 }
 
 /* ---------------------------------------------------------------
-   Actions Row — CTA buttons at the bottom of dashboard
+   Dashboard Actions Row
    --------------------------------------------------------------- */
 .dashboard-actions {
   display: flex;
-  gap: var(--space-3);
+  gap: 0.75rem;
   flex-wrap: wrap;
-  margin-bottom: var(--space-8);
+  margin-bottom: 2rem;
 }
 
 /* ---------------------------------------------------------------
-   Class Cards — Teacher view: list of classes
+   Class Cards — Teacher view
    --------------------------------------------------------------- */
 .class-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .class-card {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  background: var(--surface-soft);
+  gap: 1rem;
+  background: #f8f9fa;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-5);
+  padding: 1rem 1.25rem;
   transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
   flex-wrap: wrap;
 }
 
 .class-card:hover {
-  border-color: var(--color-sky);
+  border-color: var(--primary);
   box-shadow: var(--shadow-sm);
   transform: translateX(3px);
 }
 
-.class-info {
-  flex: 1;
-  min-width: 0;
-}
+.class-info { flex: 1; min-width: 0; }
 
 .class-name {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1rem;
   font-weight: 800;
   color: var(--color-ink);
-  margin-bottom: var(--space-1);
+  margin-bottom: 0.25rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -486,27 +443,27 @@
   color: var(--text-muted);
   font-weight: 500;
   display: flex;
-  gap: var(--space-3);
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
 .class-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 0.25rem;
 }
 
 /* Invite code pill */
 .invite-code {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;
   font-weight: 700;
-  color: var(--color-sky-dark);
+  color: var(--primary-dark);
   background: var(--color-sky-soft);
-  border: 1.5px solid rgb(59 130 246 / 0.30);
+  border: 1.5px solid rgba(23,162,184,.30);
   border-radius: var(--radius-pill);
   padding: 0.25rem 0.75rem;
   letter-spacing: 0.06em;
@@ -514,7 +471,7 @@
 }
 
 .invite-code-label {
-  font-family: var(--font);
+  font-family: var(--font-primary);
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -526,11 +483,10 @@
 .class-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
-/* Small button variant for class card actions */
 .btn--sm {
   padding: 0.4375rem 0.875rem;
   font-size: 0.8125rem;
@@ -538,17 +494,17 @@
 }
 
 /* ---------------------------------------------------------------
-   Modal Overlay — full-screen dimmed background
+   Modal Overlay
    --------------------------------------------------------------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgb(15 23 42 / 0.55);
+  background: rgba(15,23,42,.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5);
-  z-index: 100;
+  padding: 1.25rem;
+  z-index: 1050;
   animation: fadeIn 200ms ease both;
   backdrop-filter: blur(2px);
 }
@@ -558,37 +514,29 @@
   to   { opacity: 1; }
 }
 
-.modal-overlay[hidden] {
-  display: none !important;
-}
+.modal-overlay[hidden] { display: none !important; }
 
 /* ---------------------------------------------------------------
    Modal Card
    --------------------------------------------------------------- */
 .modal {
-  background: var(--color-white);
+  background: #fff;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 64px -8px rgb(0 0 0 / 0.28), 0 8px 24px -4px rgb(0 0 0 / 0.14);
+  box-shadow: 0 24px 64px -8px rgba(0,0,0,.28), 0 8px 24px -4px rgba(0,0,0,.14);
   width: 100%;
   max-width: 480px;
-  padding: var(--space-8) 2rem;
+  padding: 2rem;
   position: relative;
   animation: modalRise 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes modalRise {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Accent strip on modal top */
+/* Accent strip at top of modal */
 .modal::before {
   content: '';
   position: absolute;
@@ -596,11 +544,7 @@
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--color-sky)   0%,
-    var(--color-berry) 100%
-  );
+  background: linear-gradient(90deg, var(--primary) 0%, var(--color-berry) 100%);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
@@ -608,11 +552,11 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--space-6);
+  margin-bottom: 1.5rem;
 }
 
 .modal-title {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1.3rem;
   font-weight: 800;
   color: var(--color-ink);
@@ -623,7 +567,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: var(--space-1);
+  padding: 0.25rem;
   color: var(--text-muted);
   font-size: 1.25rem;
   line-height: 1;
@@ -638,46 +582,45 @@
 
 .modal-close:hover {
   color: var(--color-ink);
-  background: var(--surface-soft);
+  background: #f8f9fa;
 }
 
 .modal-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 
 .modal-actions {
   display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-6);
+  gap: 0.75rem;
+  margin-top: 1.5rem;
   flex-wrap: wrap;
 }
 
 /* ---------------------------------------------------------------
-   Login / Auth Page — centered card layout
+   Login / Auth Page
    --------------------------------------------------------------- */
 .auth-page-main {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-8) var(--space-5);
+  padding: 2rem 1.25rem;
 }
 
 .auth-card {
-  background: var(--color-white);
+  background: #fff;
   border: 1.5px solid var(--color-cloud);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: var(--space-8) 2.5rem;
+  padding: 2rem 2.5rem;
   width: 100%;
   max-width: 480px;
   position: relative;
   animation: fadeRise 400ms ease-out both;
 }
 
-/* Colored top accent matching site header */
 .auth-card::before {
   content: '';
   position: absolute;
@@ -687,47 +630,47 @@
   height: 4px;
   background: linear-gradient(
     90deg,
-    var(--color-sky)   0%   25%,
-    var(--color-sun)   25%  50%,
-    var(--color-leaf)  50%  75%,
-    var(--color-coral) 75%  100%
+    #17a2b8  0%   25%,
+    #ffc107  25%  50%,
+    #28a745  50%  75%,
+    #fd7e14  75%  100%
   );
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .auth-card-title {
-  font-family: var(--font-display);
+  font-family: var(--font-primary);
   font-size: 1.6rem;
   font-weight: 800;
   color: var(--color-ink);
   letter-spacing: -0.025em;
-  margin-bottom: var(--space-1);
+  margin-bottom: 0.25rem;
 }
 
 .auth-card-sub {
   font-size: 0.9375rem;
   color: var(--text-muted);
   font-weight: 500;
-  margin-bottom: var(--space-6);
+  margin-bottom: 1.5rem;
 }
 
 /* ---------------------------------------------------------------
-   Tab Toggle — Sign In / Create Account
+   Tab Toggle
    --------------------------------------------------------------- */
 .tab-group {
   display: flex;
   gap: 0;
-  background: var(--surface-soft);
+  background: #f1f3f5;
   border: 2px solid var(--color-cloud);
   border-radius: var(--radius-md);
   padding: 3px;
-  margin-bottom: var(--space-6);
+  margin-bottom: 1.5rem;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 0.5625rem var(--space-4);
-  font-family: var(--font);
+  padding: 0.5625rem 1rem;
+  font-family: var(--font-primary);
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text-muted);
@@ -736,48 +679,43 @@
   border-radius: calc(var(--radius-md) - 3px);
   cursor: pointer;
   transition: color var(--transition), background-color var(--transition), box-shadow var(--transition);
-  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
 .tab-btn:hover:not(.tab-btn--active) {
   color: var(--color-ink);
-  background: var(--color-white);
+  background: #fff;
 }
 
 .tab-btn--active {
   color: var(--color-ink);
-  background: var(--color-white);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
 }
 
 /* ---------------------------------------------------------------
-   Auth Form — sign in / register forms
+   Auth Form
    --------------------------------------------------------------- */
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 
-.auth-form[hidden] {
-  display: none !important;
-}
+.auth-form[hidden] { display: none !important; }
 
 .auth-error {
   background: var(--color-error-bg);
   border: 1.5px solid var(--color-error-border);
   border-left: 4px solid var(--color-error);
   border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4);
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #991b1b;
+  color: #721c24;
 }
 
-.auth-error[hidden] {
-  display: none !important;
-}
+.auth-error[hidden] { display: none !important; }
 
 /* ---------------------------------------------------------------
    Social Login Divider
@@ -785,8 +723,8 @@
 .auth-divider {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-4) 0;
+  gap: 0.75rem;
+  margin: 1rem 0;
   color: var(--text-muted);
   font-size: 0.8125rem;
   font-weight: 600;
@@ -802,14 +740,22 @@
 
 /* Google OAuth button */
 .btn--google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
   width: 100%;
-  background: var(--color-white);
+  background: #fff;
   color: #3c4043;
   border: 2px solid var(--color-cloud-dark);
   box-shadow: var(--shadow-xs);
+  font-family: var(--font-primary);
   font-weight: 700;
-  gap: var(--space-3);
-  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--transition), box-shadow var(--transition), transform 120ms ease;
 }
 
 .btn--google:hover {
@@ -817,6 +763,8 @@
   border-color: #dadce0;
   box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
+  color: #3c4043;
+  text-decoration: none;
 }
 
 .google-icon {
@@ -831,11 +779,10 @@
   font-size: 0;
 }
 
-/* Back to home link */
 .auth-back {
   display: block;
   text-align: center;
-  margin-top: var(--space-5);
+  margin-top: 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
@@ -843,41 +790,37 @@
   transition: color var(--transition);
 }
 
-.auth-back:hover {
-  color: var(--color-sky);
-}
+.auth-back:hover { color: var(--primary); }
 
 /* ---------------------------------------------------------------
-   Invite Code Success — shown after class creation
+   Invite Code Success
    --------------------------------------------------------------- */
 .invite-success {
   background: var(--color-leaf-soft);
   border: 2px solid #6EE7B7;
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-5);
-  margin-top: var(--space-4);
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
 }
 
-.invite-success[hidden] {
-  display: none !important;
-}
+.invite-success[hidden] { display: none !important; }
 
 .invite-success-label {
   font-size: 0.8125rem;
   font-weight: 700;
   color: #065f46;
-  margin-bottom: var(--space-2);
+  margin-bottom: 0.5rem;
 }
 
 .invite-success-code {
   font-family: var(--font-mono);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-sky-dark);
+  color: var(--primary-dark);
   background: var(--color-sky-soft);
-  border: 1.5px solid rgb(59 130 246 / 0.30);
+  border: 1.5px solid rgba(23,162,184,.30);
   border-radius: var(--radius);
-  padding: var(--space-2) var(--space-4);
+  padding: 0.5rem 1rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   display: inline-block;
@@ -887,15 +830,15 @@
   font-size: 0.8125rem;
   color: #065f46;
   font-weight: 500;
-  margin-top: var(--space-2);
+  margin-top: 0.5rem;
 }
 
 /* ---------------------------------------------------------------
-   Placeholder / Coming Soon state
+   Coming Soon state
    --------------------------------------------------------------- */
 .coming-soon {
   text-align: center;
-  padding: var(--space-10) var(--space-6);
+  padding: 2.5rem 1.5rem;
   color: var(--text-muted);
   font-size: 0.9375rem;
   font-weight: 500;
@@ -904,21 +847,21 @@
 .coming-soon-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--color-sun-dark);
   background: var(--color-sun-soft);
-  border: 1.5px solid #FCD34D;
+  border: 1.5px solid #fcd34d;
   border-radius: var(--radius-pill);
   padding: 0.25rem 0.75rem;
-  margin-bottom: var(--space-3);
+  margin-bottom: 0.75rem;
 }
 
 /* ---------------------------------------------------------------
-   Responsive — stat cards collapse on narrow screens
+   Responsive
    --------------------------------------------------------------- */
 @media (max-width: 900px) {
   .stat-cards {
@@ -929,15 +872,13 @@
 @media (max-width: 640px) {
   .stat-cards {
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
+    gap: 0.75rem;
   }
 
-  .stat-number {
-    font-size: 1.5rem;
-  }
+  .stat-number { font-size: 1.5rem; }
 
   .dashboard-welcome {
-    padding: var(--space-6) var(--space-5);
+    padding: 1.5rem 1.25rem;
   }
 
   .welcome-avatar {
@@ -946,17 +887,15 @@
     font-size: 1.2rem;
   }
 
-  .welcome-heading {
-    font-size: 1.2rem;
-  }
+  .welcome-heading { font-size: 1.2rem; }
 
   .dashboard-card {
-    padding: var(--space-5) var(--space-5);
+    padding: 1.25rem;
   }
 
   .attempt-table th,
   .attempt-table td {
-    padding: 0.625rem var(--space-3);
+    padding: 0.625rem 0.75rem;
     font-size: 0.875rem;
   }
 
@@ -965,17 +904,10 @@
     align-items: flex-start;
   }
 
-  .class-actions {
-    width: 100%;
-  }
+  .class-actions { width: 100%; }
+  .class-actions .btn { flex: 1; }
 
-  .class-actions .btn {
-    flex: 1;
-  }
-
-  .auth-card {
-    padding: var(--space-6) var(--space-5);
-  }
+  .auth-card { padding: 1.5rem 1.25rem; }
 
   .dashboard-actions {
     flex-direction: column;
@@ -986,9 +918,7 @@
     justify-content: center;
   }
 
-  .modal {
-    padding: var(--space-6) var(--space-5);
-  }
+  .modal { padding: 1.5rem 1.25rem; }
 
   .modal-actions {
     flex-direction: column;
