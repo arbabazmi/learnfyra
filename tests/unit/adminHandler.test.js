@@ -518,3 +518,78 @@ describe('adminHandler - GET /api/admin/audit/events', () => {
     expect(result.statusCode).toBe(400);
   });
 });
+
+describe('adminHandler - repeat-cap policy endpoints', () => {
+  it('returns repeat-cap policy from GET /api/admin/policies/repeat-cap', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'GET',
+        path: '/api/admin/policies/repeat-cap',
+        headers: { authorization: 'Bearer admin-token' },
+        queryStringParameters: {},
+      },
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('repeatCapPolicy');
+    expect(Array.isArray(body.overrides)).toBe(true);
+  });
+
+  it('updates global repeat-cap policy via PUT /api/admin/policies/repeat-cap', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/repeat-cap',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Idempotency-Key': 'repeat-cap-global-1',
+        },
+        body: JSON.stringify({
+          enabled: true,
+          defaultPercent: 15,
+          reason: 'LF-9001 set default repeat cap for paid plans rollout.',
+        }),
+      },
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockPutItem).toHaveBeenCalledWith('adminPolicies', expect.objectContaining({
+      repeatCapPolicy: expect.objectContaining({
+        enabled: true,
+        defaultPercent: 15,
+      }),
+    }));
+  });
+
+  it('upserts scoped repeat-cap override via PUT /api/admin/policies/repeat-cap/overrides', async () => {
+    const result = await handler(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/repeat-cap/overrides',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Idempotency-Key': 'repeat-cap-override-1',
+        },
+        body: JSON.stringify({
+          scope: 'student',
+          scopeId: 'student-42',
+          repeatCapPercent: 0,
+          isActive: true,
+          reason: 'LF-9002 premium plan no-repeat mode enabled for this student.',
+        }),
+      },
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockPutItem).toHaveBeenCalledWith('repeatCapOverrides', expect.objectContaining({
+      id: 'student:student-42',
+      repeatCapPercent: 0,
+      scope: 'student',
+      scopeId: 'student-42',
+    }));
+  });
+});

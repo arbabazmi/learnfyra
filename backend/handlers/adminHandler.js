@@ -40,6 +40,12 @@ const DEFAULT_POLICY = {
     rejectOnSchemaViolation: true,
     allowPartialIfRecoverable: false,
   },
+  repeatCapPolicy: {
+    enabled: true,
+    defaultPercent: 10,
+    minPercent: 0,
+    maxPercent: 100,
+  },
   updatedAt: new Date(0).toISOString(),
   updatedBy: 'system',
 };
@@ -68,7 +74,28 @@ function parseIntParam(value, fallback, min, max) {
 
 async function getOrCreatePolicies(db) {
   const existing = await db.getItem('adminPolicies', 'global');
-  if (existing) return existing;
+  if (existing) {
+    return {
+      ...DEFAULT_POLICY,
+      ...existing,
+      modelRouting: {
+        ...DEFAULT_POLICY.modelRouting,
+        ...(existing.modelRouting || {}),
+      },
+      budgetUsage: {
+        ...DEFAULT_POLICY.budgetUsage,
+        ...(existing.budgetUsage || {}),
+      },
+      validationProfile: {
+        ...DEFAULT_POLICY.validationProfile,
+        ...(existing.validationProfile || {}),
+      },
+      repeatCapPolicy: {
+        ...DEFAULT_POLICY.repeatCapPolicy,
+        ...(existing.repeatCapPolicy || {}),
+      },
+    };
+  }
 
   const created = {
     ...DEFAULT_POLICY,
@@ -229,6 +256,46 @@ function validateValidationPayload(body, currentPolicy) {
   return null;
 }
 
+function validateRepeatCapPolicyPayload(body) {
+  const { enabled, defaultPercent, reason } = body || {};
+  if (typeof enabled !== 'boolean') {
+    return 'enabled must be a boolean.';
+  }
+
+  if (!Number.isInteger(defaultPercent) || defaultPercent < 0 || defaultPercent > 100) {
+    return 'defaultPercent must be an integer between 0 and 100.';
+  }
+
+  const reasonErr = validateReason(reason);
+  if (reasonErr) return reasonErr;
+  return null;
+}
+
+function validateRepeatCapOverridePayload(body) {
+  const { scope, scopeId, repeatCapPercent, reason, isActive, expiresAt } = body || {};
+  if (!['student', 'teacher', 'parent'].includes(scope)) {
+    return 'scope must be one of: student, teacher, parent.';
+  }
+  if (typeof scopeId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(scopeId.trim())) {
+    return 'scopeId must be 1-128 characters and use only letters, numbers, underscores, or hyphens.';
+  }
+  if (!Number.isInteger(repeatCapPercent) || repeatCapPercent < 0 || repeatCapPercent > 100) {
+    return 'repeatCapPercent must be an integer between 0 and 100.';
+  }
+  if (isActive != null && typeof isActive !== 'boolean') {
+    return 'isActive must be a boolean when provided.';
+  }
+  if (expiresAt != null && expiresAt !== '') {
+    const parsed = Date.parse(expiresAt);
+    if (!Number.isFinite(parsed)) {
+      return 'expiresAt must be a valid ISO-8601 datetime when provided.';
+    }
+  }
+  const reasonErr = validateReason(reason);
+  if (reasonErr) return reasonErr;
+  return null;
+}
+
 async function writeAuditEvent(db, decoded, action, target, before, after, reason, event) {
   await db.putItem('adminAuditEvents', {
     id: randomUUID(),
@@ -299,8 +366,50 @@ async function handleGetPolicies(decoded) {
       modelRouting: policy.modelRouting,
       budgetUsage: policy.budgetUsage,
       validationProfile: policy.validationProfile,
+      repeatCapPolicy: policy.repeatCapPolicy,
       updatedAt: policy.updatedAt,
       updatedBy: policy.updatedBy,
+      requestedBy: decoded.sub,
+    }),
+  };
+}
+
+async function handleGetRepeatCapPolicy(decoded, queryStringParameters) {
+  const db = getDbAdapter();
+  const policy = await getOrCreatePolicies(db);
+
+  const scope = typeof queryStringParameters?.scope === 'string'
+    ? queryStringParameters.scope.trim()
+    : '';
+  const scopeId = typeof queryStringParameters?.scopeId === 'string'
+    ? queryStringParameters.scopeId.trim()
+    : '';
+
+  const overrides = await db.listAll('repeatCapOverrides');
+  const filtered = (Array.isArray(overrides) ? overrides : [])
+    .filter((item) => {
+      if (!scope) return true;
+      if (item.scope !== scope) return false;
+      if (scopeId && item.scopeId !== scopeId) return false;
+      return true;
+    })
+    .map((item) => ({
+      id: item.id,
+      scope: item.scope,
+      scopeId: item.scopeId,
+      repeatCapPercent: item.repeatCapPercent,
+      isActive: item.isActive !== false,
+      expiresAt: item.expiresAt || null,
+      updatedAt: item.updatedAt,
+      updatedBy: item.updatedBy,
+    }));
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      repeatCapPolicy: policy.repeatCapPolicy,
+      overrides: filtered,
       requestedBy: decoded.sub,
     }),
   };
@@ -450,6 +559,108 @@ async function handleUpdateValidationProfile(event, decoded, body) {
   });
 }
 
+async function handleUpdateRepeatCapPolicy(event, decoded, body) {
+  const db = getDbAdapter();
+  const validationError = validateRepeatCapPolicyPayload(body);
+  if (validationError) {
+    return errorResponse(400, validationError, 'ADMIN_INVALID_REQUEST');
+  }
+
+  return applyIdempotentMutation(db, event, decoded, 'update-repeat-cap-policy', async () => {
+    const current = await getOrCreatePolicies(db);
+    const updated = {
+      ...current,
+      version: (Number(current.version) || 0) + 1,
+      repeatCapPolicy: {
+        enabled: body.enabled,
+        defaultPercent: body.defaultPercent,
+        minPercent: 0,
+        maxPercent: 100,
+      },
+      updatedAt: new Date().toISOString(),
+      updatedBy: decoded.sub,
+    };
+
+    await db.putItem('adminPolicies', updated);
+    await writeAuditEvent(
+      db,
+      decoded,
+      'update-repeat-cap-policy',
+      'adminPolicies.global.repeatCapPolicy',
+      current.repeatCapPolicy,
+      updated.repeatCapPolicy,
+      body.reason.trim(),
+      event,
+    );
+
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        message: 'Repeat-cap policy updated.',
+        version: updated.version,
+        appliedAt: updated.updatedAt,
+      }),
+    };
+  });
+}
+
+async function handleUpsertRepeatCapOverride(event, decoded, body) {
+  const db = getDbAdapter();
+  const validationError = validateRepeatCapOverridePayload(body);
+  if (validationError) {
+    return errorResponse(400, validationError, 'ADMIN_INVALID_REQUEST');
+  }
+
+  return applyIdempotentMutation(db, event, decoded, 'upsert-repeat-cap-override', async () => {
+    const current = await db.getItem('repeatCapOverrides', `${body.scope}:${body.scopeId.trim()}`);
+    const now = new Date().toISOString();
+    const updated = {
+      id: `${body.scope}:${body.scopeId.trim()}`,
+      scope: body.scope,
+      scopeId: body.scopeId.trim(),
+      repeatCapPercent: body.repeatCapPercent,
+      isActive: body.isActive !== false,
+      expiresAt: body.expiresAt || null,
+      createdAt: current?.createdAt || now,
+      createdBy: current?.createdBy || decoded.sub,
+      updatedAt: now,
+      updatedBy: decoded.sub,
+      reason: body.reason.trim(),
+    };
+
+    await db.putItem('repeatCapOverrides', updated);
+    await writeAuditEvent(
+      db,
+      decoded,
+      'upsert-repeat-cap-override',
+      `repeatCapOverrides.${updated.id}`,
+      current,
+      updated,
+      body.reason.trim(),
+      event,
+    );
+
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        message: 'Repeat-cap override updated.',
+        override: {
+          id: updated.id,
+          scope: updated.scope,
+          scopeId: updated.scopeId,
+          repeatCapPercent: updated.repeatCapPercent,
+          isActive: updated.isActive,
+          expiresAt: updated.expiresAt,
+          updatedAt: updated.updatedAt,
+          updatedBy: updated.updatedBy,
+        },
+      }),
+    };
+  });
+}
+
 async function handleListAuditEvents(queryStringParameters) {
   const db = getDbAdapter();
   const qs = queryStringParameters || {};
@@ -533,6 +744,20 @@ export const handler = async (event, context) => {
     if (method === 'PUT' && path.endsWith('/api/admin/policies/validation-profile')) {
       const body = JSON.parse(event.body || '{}');
       return await handleUpdateValidationProfile(event, decoded, body);
+    }
+
+    if (method === 'GET' && path.endsWith('/api/admin/policies/repeat-cap')) {
+      return await handleGetRepeatCapPolicy(decoded, event.queryStringParameters || {});
+    }
+
+    if (method === 'PUT' && path.endsWith('/api/admin/policies/repeat-cap')) {
+      const body = JSON.parse(event.body || '{}');
+      return await handleUpdateRepeatCapPolicy(event, decoded, body);
+    }
+
+    if (method === 'PUT' && path.endsWith('/api/admin/policies/repeat-cap/overrides')) {
+      const body = JSON.parse(event.body || '{}');
+      return await handleUpsertRepeatCapOverride(event, decoded, body);
     }
 
     if (method === 'GET' && path.endsWith('/api/admin/audit/events')) {

@@ -97,15 +97,42 @@
               <select id="questionCount" name="questionCount" class="form-select" required aria-required="true">
                 <option value="">Select count…</option>
                 <option value="5">5</option>
-                <option value="10">10</option>
+                 <option value="10">10</option>
+                 <option value="15">15</option>
+                 <option value="20">20</option>
+                 <option value="25">25</option>
+                 <option value="30">30</option>
               </select>
               <span class="field-error" id="questionCountError" role="alert" aria-live="polite"></span>
             </div>
 
-            <!-- Format -->
-            <div class="form-group">
-              <label class="form-label" for="format">Output Format <span class="required" aria-hidden="true">*</span></label>
-              <select id="format" name="format" class="form-select" required aria-required="true">
+          </div><!-- /.form-grid -->
+
+          <h3 class="form-section-title">Delivery Mode</h3>
+          <div class="form-grid">
+
+            <div class="form-group form-group--full">
+              <label class="form-label">How will students use this worksheet? <span class="required" aria-hidden="true">*</span></label>
+              <div class="mode-toggle" role="group" aria-label="Delivery mode">
+                <label class="mode-card is-selected" id="modeCardOnline">
+                  <input type="radio" name="deliveryMode" id="modeOnline" value="online" checked />
+                  <span class="mode-card__icon" aria-hidden="true">&#127760;</span>
+                  <span class="mode-card__title">Solve Online</span>
+                  <span class="mode-card__desc">Students solve in the browser with instant scoring and feedback</span>
+                </label>
+                <label class="mode-card" id="modeCardDownload">
+                  <input type="radio" name="deliveryMode" id="modeDownload" value="download" />
+                  <span class="mode-card__icon" aria-hidden="true">&#11015;</span>
+                  <span class="mode-card__title">Download File</span>
+                  <span class="mode-card__desc">Export as PDF, Word, or HTML to print or share offline</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Shown only when Download is selected -->
+            <div class="form-group" id="formatGroup" hidden>
+              <label class="form-label" for="format">File Format <span class="required" aria-hidden="true">*</span></label>
+              <select id="format" name="format" class="form-select" aria-required="true">
                 <option value="">Select format…</option>
                 <option value="PDF">PDF</option>
                 <option value="Word (.docx)">Word (.docx)</option>
@@ -114,8 +141,7 @@
               <span class="field-error" id="formatError" role="alert" aria-live="polite"></span>
             </div>
 
-            <!-- Include Answer Key -->
-            <div class="form-group form-group--full">
+            <div class="form-group form-group--full" id="answerKeyGroup" hidden>
               <label class="checkbox-label">
                 <input
                   type="checkbox"
@@ -129,7 +155,7 @@
               </label>
             </div>
 
-          </div><!-- /.form-grid -->
+          </div><!-- /.form-grid delivery -->
 
           <h3 class="form-section-title">Student &amp; Class Details <span style="font-size:0.75em;font-weight:700;opacity:0.6;">(Optional)</span></h3>
           <div class="form-grid">

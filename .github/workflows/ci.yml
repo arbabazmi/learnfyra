@@ -22,8 +22,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit tests
+      - name: Run all tests (unit + integration)
         run: npm test
+        env:
+          NODE_ENV: test
+          ANTHROPIC_API_KEY: sk-ant-ci-placeholder
 
       - name: Coverage gate (≥80%)
         run: |

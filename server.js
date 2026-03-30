@@ -13,6 +13,7 @@
 
 import 'dotenv/config';
 import express from 'express';
+import morgan from 'morgan';
 import { randomUUID } from 'crypto';
 import { mkdirSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -82,6 +83,7 @@ function serializeError(err) {
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
+app.use(morgan('dev'));
 app.use(express.json());
 
 // Serve the frontend
@@ -301,6 +303,7 @@ app.options(/^\/api\/.*$/, (req, res) => {
 // ── Lazy-load solve/submit handlers ───────────────────────────────────────────
 let _solveHandler;
 let _submitHandler;
+let _generateQuestionsHandler;
 
 /**
  * Returns the solveHandler function, importing it on first call.
@@ -325,6 +328,30 @@ const getSubmitHandler = async () => {
   }
   return _submitHandler;
 };
+
+const getGenerateQuestionsHandler = async () => {
+  if (!_generateQuestionsHandler) {
+    const mod = await import('./backend/handlers/generateQuestionsHandler.js');
+    _generateQuestionsHandler = mod.handler;
+  }
+  return _generateQuestionsHandler;
+};
+
+// ── POST /api/generate-questions ──────────────────────────────────────────────
+app.post('/api/generate-questions', async (req, res) => {
+  try {
+    const fn = await getGenerateQuestionsHandler();
+    const result = await fn(
+      { httpMethod: 'POST', body: JSON.stringify(req.body) },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('generate-questions route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ── GET /api/solve/:worksheetId ────────────────────────────────────────────────
 app.get('/api/solve/:worksheetId', async (req, res) => {
@@ -842,6 +869,73 @@ app.put('/api/admin/policies/validation-profile', async (req, res) => {
       {
         httpMethod: 'PUT',
         path: '/api/admin/policies/validation-profile',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/admin/policies/repeat-cap ─────────────────────────────────────
+app.get('/api/admin/policies/repeat-cap', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/admin/policies/repeat-cap',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PUT /api/admin/policies/repeat-cap ─────────────────────────────────────
+app.put('/api/admin/policies/repeat-cap', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/repeat-cap',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        requestContext: { requestId: randomUUID() },
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('admin route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PUT /api/admin/policies/repeat-cap/overrides ───────────────────────────
+app.put('/api/admin/policies/repeat-cap/overrides', async (req, res) => {
+  try {
+    const fn = await getAdminHandler();
+    const result = await fn(
+      {
+        httpMethod: 'PUT',
+        path: '/api/admin/policies/repeat-cap/overrides',
         headers: req.headers,
         body: JSON.stringify(req.body),
         requestContext: { requestId: randomUUID() },

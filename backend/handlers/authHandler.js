@@ -15,8 +15,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { getAuthAdapter } from '../../src/auth/index.js';
-import { oauthStubAdapter } from '../../src/auth/oauthStubAdapter.js';
+import { getAuthAdapter, getOAuthAdapter } from '../../src/auth/index.js';
 import { getDbAdapter } from '../../src/db/index.js';
 
 const corsHeaders = {
@@ -151,6 +150,34 @@ function handleLogout() {
 }
 
 /**
+ * POST /api/auth/refresh
+ * Body: { refreshToken: string }
+ * Returns: { token: string } — a new short-lived (1h) access token (200)
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleRefresh(body) {
+  const { refreshToken } = body || {};
+
+  if (!refreshToken) {
+    return errorResponse(400, 'refreshToken is required.');
+  }
+
+  try {
+    const authAdapter = getAuthAdapter();
+    const token = authAdapter.refreshAccessToken(refreshToken);
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({ token }),
+    };
+  } catch {
+    return errorResponse(401, 'Invalid or expired refresh token.');
+  }
+}
+
+/**
  * POST /api/auth/oauth/:provider
  * Initiates an OAuth flow. Returns the provider's authorization URL so the
  * client can redirect the user.
@@ -165,7 +192,8 @@ async function handleOAuthInitiate(provider) {
     return errorResponse(400, 'OAuth provider is required.');
   }
 
-  const result = await oauthStubAdapter.initiateOAuth(provider);
+  const oauthAdapter = getOAuthAdapter();
+  const result = await oauthAdapter.initiateOAuth(provider);
 
   return {
     statusCode: 200,
@@ -199,7 +227,8 @@ async function handleOAuthCallback(provider, queryStringParameters) {
     return errorResponse(400, 'OAuth authorization code is required.');
   }
 
-  const result = await oauthStubAdapter.handleCallback(provider, code, state);
+  const oauthAdapter = getOAuthAdapter();
+  const result = await oauthAdapter.handleCallback(provider, code, state);
 
   return {
     statusCode: 200,
@@ -243,6 +272,10 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/logout')) {
       return handleLogout();
+    }
+
+    if (path.endsWith('/refresh')) {
+      return await handleRefresh(body);
     }
 
     // POST /api/auth/oauth/:provider — initiate OAuth flow

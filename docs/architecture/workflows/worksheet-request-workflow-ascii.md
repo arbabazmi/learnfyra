@@ -12,12 +12,13 @@ It reflects the current implementation in:
 ## 1) High-Level End-to-End Flow
 
 ```text
-+-------------------+        +-------------------+        +--------------------------+
-| Teacher Frontend  |        | API Entry Point   |        | Generation Pipeline      |
-| (index.html/app)  | -----> | /api/generate     | -----> | Validate -> Claude ->    |
-| POST payload      |        | (Express/Lambda)  |        | Export -> Store -> Reply |
-+-------------------+        +-------------------+        +--------------------------+
-         ^                                                            |
++-------------------+        +-------------------+        +--------------------------------------+
+| Teacher Frontend  |        | API Entry Point   |        | Generation Pipeline                  |
+| (index.html/app)  | -----> | /api/generate     | -----> | Validate -> Bank Lookup + Uniqueness |
+| POST payload      |        | (Express/Lambda)  |        | -> Claude Gap Fill -> Export ->      |
++-------------------+        +-------------------+        | Store -> Reply                        |
+         ^                                                  +--------------------------------------+
+         |                                                            |
          |                                                            v
          +-------------------- JSON success/error response -----------+
 ```
@@ -63,6 +64,10 @@ request:start
   -> request:parse-body (Lambda only)
   -> request:validate-body
   -> worksheet:generate
+      -> build request-scoped exclusion set (question ids + normalized fingerprints)
+      -> select reusable questions excluding already chosen candidates for this request
+      -> generate only missing unique question slots
+      -> reject duplicate / near-duplicate candidates before assembly
       -> auth:load-api-key (Lambda only, from SSM when needed)
       -> generateWorksheet()
           -> validate inputs (grade/subject/questionCount)
@@ -76,6 +81,30 @@ request:start
   -> answer-key:export (if includeAnswerKey=true)
   -> answer-key:upload (Lambda)
   -> response:success
+```
+
+## 3.1) Request-Scoped Non-Repetition Guardrail
+
+```text
+For every worksheet generation request:
+  -> start an empty exclusion set for this worksheet session
+  -> add each selected reusable question id/hash/canonical text fingerprint to the set
+  -> call AI only for the remaining slots that are still unique
+  -> normalize every AI candidate and compare it against the exclusion set
+  -> discard and regenerate or replace any duplicate / near-duplicate candidate
+  -> run a final uniqueness check before export so the assembled worksheet contains no repeated questions
+```
+
+## 3.2) Future-Session Repeat Cap Policy
+
+```text
+For future worksheet sessions for the same student and same grade+difficulty profile:
+  -> apply default repeat cap = 10% of total worksheet questions
+  -> compute maxRepeatQuestions = floor(questionCount * effectiveRepeatCapPercent / 100)
+  -> enforce this cap across historical question exposure for the student profile
+  -> if admin override exists, use effectiveRepeatCapPercent from override (0..100)
+  -> override scope can be student, teacher, or parent
+  -> reject or regenerate candidates that exceed the repeat allowance before final assembly
 ```
 
 ## 4) Frontend Payload Sent to /api/generate
@@ -201,5 +230,5 @@ AWS (generateHandler.js)
 ## 9) One-Line Summary
 
 ```text
-User submits form -> backend validates -> Claude generates worksheet JSON -> server exports files -> stores artifacts -> returns keys/metadata -> frontend renders download and solve actions.
+User submits form -> backend validates -> system selects only unique reusable questions -> Claude fills only the remaining unique slots -> server exports files -> stores artifacts -> returns keys/metadata -> frontend renders download and solve actions.
 ```

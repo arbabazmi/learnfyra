@@ -53,11 +53,11 @@ describe('validator', () => {
     });
 
     it('throws on count below minimum (4)', () => {
-      expect(() => validateQuestionCount(4)).toThrow('Question count must be between 5 and 10');
+      expect(() => validateQuestionCount(4)).toThrow('Question count must be between 5 and 30');
     });
 
-    it('throws on count above maximum (11)', () => {
-      expect(() => validateQuestionCount(11)).toThrow('Question count must be between 5 and 10');
+    it('throws on count above maximum (31)', () => {
+      expect(() => validateQuestionCount(31)).toThrow('Question count must be between 5 and 30');
     });
 
     it('throws on zero', () => {

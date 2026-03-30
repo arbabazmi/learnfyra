@@ -21,7 +21,7 @@ jest.unstable_mockModule('../../src/auth/index.js', () => ({
 
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
 
-const { validateToken, requireRole } =
+const { validateToken, requireRole, assertRole } =
   await import('../../backend/middleware/authMiddleware.js');
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -195,6 +195,66 @@ describe('requireRole — disallowed role', () => {
     } catch (err) {
       expect(err.statusCode).toBe(403);
     }
+  });
+
+});
+
+// ─── assertRole — admin role (DEC-AUTH-005) ───────────────────────────────────
+
+describe('assertRole — admin role (DEC-AUTH-005)', () => {
+
+  it('does not throw when role=admin and allowed roles include admin', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'admin' };
+    expect(() => assertRole(decoded, ['admin'])).not.toThrow();
+  });
+
+  it('throws 403 when role=teacher and only admin is allowed', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'teacher' };
+    try {
+      assertRole(decoded, ['admin']);
+    } catch (err) {
+      expect(err.statusCode).toBe(403);
+    }
+  });
+
+  it('throws 403 when role=student and only admin is allowed', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'student' };
+    try {
+      assertRole(decoded, ['admin']);
+    } catch (err) {
+      expect(err.statusCode).toBe(403);
+    }
+  });
+
+  it('throws 403 when role=parent and only admin is allowed', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'parent' };
+    try {
+      assertRole(decoded, ['admin']);
+    } catch (err) {
+      expect(err.statusCode).toBe(403);
+    }
+  });
+
+  it('does not throw when role=admin and both admin+teacher are allowed', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'admin' };
+    expect(() => assertRole(decoded, ['teacher', 'admin'])).not.toThrow();
+  });
+
+  it('does not throw when role=teacher and both admin+teacher are allowed', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'teacher' };
+    expect(() => assertRole(decoded, ['teacher', 'admin'])).not.toThrow();
+  });
+
+  it('thrown error has statusCode 403 when admin-only route accessed by teacher', () => {
+    const decoded = { sub: 'u1', email: 'a@b.com', role: 'teacher' };
+    let caught;
+    try {
+      assertRole(decoded, ['admin']);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeDefined();
+    expect(caught.statusCode).toBe(403);
   });
 
 });

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check C:/arbab-github/edusheet-ai/backend/middleware/authMiddleware.js)",
+      "Bash(node --check C:/arbab-github/edusheet-ai/src/auth/tokenUtils.js)",
+      "Bash(node --check C:/arbab-github/edusheet-ai/src/auth/mockAuthAdapter.js)",
+      "Bash(node --check C:/arbab-github/edusheet-ai/backend/handlers/authHandler.js)",
+      "Bash(node:*)",
+      "Bash(npm test:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Skill(update-config)",
+      "Bash(npm --version)",
+      "Bash(mv /c/arbab-github/edusheet-ai/.claude/hooks/syntax-check.js /c/arbab-github/edusheet-ai/.claude/hooks/syntax-check.cjs)",
+      "Bash(mv /c/arbab-github/edusheet-ai/.claude/hooks/test-handlers.js /c/arbab-github/edusheet-ai/.claude/hooks/test-handlers.cjs)",
+      "Read(//c/arbab-github/edusheet-ai/**)",
+      "Bash(grep -h \"^model:\" /c/arbab-github/edusheet-ai/.claude/agents/*.md)",
+      "Bash(grep -h \"use \\\\`\" /c/arbab-github/edusheet-ai/.claude/agents/*.md)",
+      "Bash(/c/arbab-github/edusheet-ai/learnfyra-docs/00-governance/decisions-log.md:*)",
+      "Bash(head -20 echo \"---\" grep -n \"ADR-010\\\\|ADR-011\\\\|ADR-012\\\\|ADR-013\\\\|ADR-014\" /c/arbab-github/edusheet-ai/learnfyra-docs/00-governance/decisions-log.md)",
+      "Bash(sort echo:*)",
+      "Bash(grep -c \"^| \" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md echo \"---\" grep \"| TODO\\\\|| BLOCKED\\\\|| IN PROGRESS\\\\|| DONE\" /c/arbab-github/edusheet-ai/learnfyra-docs/08-task-tracker/master-task-list.md)",
+      "Bash(2)",
+      "Bash(npm install:*)",
+      "Bash(git -C C:/arbab-github/edusheet-ai status --short)",
+      "Bash(grep:*)"
+    ]
+  }
+}

@@ -160,10 +160,11 @@ body {
   gap: 2px;
 }
 .sf-label {
-  font-size: 8pt;
+  font-size: 9pt;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-light);
 }
 .sf-line {
   border-bottom: 1pt solid var(--color-ink);

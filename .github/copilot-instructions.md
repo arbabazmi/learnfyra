@@ -51,6 +51,27 @@ This repository contains Learnfyra, an AI-powered USA curriculum worksheet platf
 - For newly added first-party code, run the required Snyk code scan workflow and fix findings introduced by the change.
 - Avoid logging secrets or sensitive user data.
 
+## Documentation Placement Policy
+
+When creating or updating documentation, always place files in the correct `docs/` subfolder based on intent.
+
+- Architecture and system/data flow docs: `docs/architecture/`
+- UI/UX and visual direction docs: `docs/design/`
+- Runbooks, deployment notes, checklists, and operational procedures: `docs/operations/`
+- Prompt engineering and reusable prompt assets: `docs/prompts/`
+- Test plans, QA matrices, validation checklists, and verification guides: `docs/qa/`
+- Product/business requirements and acceptance criteria: `docs/requirements/`
+- Module or API specifications and interface contracts: `docs/specs/`
+- Execution plans, task boards, and delivery trackers: `docs/tasks/`
+- Deep implementation notes and low-level technical references: `docs/technical/`
+
+Rules:
+
+- Do not place new documentation files at repository root unless explicitly requested.
+- Prefer updating an existing document in the correct folder before creating a new file.
+- If a document spans multiple categories, place it where it will be maintained most often and add cross-links in related folders.
+- Use clear, purpose-specific filenames; avoid generic names like `notes.md`.
+
 ## Default Agent Workflow
 
 For delivery work, follow this sequence unless the user explicitly asks otherwise:

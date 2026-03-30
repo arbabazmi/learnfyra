@@ -103,6 +103,36 @@ jobs:
             --overwrite \
             --region ${{ vars.AWS_REGION }}
 
+      - name: Write JWT secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/staging/jwt-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/staging/jwt-secret" \
+            --secret-string "${{ secrets.JWT_SECRET_STAGING }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/staging/jwt-secret" \
+            --description "JWT signing secret for Learnfyra staging" \
+            --secret-string "${{ secrets.JWT_SECRET_STAGING }}" \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Write Google OAuth client secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/staging/google-client-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/staging/google-client-secret" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_STAGING }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/staging/google-client-secret" \
+            --description "Google OAuth client secret for Learnfyra staging" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_STAGING }}" \
+            --region ${{ vars.AWS_REGION }}
+
       - name: Install app dependencies (needed by esbuild when bundling Lambdas)
         run: npm ci
 

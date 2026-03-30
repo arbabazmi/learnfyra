@@ -45,6 +45,18 @@ This document defines the complete Phase 1 module structure for Learnfyra, an AI
 - JWT-based session management
 - Auth gate for online features
 
+**Auth Environment Configuration (Google OAuth metadata):**
+
+| Environment | Client ID | Project ID | Auth URL | Token URL | Cert URL | JavaScript Origins |
+|---|---|---|---|---|---|---|
+| Prod | 1079696386286-edsmfmdk6j8073qnm05ui6b2c6o655o.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | https://www.learnfyra.com, https://admin.learnfyra.com |
+| Dev | 1079696386286-m95l3vrmh157sgji4njii0afftoglc9b.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | https://dev.learnfyra.com |
+| QA | 1079696386286-hjn155lvt8sr4cc0g1e3f8mfvs6mgbk.apps.googleusercontent.com | learnfyra | https://accounts.google.com/o/oauth2/auth | https://oauth2.googleapis.com/token | https://www.googleapis.com/oauth2/v1/certs | TBD |
+
+**Security Note:**
+- OAuth client secrets and signing keys MUST be stored outside this repository (AWS Secrets Manager or equivalent secure store).
+- Only non-secret OAuth metadata (client ID, endpoints, allowed origins) is documented here.
+
 **Key Services:** AWS Cognito, Lambda Authorizer, SES/SendGrid  
 **Data Storage:** DynamoDB Users table  
 
@@ -299,6 +311,9 @@ So that I can provide effective at-home practice.
   model_used, token_cost, quality_score, created_at, reuse_count
   ```
 - System SHALL deduplicate questions on insert (hash of question text + answer)
+- System SHALL maintain request-scoped exclusion during worksheet assembly so the same student request/session does not receive repeated or near-duplicate questions
+- System SHALL enforce a default future-session repeat cap of 10% for the same student at the same grade and difficulty
+- System SHALL allow admin-configured repeat-cap overrides at student, teacher, or parent scope with valid range 0% to 100%
 - System MUST support queries: by grade+subject+topic+difficulty+type
 
 #### FR-GEN-002: Multi-Model AI Strategy
@@ -309,10 +324,10 @@ So that I can provide effective at-home practice.
 
 #### FR-GEN-003: Five-Stage Generation Pipeline
 1. **Request** — Accept grade, subject, topic, difficulty, questionCount
-2. **Check Bank** — Query DynamoDB for existing questions, randomize selection
-3. **Generate** — If insufficient, call Bedrock to generate new questions
-4. **Validate** — Standards alignment check, answer format verification
-5. **Assemble** — Combine bank + new questions, save to S3 as worksheet JSON
+2. **Check Bank** — Query DynamoDB for existing questions, randomize selection, exclude duplicates already chosen for the current worksheet session
+3. **Generate** — If insufficient, call Bedrock to generate only the remaining unique questions
+4. **Validate** — Standards alignment check, answer format verification, duplicate/near-duplicate screening against already selected questions
+5. **Assemble** — Combine bank + new questions, run final uniqueness check, save to S3 as worksheet JSON
 
 #### FR-GEN-004: Standards Alignment
 - System MUST embed CCSS codes for Math/ELA or NGSS codes for Science
@@ -600,8 +615,21 @@ Given a teacher requests worksheet: Grade 3, Math, Multiplication, Medium, 10 qu
 When Question Bank contains 8 matching questions
 Then system retrieves 8 from bank and generates 2 new questions via Bedrock
 And new questions are validated and saved to Question Bank
+And the 10 selected questions are unique within that worksheet request/session
 And 10 questions are assembled into worksheet JSON
 And worksheet.pdf, .docx, .html, answer key are generated and uploaded to S3
+```
+
+### AC-GEN-004: Future-Session Repeat Cap and Admin Override
+```
+Given the same student requests another worksheet with the same grade and difficulty in a future session
+When no override is configured
+Then the system allows at most 10% repeated questions from prior exposure for that student profile
+
+Given an admin configures an override for student, teacher, or parent scope
+When effective repeat cap is set between 0% and 100%
+Then worksheet assembly enforces the configured cap for applicable future sessions
+And any candidate exceeding the cap is replaced before final worksheet output
 ```
 
 ### AC-GEN-002: Multi-Model Fallback

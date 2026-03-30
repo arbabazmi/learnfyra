@@ -13,6 +13,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -57,6 +58,25 @@ export class LearnfyraStack extends cdk.Stack {
     const tracingMode =
       isProd || appEnv === 'staging' ? lambda.Tracing.ACTIVE : lambda.Tracing.DISABLED;
 
+    // Explicit CloudFormation stack description helps ops identify purpose quickly.
+    this.templateOptions.description =
+      `Learnfyra ${appEnv} stack: API, Lambda handlers, Cognito auth, CloudFront, and S3 assets`;
+
+    // Google OAuth Client IDs per environment (public identifiers — not secrets)
+    const googleClientIds: Record<string, string> = {
+      dev:     '1079696386286-m95l3vrmh157sgji4njii0afftoglc9b.apps.googleusercontent.com',
+      staging: '1079696386286-hjn155lvlt8sr4cc0g1e3f8mfvs6mgbk.apps.googleusercontent.com',
+      prod:    '1079696386286-edsmfmdk6j8073qnm05uii6b2c6o655o.apps.googleusercontent.com',
+    };
+
+    // OAuth callback base URLs per environment
+    const callbackBaseUrls: Record<string, string> = {
+      dev:     'https://dev.learnfyra.com',
+      staging: 'https://qa.learnfyra.com',
+      prod:    'https://www.learnfyra.com',
+    };
+    const callbackBaseUrl = callbackBaseUrls[appEnv] ?? 'http://localhost:3000';
+
     const rootDomainName = props.rootDomainName;
     const hostedZoneId = props.hostedZoneId;
     const zone =
@@ -83,7 +103,9 @@ export class LearnfyraStack extends cdk.Stack {
     const adminDomainName = isProd
       ? `admin.${rootDomainName}`
       : `admin.${dnsEnvLabel}.${rootDomainName}`;
-    const authDomainName = `auth.dev.${rootDomainName}`;
+    const authDomainName = isProd
+      ? `auth.${rootDomainName}`
+      : `auth.${dnsEnvLabel}.${rootDomainName}`;
 
     let cloudFrontCertificate: acm.ICertificate | undefined;
     if (enableCustomDomains) {
@@ -99,9 +121,13 @@ export class LearnfyraStack extends cdk.Stack {
 
     // ── Tag all resources ─────────────────────────────────────────────────────
     cdk.Tags.of(this).add('Project', 'learnfyra');
+    cdk.Tags.of(this).add('Application', 'learnfyra');
     cdk.Tags.of(this).add('Env', appEnv);
     cdk.Tags.of(this).add('Environment', appEnv);
+    cdk.Tags.of(this).add('Stage', appEnv);
     cdk.Tags.of(this).add('ManagedBy', 'cdk');
+    cdk.Tags.of(this).add('Repository', 'arbabazmi/learnfyra');
+    cdk.Tags.of(this).add('Workload', 'serverless');
 
     // ── S3: Worksheet bucket (private) ────────────────────────────────────────
     const worksheetBucket = new s3.Bucket(this, 'WorksheetBucket', {
@@ -169,6 +195,16 @@ export class LearnfyraStack extends cdk.Stack {
         metricsEnabled: true,
         throttlingRateLimit: isDev ? 2 : 10,
         throttlingBurstLimit: isDev ? 5 : 20,
+        methodOptions: {
+          '/api/auth/register/POST': {
+            throttlingRateLimit: 1,
+            throttlingBurstLimit: 2,
+          },
+          '/api/auth/login/POST': {
+            throttlingRateLimit: 1,
+            throttlingBurstLimit: 2,
+          },
+        },
       },
     });
 
@@ -220,11 +256,66 @@ export class LearnfyraStack extends cdk.Stack {
       this, 'AnthropicApiKey',
       { parameterName: `/learnfyra/${appEnv}/anthropic-api-key` }
     );
-    const jwtSecretValue = ssm.StringParameter.valueForStringParameter(
-      this,
+    // JWT secret — stored in Secrets Manager (not SSM) so it is encrypted at rest
+    // and resolved via CloudFormation dynamic reference into the Lambda env var.
+    const jwtSecretValue = cdk.SecretValue.secretsManager(
       `/learnfyra/${appEnv}/jwt-secret`
-    );
+    ).unsafeUnwrap();
     const allowedOrigin = enableCustomDomains ? `https://${webDomainName}` : '*';
+
+    // ── Cognito: User Pool ─────────────────────────────────────────────────────
+    const userPool = new cognito.UserPool(this, 'UserPool', {
+      userPoolName: `learnfyra-${appEnv}-user-pool`,
+      selfSignUpEnabled: false,
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      removalPolicy,
+    });
+
+    // Google identity provider — client secret fetched from Secrets Manager at deploy time
+    const googleIdp = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdp', {
+      userPool,
+      clientId: googleClientIds[appEnv],
+      clientSecretValue: cdk.SecretValue.secretsManager(`/learnfyra/${appEnv}/google-client-secret`),
+      scopes: ['openid', 'email', 'profile'],
+      attributeMapping: {
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+        fullname: cognito.ProviderAttribute.GOOGLE_NAME,
+      },
+    });
+
+    // Cognito Hosted UI domain
+    const userPoolDomain = new cognito.UserPoolDomain(this, 'UserPoolDomain', {
+      userPool,
+      cognitoDomain: { domainPrefix: `learnfyra-${appEnv}` },
+    });
+
+    // Construct full Cognito domain URL — region resolves at deploy time
+    const cognitoDomainUrl = `https://learnfyra-${appEnv}.auth.${this.region}.amazoncognito.com`;
+
+    // App Client (public — no client secret; PKCE handled by Cognito Hosted UI)
+    const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
+      userPool,
+      userPoolClientName: `learnfyra-${appEnv}-app-client`,
+      generateSecret: false,
+      oAuth: {
+        flows: { authorizationCodeGrant: true },
+        scopes: [
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.PROFILE,
+        ],
+        callbackUrls: [`${callbackBaseUrl}/api/auth/callback/google`],
+        logoutUrls: [callbackBaseUrl],
+      },
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+      ],
+    });
+    // App client must be created after the IdP exists
+    userPoolClient.node.addDependency(googleIdp);
+    // Suppress unused variable warning — domain is a required CDK construct
+    void userPoolDomain;
 
     // Shared esbuild bundling options — bundles handler + all src/ imports into
     // a single CJS file. @aws-sdk/* is excluded (provided by the Lambda runtime).
@@ -321,6 +412,24 @@ export class LearnfyraStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-auth — auth route handler`,
+    });
+
+    // ── Lambda: API Gateway token authorizer ─────────────────────────────────
+    const apiAuthorizerFn = new NodejsFunction(this, 'ApiAuthorizerFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-api-authorizer`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('apiAuthorizerHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(5),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-api-authorizer — API Gateway JWT authorizer`,
     });
 
     // ── Lambda: Solve handler ──────────────────────────────────────────────────
@@ -489,10 +598,31 @@ export class LearnfyraStack extends cdk.Stack {
     });
 
     [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn].forEach((fn) => {
-      fn.addEnvironment('AUTH_MODE', 'mock');
-      fn.addEnvironment('APP_RUNTIME', 'local');
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
+      fn.addEnvironment('AUTH_MODE', 'cognito');
     });
+
+    apiAuthorizerFn.addEnvironment('JWT_SECRET', jwtSecretValue);
+    apiAuthorizerFn.addEnvironment('AUTH_MODE', 'cognito');
+
+    const tokenAuthorizer = new apigateway.TokenAuthorizer(this, 'ApiTokenAuthorizer', {
+      handler: apiAuthorizerFn,
+      identitySource: apigateway.IdentitySource.header('Authorization'),
+      resultsCacheTtl: cdk.Duration.minutes(5),
+    });
+
+    // OAUTH_CALLBACK_BASE_URL: used by OAuth adapters to build the redirect URI.
+    // dev:  CloudFront domain (or '*' when custom domains disabled for local testing)
+    // staging/prod: CloudFront domain for the environment
+    const oauthCallbackBaseUrl = enableCustomDomains
+      ? `https://${webDomainName}`
+      : `https://${distribution.distributionDomainName}`;
+    authFn.addEnvironment('OAUTH_CALLBACK_BASE_URL', oauthCallbackBaseUrl);
+
+    // Cognito env vars — used by cognitoAdapter.js for Google OAuth flow
+    authFn.addEnvironment('COGNITO_USER_POOL_ID', userPool.userPoolId);
+    authFn.addEnvironment('COGNITO_APP_CLIENT_ID', userPoolClient.userPoolClientId);
+    authFn.addEnvironment('COGNITO_DOMAIN', cognitoDomainUrl);
 
     [generateFn, adminFn].forEach((fn) => {
       fn.addEnvironment('QB_ADAPTER', 'local');
@@ -504,7 +634,11 @@ export class LearnfyraStack extends cdk.Stack {
     generateResource.addMethod(
       'POST',
       new apigateway.LambdaIntegration(generateFn, { proxy: true }),
-      { apiKeyRequired: false }
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
     );
 
     const downloadResource = apiResource.addResource('download');
@@ -530,6 +664,11 @@ export class LearnfyraStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
+    authResource
+      .addResource('refresh')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
 
     const authOauthResource = authResource.addResource('oauth');
     authOauthResource
@@ -549,6 +688,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('submit')
       .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     apiResource
@@ -556,6 +697,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('{worksheetId}')
       .addMethod('GET', new apigateway.LambdaIntegration(solveFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const progressResource = apiResource.addResource('progress');
@@ -563,11 +706,15 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('save')
       .addMethod('POST', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     progressResource
       .addResource('history')
       .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const classResource = apiResource.addResource('class');
@@ -575,12 +722,16 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('create')
       .addMethod('POST', new apigateway.LambdaIntegration(classFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     classResource
       .addResource('{id}')
       .addResource('students')
       .addMethod('GET', new apigateway.LambdaIntegration(classFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     apiResource
@@ -589,6 +740,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('{id}')
       .addMethod('GET', new apigateway.LambdaIntegration(analyticsFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const rewardsResource = apiResource.addResource('rewards');
@@ -597,12 +750,16 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('{id}')
       .addMethod('GET', new apigateway.LambdaIntegration(rewardsFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     rewardsResource
       .addResource('class')
       .addResource('{id}')
       .addMethod('GET', new apigateway.LambdaIntegration(rewardsFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const studentResource = apiResource.addResource('student');
@@ -610,11 +767,15 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('profile')
       .addMethod('GET', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     studentResource
       .addResource('join-class')
       .addMethod('POST', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const qbResource = apiResource.addResource('qb');
@@ -622,21 +783,29 @@ export class LearnfyraStack extends cdk.Stack {
     qbQuestionsResource
       .addMethod('GET', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     qbQuestionsResource
       .addMethod('POST', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const qbQuestionById = qbQuestionsResource.addResource('{id}');
     qbQuestionById
       .addMethod('GET', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     qbQuestionById
       .addResource('reuse')
       .addMethod('POST', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const monitoredFunctions = [

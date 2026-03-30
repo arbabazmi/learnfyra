@@ -7,13 +7,11 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Project root is two levels up from src/db/
-const DATA_DIR = join(__dirname, '../../data-local');
+// Use process.cwd() so the adapter works in both local ESM runs and bundled
+// Lambda CJS output, where import.meta.url can be unavailable at module init.
+const DATA_DIR = process.env.DATA_DIR || join(process.cwd(), 'data-local');
 
 const _writeLocks = new Map();
 

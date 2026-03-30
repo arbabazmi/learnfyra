@@ -36,3 +36,7 @@ Before considering a delivery complete:
 - Project stack: Node.js 18+, ESM modules, Express local server, AWS Lambda-style handlers.
 - Core run command for local web app: `npm run dev` (serves frontend + `/api/*` routes).
 - Keep changes local-first unless the request explicitly asks for AWS deployment wiring.
+
+## Documentation Placement Rule
+
+When creating documentation, place files under the correct `docs/` category folder (architecture, design, operations, prompts, qa, requirements, specs, tasks, technical). Avoid placing new docs at repository root unless explicitly requested.

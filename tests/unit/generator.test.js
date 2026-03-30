@@ -201,12 +201,12 @@ describe('generateWorksheet()', () => {
 
   it('throws on question count below minimum (4) without calling API', async () => {
     await expect(generateWorksheet({ ...validOptions, questionCount: 4 }))
-      .rejects.toThrow('Question count must be between 5 and 10');
+      .rejects.toThrow('Question count must be between 5 and 30');
     expect(anthropic.messages.create).not.toHaveBeenCalled();
   });
 
-  it('throws on question count above maximum (11) without calling API', async () => {
-    await expect(generateWorksheet({ ...validOptions, questionCount: 11 }))
+  it('throws on question count above maximum (31) without calling API', async () => {
+    await expect(generateWorksheet({ ...validOptions, questionCount: 31 }))
       .rejects.toThrow();
     expect(anthropic.messages.create).not.toHaveBeenCalled();
   });

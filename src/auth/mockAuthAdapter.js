@@ -20,7 +20,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { getDbAdapter } from '../../src/db/index.js';
-import { signToken, verifyToken as verifyJwt } from './tokenUtils.js';
+import { signToken, verifyToken as verifyJwt, signRefreshToken, verifyRefreshToken } from './tokenUtils.js';
 
 const USERS_TABLE = 'users';
 const BCRYPT_ROUNDS = 10;
@@ -133,5 +133,30 @@ export const mockAuthAdapter = {
    */
   verifyToken(token) {
     return verifyJwt(token);
+  },
+
+  /**
+   * Issues a signed refresh token for the given user.
+   * The refresh token contains sub, email, role, and type='refresh'.
+   * Use POST /api/auth/refresh with this token to obtain a new access token.
+   *
+   * @param {Object} user - Public user object (must have userId, email, role)
+   * @returns {string} Signed refresh JWT string
+   */
+  generateRefreshToken(user) {
+    return signRefreshToken({ sub: user.userId, email: user.email, role: user.role });
+  },
+
+  /**
+   * Verifies a refresh token and issues a new short-lived (1h) access token.
+   * Throws if the refresh token is invalid, expired, or not of type 'refresh'.
+   *
+   * @param {string} refreshToken - Refresh JWT string
+   * @returns {string} New signed access token (1h expiry)
+   * @throws {Error} If the refresh token is invalid or expired
+   */
+  refreshAccessToken(refreshToken) {
+    const decoded = verifyRefreshToken(refreshToken);
+    return signToken({ sub: decoded.sub, email: decoded.email, role: decoded.role }, '1h');
   },
 };

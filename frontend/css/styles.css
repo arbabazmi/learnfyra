@@ -970,6 +970,76 @@ body {
 }
 
 /* ---------------------------------------------------------------
+   Delivery Mode Toggle — Online vs Download cards
+   --------------------------------------------------------------- */
+.mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-4) var(--space-5);
+  border: 2px solid var(--color-cloud);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  background: var(--color-white);
+  position: relative;
+}
+
+.mode-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.mode-card:hover {
+  border-color: var(--color-cloud-dark);
+  box-shadow: var(--shadow-xs);
+}
+
+.mode-card.is-selected {
+  border-color: var(--color-sky);
+  background: var(--color-sky-soft);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.10);
+}
+
+.mode-card__icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.mode-card__title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-ink);
+  line-height: 1.2;
+}
+
+.mode-card.is-selected .mode-card__title {
+  color: var(--color-sky-dark);
+}
+
+.mode-card__desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 480px) {
+  .mode-toggle {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------
    Print — preserve worksheet print functionality
    --------------------------------------------------------------- */
 @media print {

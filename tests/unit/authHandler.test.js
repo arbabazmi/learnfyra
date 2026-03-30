@@ -14,11 +14,12 @@ const VALID_TEACHER_ID   = '22222222-2222-4222-8222-222222222222';
 
 // ─── Mock auth adapter methods ────────────────────────────────────────────────
 
-const mockCreateUser    = jest.fn();
-const mockFindUser      = jest.fn();
-const mockVerifyPassword = jest.fn();
-const mockGenerateToken = jest.fn();
-const mockVerifyToken   = jest.fn();
+const mockCreateUser         = jest.fn();
+const mockFindUser           = jest.fn();
+const mockVerifyPassword     = jest.fn();
+const mockGenerateToken      = jest.fn();
+const mockVerifyToken        = jest.fn();
+const mockRefreshAccessToken = jest.fn();
 
 // ─── Mock OAuth stub adapter methods ─────────────────────────────────────────
 
@@ -35,21 +36,17 @@ const mockQueryByField  = jest.fn();
 
 jest.unstable_mockModule('../../src/auth/index.js', () => ({
   getAuthAdapter: jest.fn(() => ({
-    createUser:      mockCreateUser,
-    findUserByEmail: mockFindUser,
-    verifyPassword:  mockVerifyPassword,
-    generateToken:   mockGenerateToken,
-    verifyToken:     mockVerifyToken,
+    createUser:          mockCreateUser,
+    findUserByEmail:     mockFindUser,
+    verifyPassword:      mockVerifyPassword,
+    generateToken:       mockGenerateToken,
+    verifyToken:         mockVerifyToken,
+    refreshAccessToken:  mockRefreshAccessToken,
   })),
-}));
-
-// ─── Mock ../../src/auth/oauthStubAdapter.js BEFORE any dynamic import ───────
-
-jest.unstable_mockModule('../../src/auth/oauthStubAdapter.js', () => ({
-  oauthStubAdapter: {
+  getOAuthAdapter: jest.fn(() => ({
     initiateOAuth:  mockInitiateOAuth,
     handleCallback: mockHandleCallback,
-  },
+  })),
 }));
 
 // ─── Mock ../../src/db/index.js BEFORE any dynamic import ────────────────────
@@ -656,6 +653,85 @@ describe('authHandler — Lambda context guard', () => {
     const ctx = { callbackWaitsForEmptyEventLoop: true };
     await handler({ httpMethod: 'OPTIONS' }, ctx);
     expect(ctx.callbackWaitsForEmptyEventLoop).toBe(false);
+  });
+
+});
+
+// ─── POST /api/auth/refresh — happy path ──────────────────────────────────────
+
+describe('authHandler — POST /api/auth/refresh happy path', () => {
+
+  beforeEach(() => {
+    mockRefreshAccessToken.mockReturnValue('new-access-token');
+  });
+
+  it('returns 200 for a valid refresh token', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(200);
+  });
+
+  it('response body contains { token }', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('token', 'new-access-token');
+  });
+
+  it('calls authAdapter.refreshAccessToken with the refreshToken from body', async () => {
+    await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(mockRefreshAccessToken).toHaveBeenCalledWith('valid-refresh-jwt');
+  });
+
+  it('CORS headers are present on 200 refresh response', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── POST /api/auth/refresh — error cases ────────────────────────────────────
+
+describe('authHandler — POST /api/auth/refresh error cases', () => {
+
+  it('returns 400 when refreshToken field is missing from body', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', {}),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 401 when refreshAccessToken throws (invalid/expired token)', async () => {
+    mockRefreshAccessToken.mockImplementation(() => {
+      throw new Error('jwt expired');
+    });
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'expired-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('CORS headers are present on 401 refresh response', async () => {
+    mockRefreshAccessToken.mockImplementation(() => {
+      throw new Error('jwt malformed');
+    });
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'bad-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
 });

@@ -112,6 +112,36 @@ jobs:
             --overwrite \
             --region ${{ vars.AWS_REGION }}
 
+      - name: Write JWT secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/prod/jwt-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/prod/jwt-secret" \
+            --secret-string "${{ secrets.JWT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/prod/jwt-secret" \
+            --description "JWT signing secret for Learnfyra prod" \
+            --secret-string "${{ secrets.JWT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Write Google OAuth client secret to Secrets Manager
+        run: |
+          aws secretsmanager describe-secret \
+            --secret-id "/learnfyra/prod/google-client-secret" \
+            --region ${{ vars.AWS_REGION }} > /dev/null 2>&1 \
+          && aws secretsmanager update-secret \
+            --secret-id "/learnfyra/prod/google-client-secret" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }} \
+          || aws secretsmanager create-secret \
+            --name "/learnfyra/prod/google-client-secret" \
+            --description "Google OAuth client secret for Learnfyra production" \
+            --secret-string "${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" \
+            --region ${{ vars.AWS_REGION }}
+
       - name: Install app dependencies (needed by esbuild when bundling Lambdas)
         run: npm ci
 

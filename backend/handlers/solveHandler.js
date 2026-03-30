@@ -12,7 +12,8 @@ import { promises as fs } from 'fs';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// __dirname is not available in Lambda CJS bundle; use process.cwd() for root
+const __dirname = process.cwd();
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -106,8 +107,8 @@ export const handler = async (event, context) => {
       };
     }
 
-    // Local dev: resolve path 2 levels up from backend/handlers/ to project root
-    const baseDir = resolve(join(__dirname, '../../worksheets-local'));
+    // Local dev: process.cwd() is already the project root
+    const baseDir = resolve(join(__dirname, 'worksheets-local'));
     const localDir = resolve(join(baseDir, worksheetId));
 
     // Ensure the resolved path stays within the worksheets-local directory

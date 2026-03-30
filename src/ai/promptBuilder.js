@@ -166,7 +166,7 @@ function _buildPromptBody(options, strict) {
   return (
     `${strictPrefix}` +
     `Generate a ${difficulty} difficulty worksheet for Grade ${grade} ${subject} ` +
-    `on the topic of "${topic}".\n\n` +
+    `on the topic of "${topic.replace(/"/g, '\\"')}".\n\n` +
     `Requirements:\n` +
     `- Produce EXACTLY ${questionCount} question objects in the "questions" array\n` +
     `- Use only these question types: ${questionTypes}\n` +
