@@ -54,5 +54,12 @@
     "studentId": "afa499ce-a91a-49e0-aec1-43e2c0029f03",
     "joinedAt": "2026-03-30T02:22:01.922Z",
     "status": "active"
+  },
+  {
+    "id": "9d847a83-317d-4520-8370-944e9685dc94#765f0635-910d-4493-ad31-5fdcc0faaaac",
+    "classId": "9d847a83-317d-4520-8370-944e9685dc94",
+    "studentId": "765f0635-910d-4493-ad31-5fdcc0faaaac",
+    "joinedAt": "2026-03-30T03:49:25.146Z",
+    "status": "active"
   }
 ]

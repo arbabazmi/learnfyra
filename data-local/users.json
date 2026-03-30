@@ -258,5 +258,35 @@
     "authType": "local:email",
     "createdAt": "2026-03-30T02:21:56.527Z",
     "lastActiveAt": "2026-03-30T02:21:56.527Z"
+  },
+  {
+    "userId": "765f0635-910d-4493-ad31-5fdcc0faaaac",
+    "email": "student.20260329224920@example.com",
+    "passwordHash": "$2b$10$OkP0KUTdNINUfd/jWiZwUuS5PULmrezNer34HIlPL.IO7Rla2iLVK",
+    "role": "student",
+    "displayName": "API Test Student",
+    "authType": "local:email",
+    "createdAt": "2026-03-30T03:49:21.433Z",
+    "lastActiveAt": "2026-03-30T03:49:21.433Z"
+  },
+  {
+    "userId": "e6f5b6c7-2563-4f87-b3dc-c94698c9e2c9",
+    "email": "teacher.20260329224920@example.com",
+    "passwordHash": "$2b$10$4K2xWn.3mrwoArLCoR5FlOjAXjBZ2x2cShYe8lZyuNJuNPG24OfRC",
+    "role": "teacher",
+    "displayName": "API Test Teacher",
+    "authType": "local:email",
+    "createdAt": "2026-03-30T03:49:21.625Z",
+    "lastActiveAt": "2026-03-30T03:49:21.625Z"
+  },
+  {
+    "userId": "6a07cfc4-810a-444d-a85a-ab7021d83fe0",
+    "email": "parent.20260329224920@example.com",
+    "passwordHash": "$2b$10$Tc84zFxTYXqSxwGUeCfKxuQyLolEXYMQqMwbwFoEp7AD3X0Z4znh6",
+    "role": "parent",
+    "displayName": "API Test Parent",
+    "authType": "local:email",
+    "createdAt": "2026-03-30T03:49:21.849Z",
+    "lastActiveAt": "2026-03-30T03:49:21.849Z"
   }
 ]

@@ -70,5 +70,14 @@
     "subject": "Math",
     "inviteCode": "B7LQKW",
     "createdAt": "2026-03-30T02:22:01.710Z"
+  },
+  {
+    "classId": "9d847a83-317d-4520-8370-944e9685dc94",
+    "teacherId": "e6f5b6c7-2563-4f87-b3dc-c94698c9e2c9",
+    "className": "API Class 20260329224920",
+    "grade": 4,
+    "subject": "Math",
+    "inviteCode": "CMA0X4",
+    "createdAt": "2026-03-30T03:49:25.034Z"
   }
 ]

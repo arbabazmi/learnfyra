@@ -190,5 +190,37 @@
     },
     "suspiciousAttemptCount": 0,
     "updatedAt": "2026-03-30T02:22:02.018Z"
+  },
+  {
+    "id": "765f0635-910d-4493-ad31-5fdcc0faaaac",
+    "lifetimePoints": 11,
+    "monthlyPoints": 11,
+    "dailyPoints": 11,
+    "dailyPointsDate": "2026-03-30",
+    "currentStreak": 1,
+    "longestStreak": 1,
+    "lastActiveDate": "2026-03-30",
+    "freezeTokens": 0,
+    "badges": [
+      {
+        "id": "first-steps",
+        "name": "First Steps",
+        "emoji": "🎯",
+        "description": "Complete your first worksheet",
+        "earnedAt": "2026-03-30T03:49:25.281Z"
+      }
+    ],
+    "totalAttempts": 1,
+    "perfectScoreCount": 0,
+    "topicStats": {
+      "Factors and Multiples": {
+        "count": 1,
+        "totalScore": 80,
+        "avgScore": 80,
+        "perfectCount": 0
+      }
+    },
+    "suspiciousAttemptCount": 0,
+    "updatedAt": "2026-03-30T03:49:25.281Z"
   }
 ]

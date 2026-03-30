@@ -14,6 +14,14 @@
  *     4. validateTopLevel()      — checks required top-level fields
  *     5. validateQuestions()     — checks each question object
  *     6. validateQuestionCount() — exact count must match requested count
+ *
+ *   Bank-first assembly (when QB_ADAPTER is set and not 'off'):
+ *     - Attempts to serve questions from the question bank first
+ *     - Falls back to Claude AI for any shortfall
+ *     - Stores every new AI-generated question back into the bank
+ *     - Records reuse of every banked question used
+ *     - Returns generationMode ('ai-only' | 'mixed' | 'bank-only') and
+ *       provenanceLevel array (one entry per question: 'bank' | 'ai')
  * @agent DEV
  */
 
@@ -23,6 +31,7 @@ import { withRetry } from '../utils/retryUtils.js';
 import { validateGrade, validateQuestionCount, validateSubject } from '../cli/validator.js';
 import { logger } from '../utils/logger.js';
 import { mockGenerateWorksheet } from './mockAi.js';
+import { recordQuestionReuse } from '../questionBank/reuseHook.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -217,10 +226,87 @@ function validateQuestions(data, expectedCount) {
   }
 }
 
+// ─── Bank-first helpers ───────────────────────────────────────────────────────
+
+/**
+ * Returns true when the question bank integration is enabled.
+ * Disabled when QB_ADAPTER is unset or explicitly set to 'off'.
+ * @returns {boolean}
+ */
+function isBankEnabled() {
+  const val = process.env.QB_ADAPTER;
+  return Boolean(val) && val !== 'off';
+}
+
+/**
+ * Fisher-Yates in-place shuffle.
+ * @param {Array} arr
+ * @returns {Array} The same array, shuffled
+ */
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Attempts to fetch candidate questions from the question bank for the given
+ * worksheet parameters. Returns an empty array on any error so a bank failure
+ * never prevents worksheet generation.
+ *
+ * @param {{ grade, subject, topic, difficulty }} options
+ * @returns {Promise<Object[]>} Bank questions (may be empty)
+ */
+async function fetchBankQuestions(options) {
+  try {
+    const { getQuestionBankAdapter } = await import('../questionBank/index.js');
+    const qb = await getQuestionBankAdapter();
+    return await qb.listQuestions({
+      grade:      options.grade,
+      subject:    options.subject,
+      topic:      options.topic,
+      difficulty: options.difficulty,
+    });
+  } catch (err) {
+    logger.warn(`Question bank lookup failed — falling back to ai-only: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Stores AI-generated questions back into the question bank.
+ * Errors are swallowed so a bank-write failure never breaks worksheet delivery.
+ *
+ * @param {Object[]} questions - Validated AI-generated question objects
+ * @returns {Promise<void>}
+ */
+async function storeToBankSilently(questions) {
+  try {
+    const { getQuestionBankAdapter } = await import('../questionBank/index.js');
+    const qb = await getQuestionBankAdapter();
+    for (const q of questions) {
+      await qb.addIfNotExists(q, q);
+    }
+  } catch (err) {
+    logger.warn(`Question bank write failed (non-fatal): ${err.message}`);
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Generates a worksheet by calling the Claude API with retry and escalating prompts.
+ *
+ * When QB_ADAPTER is set and not 'off', the bank-first pipeline is active:
+ *   - 'bank-only'  — all questions served from the bank (no Claude call)
+ *   - 'mixed'      — some from bank, remainder from Claude
+ *   - 'ai-only'    — bank empty / disabled; full Claude generation
+ *
+ * Additional fields on the returned worksheet:
+ *   generationMode   {string}   — 'ai-only' | 'mixed' | 'bank-only'
+ *   provenanceLevel  {string[]} — parallel to questions; 'bank' | 'ai' per question
  *
  * @param {Object} options - Worksheet generation options
  * @param {number}  options.grade         - Grade level 1–10
@@ -236,91 +322,194 @@ export async function generateWorksheet(options) {
     return mockGenerateWorksheet(options);
   }
 
-  const { grade, subject, questionCount } = options;
+  const { grade, subject, topic, difficulty, questionCount } = options;
   const isLambdaRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
   const anthropicRequestTimeoutMs = parseInt(
     process.env.ANTHROPIC_REQUEST_TIMEOUT_MS || (isLambdaRuntime ? '22000' : '60000'),
     10
   );
 
-  // Validate inputs before touching the API
+  // Validate inputs before touching the API or bank
   validateGrade(grade);
   validateSubject(subject);
   validateQuestionCount(questionCount);
 
-  const systemPrompt = buildSystemPrompt();
-  let attemptNumber = 0;
+  // ── Bank-first assembly ──────────────────────────────────────────────────
+  let bankPool    = [];
+  let bankEnabled = isBankEnabled();
 
-  const callClaude = async () => {
-    // Escalate to the strict prompt after the first failure
-    const userPrompt = attemptNumber === 0
-      ? buildUserPrompt(options)
-      : buildStrictUserPrompt(options);
+  if (bankEnabled) {
+    bankPool = await fetchBankQuestions({ grade, subject, topic, difficulty });
+    shuffleInPlace(bankPool);
+  }
 
-    logger.debug(`Claude API call (attempt ${attemptNumber + 1})…`);
+  const bankQuestions = bankPool.slice(0, questionCount);
+  const bankCount     = bankQuestions.length;
+  const aiNeeded      = questionCount - bankCount;
 
-    const message = await anthropic.messages.create(
-      {
-        model:      CLAUDE_MODEL,
-        max_tokens: MAX_TOKENS,
-        system:     systemPrompt,
-        messages:   [{ role: 'user', content: userPrompt }],
+  let generationMode;
+  let aiQuestions = [];
+
+  if (bankCount >= questionCount) {
+    generationMode = 'bank-only';
+    logger.debug(`Bank-first: serving all ${questionCount} questions from bank.`);
+  } else if (bankCount > 0) {
+    generationMode = 'mixed';
+    logger.debug(`Bank-first: ${bankCount} from bank, ${aiNeeded} from Claude.`);
+  } else {
+    generationMode = 'ai-only';
+    logger.debug('Bank-first: bank empty — full Claude generation.');
+  }
+
+  // ── Claude generation (ai-only or mixed) ────────────────────────────────
+  if (aiNeeded > 0) {
+    const aiOptions   = { ...options, questionCount: aiNeeded };
+    const systemPrompt = buildSystemPrompt();
+    let attemptNumber  = 0;
+
+    const callClaude = async () => {
+      const userPrompt = attemptNumber === 0
+        ? buildUserPrompt(aiOptions)
+        : buildStrictUserPrompt(aiOptions);
+
+      logger.debug(`Claude API call (attempt ${attemptNumber + 1})…`);
+
+      const message = await anthropic.messages.create(
+        {
+          model:      CLAUDE_MODEL,
+          max_tokens: MAX_TOKENS,
+          system:     systemPrompt,
+          messages:   [{ role: 'user', content: userPrompt }],
+        },
+        { timeout: anthropicRequestTimeoutMs }
+      );
+
+      if (message.stop_reason === 'max_tokens') {
+        throw new Error(
+          `Claude response was truncated (hit max_tokens=${MAX_TOKENS}). ` +
+          'Try reducing the question count.'
+        );
+      }
+
+      const rawText = message.content[0]?.text ?? '';
+
+      if (!rawText.trim()) {
+        throw new Error('Claude API returned an empty response.');
+      }
+
+      if (
+        rawText.length < 200 &&
+        /\b(cannot|can't|sorry|unable|inappropriate|policy)\b/i.test(rawText)
+      ) {
+        throw new Error(
+          `Claude refused to generate content: "${rawText.trim().slice(0, 120)}". ` +
+          'Try a different topic or rephrase.'
+        );
+      }
+
+      const jsonStr = extractJSON(rawText);
+      const parsed  = JSON.parse(jsonStr);
+      const coerced = coerceTypes(parsed);
+
+      validateTopLevel(coerced);
+      // Validate question count matches what we asked Claude for
+      validateQuestions(coerced, aiNeeded);
+
+      return coerced;
+    };
+
+    const aiWorksheet = await withRetry(
+      async () => {
+        try {
+          return await callClaude();
+        } finally {
+          attemptNumber++;
+        }
       },
       {
-        timeout: anthropicRequestTimeoutMs,
+        maxRetries: parseInt(process.env.MAX_RETRIES || (isLambdaRuntime ? '0' : '3'), 10),
+        baseDelayMs: 1000,
+        onRetry: (attempt, err) => {
+          logger.warn(`Retry ${attempt}: ${err.message}`);
+        },
       }
     );
 
-    // Check for truncated response (max_tokens hit mid-JSON)
-    if (message.stop_reason === 'max_tokens') {
-      throw new Error(
-        `Claude response was truncated (hit max_tokens=${MAX_TOKENS}). ` +
-        'Try reducing the question count.'
-      );
+    aiQuestions = aiWorksheet.questions;
+
+    // Store new AI questions back into the bank (best-effort, non-blocking)
+    if (bankEnabled) {
+      await storeToBankSilently(aiQuestions);
     }
 
-    const rawText = message.content[0]?.text ?? '';
-
-    if (!rawText.trim()) {
-      throw new Error('Claude API returned an empty response.');
+    // For ai-only, return the full AI worksheet enriched with bank metadata
+    if (generationMode === 'ai-only') {
+      return {
+        ...aiWorksheet,
+        generationMode:  'ai-only',
+        provenanceLevel: Array(aiWorksheet.questions.length).fill('ai'),
+      };
     }
+  }
 
-    // Detect safety refusals before attempting JSON parse
-    if (
-      rawText.length < 200 &&
-      /\b(cannot|can't|sorry|unable|inappropriate|policy)\b/i.test(rawText)
-    ) {
-      throw new Error(
-        `Claude refused to generate content: "${rawText.trim().slice(0, 120)}". ` +
-        'Try a different topic or rephrase.'
-      );
-    }
+  // ── bank-only: return the banked worksheet structure ─────────────────────
+  if (generationMode === 'bank-only') {
+    // Renumber questions 1..N
+    const questions = bankQuestions.map((q, i) => ({ ...q, number: i + 1 }));
 
-    // Extract, parse, coerce, and validate
-    const jsonStr     = extractJSON(rawText);
-    const parsed      = JSON.parse(jsonStr);     // throws SyntaxError → retry
-    const coerced     = coerceTypes(parsed);
+    const bankIds = bankQuestions.map(q => q.questionId).filter(Boolean);
+    await recordQuestionReuse(bankIds);
 
-    validateTopLevel(coerced);
-    validateQuestions(coerced, questionCount);
+    // Reconstruct a worksheet-shaped object from the first banked question's metadata
+    const sample = bankQuestions[0];
+    return {
+      title:           `${sample.subject} Worksheet — ${sample.topic}`,
+      grade,
+      subject,
+      topic:           topic || sample.topic,
+      difficulty:      difficulty || sample.difficulty,
+      standards:       sample.standards || [],
+      estimatedTime:   sample.estimatedTime || '',
+      instructions:    sample.instructions || '',
+      totalPoints:     questions.reduce((s, q) => s + (q.points || 0), 0),
+      questions,
+      generationMode:  'bank-only',
+      provenanceLevel: Array(questions.length).fill('bank'),
+    };
+  }
 
-    return coerced;
+  // ── mixed: merge bank + AI questions ────────────────────────────────────
+  const mergedQuestions = [
+    ...bankQuestions.map(q => ({ ...q, _provenance: 'bank' })),
+    ...aiQuestions.map(q => ({ ...q, _provenance: 'ai'   })),
+  ];
+
+  // Renumber 1..N
+  mergedQuestions.forEach((q, i) => { q.number = i + 1; });
+
+  const provenanceLevel = mergedQuestions.map(q => q._provenance);
+  mergedQuestions.forEach(q => { delete q._provenance; });
+
+  // Record reuse for banked questions
+  const bankIds = bankQuestions.map(q => q.questionId).filter(Boolean);
+  await recordQuestionReuse(bankIds);
+
+  // Use AI worksheet top-level fields as the base (they match the requested options)
+  // We need the AI worksheet fields — retrieve via the aiQuestions already stored above.
+  // For mixed mode we only have aiQuestions array; reconstruct top-level from options.
+  const sample = bankQuestions[0];
+  return {
+    title:           `${subject} Worksheet — ${topic}`,
+    grade,
+    subject,
+    topic,
+    difficulty,
+    standards:       sample.standards || [],
+    estimatedTime:   sample.estimatedTime || '',
+    instructions:    sample.instructions || '',
+    totalPoints:     mergedQuestions.reduce((s, q) => s + (q.points || 0), 0),
+    questions:       mergedQuestions,
+    generationMode:  'mixed',
+    provenanceLevel,
   };
-
-  return withRetry(
-    async () => {
-      try {
-        return await callClaude();
-      } finally {
-        attemptNumber++;
-      }
-    },
-    {
-      maxRetries: parseInt(process.env.MAX_RETRIES || (isLambdaRuntime ? '0' : '3'), 10),
-      baseDelayMs: 1000,
-      onRetry: (attempt, err) => {
-        logger.warn(`Retry ${attempt}: ${err.message}`);
-      },
-    }
-  );
 }
