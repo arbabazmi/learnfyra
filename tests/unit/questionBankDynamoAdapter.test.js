@@ -153,7 +153,7 @@ describe('listQuestions', () => {
     const result = await listQuestions({ grade: 3, subject: 'Math', topic: 'Multiplication' });
     expect(result).toHaveLength(1);
     const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.IndexName).toBe('lookupKey-typeDifficulty-index');
+    expect(call.args[0].input.IndexName).toBe('GSI-1');
     expect(call.args[0].input.ExpressionAttributeValues[':lk']).toBe('3|math|multiplication');
   });
 

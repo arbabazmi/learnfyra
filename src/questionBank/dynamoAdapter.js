@@ -75,9 +75,9 @@ const getTableName = () =>
   process.env.QB_TABLE_NAME ||
   `LearnfyraQuestionBank-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`;
 
-// GSI names — must match the DynamoDB table definition
-const GSI_LOOKUP        = 'lookupKey-typeDifficulty-index';
-const GSI_DEDUPE        = 'dedupeHash-index';
+// GSI names — must match the DynamoDB table definition in scripts/bootstrap-local-db.js
+const GSI_LOOKUP        = 'GSI-1';               // HASH: lookupKey, RANGE: typeDifficulty
+const GSI_DEDUPE        = 'dedupeHash-index';     // HASH: dedupeHash, KEYS_ONLY
 
 // ---------------------------------------------------------------------------
 // Internal helpers
