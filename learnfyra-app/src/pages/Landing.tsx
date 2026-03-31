@@ -8,6 +8,7 @@
  */
 
 import * as React from 'react';
+import { Link } from 'react-router';
 import {
   Sparkles,
   TrendingUp,
@@ -31,6 +32,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { AuthModal, type ModalStep } from '@/components/AuthModal';
+import { RoleSelectionPanel } from '@/components/guest/RoleSelectionPanel';
+import { SmartSearchBox } from '@/components/search/SmartSearchBox';
 import { useInView } from '@/hooks/useInView';
 import { usePageMeta } from '@/lib/pageMeta';
 
@@ -205,8 +208,14 @@ const WorksheetMockup: React.FC = () => {
   );
 };
 
-const HeroSection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) => (
-  <section className="relative overflow-hidden bg-white">
+interface HeroProps {
+  onTryWorksheet: () => void;
+  externalGrade?: string | null;
+  onExternalGradeHandled?: () => void;
+}
+
+const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExternalGradeHandled }) => (
+  <section id="hero" className="relative overflow-hidden bg-white">
     {/* Dot grid */}
     <div className="absolute inset-0 bg-dot-pattern opacity-50 pointer-events-none" aria-hidden="true" />
     {/* Radial glow */}
@@ -221,13 +230,13 @@ const HeroSection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) 
 
         {/* Left — copy */}
         <div>
-          {/* Badge — tight to headline */}
+          {/* Badge */}
           <div className="inline-flex items-center gap-2 bg-primary-light text-primary border border-primary/20 rounded-full px-4 py-1.5 text-[13px] font-bold mb-5 animate-fade-up">
             <Sparkles className="size-3.5 shrink-0" />
             AI-Powered · USA Curriculum Aligned
           </div>
 
-          {/* Headline — more breathing room below badge */}
+          {/* Headline */}
           <div className="animate-fade-up delay-100">
             <h1 className="text-5xl sm:text-6xl lg:text-[4.25rem] font-extrabold leading-[1.08] tracking-tight text-foreground">
               Learn Smarter.
@@ -236,30 +245,37 @@ const HeroSection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) 
             </h1>
           </div>
 
-          {/* Body — properly separated from headline */}
+          {/* Subtitle */}
           <p className="mt-7 text-[17px] text-muted-foreground leading-relaxed max-w-[500px] animate-fade-up delay-200">
             AI-generated worksheets for Grades&nbsp;1–10, aligned to CCSS and NGSS.
             Solve online, get instant feedback, and watch every score improve.
           </p>
 
-          {/* CTAs */}
-          <div className="mt-8 flex flex-wrap gap-4 animate-fade-up delay-300">
-            <Button variant="primary" size="lg" className="gap-2 shadow-primary-sm hover:shadow-primary-md" onClick={onGetStarted}>
-              Start Free Today
+          {/* ── Smart Search Box ──────────────────────────── */}
+          <div className="mt-8 animate-fade-up delay-300">
+            <SmartSearchBox externalGrade={externalGrade} onExternalGradeHandled={onExternalGradeHandled} />
+          </div>
+
+          {/* CTA buttons */}
+          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400">
+            <Button
+              variant="primary"
+              size="lg"
+              className="gap-2 shadow-primary-sm hover:shadow-primary-md"
+              onClick={onTryWorksheet}
+            >
+              Try a Worksheet
               <ArrowRight className="size-5" />
             </Button>
-            {/* Ghost button — border-border gives it clear affordance without competing with primary */}
-            <Button variant="ghost" size="lg" className="gap-2 border border-border hover:border-primary/30">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary shrink-0">
-                <svg viewBox="0 0 10 10" className="size-2.5 fill-white ml-0.5">
-                  <polygon points="2,1 9,5 2,9" />
-                </svg>
-              </span>
-              Watch 2-min Demo
+            <Button variant="ghost" size="lg" className="gap-2 border border-border hover:border-primary/30" asChild>
+              <Link to="#how-it-works">
+                See How It Works
+                <ChevronRight className="size-5" />
+              </Link>
             </Button>
           </div>
 
-          {/* Stats — tighter, vertically aligned */}
+          {/* Stats */}
           <div className="mt-10 flex items-stretch gap-8 animate-fade-up delay-400">
             {[
               { number: '50K+', label: 'Students' },
@@ -290,7 +306,7 @@ const HeroSection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) 
 // TRUST STRIP — stats only, no duplicate content from hero
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TrustStrip: React.FC = () => {
+const TrustStrip: React.FC<{ onGradeClick?: (grade: string) => void }> = ({ onGradeClick }) => {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'];
 
   return (
@@ -299,15 +315,19 @@ const TrustStrip: React.FC = () => {
         <p className="text-center text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] mb-6">
           Trusted by schools across the USA
         </p>
-        {/* Grade chips — shows coverage, not duplicating hero stats */}
+        {/* Grade chips — clickable, feeds into search box */}
         <div className="flex flex-wrap justify-center gap-2">
           {grades.map((g) => (
-            <span
+            <button
               key={g}
-              className="inline-block px-3 py-1 rounded-full bg-white border border-border text-[12px] font-semibold text-muted-foreground"
+              onClick={() => {
+                onGradeClick?.(g);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="inline-block px-3 py-1 rounded-full bg-white border border-border text-[12px] font-semibold text-muted-foreground hover:border-primary/40 hover:bg-primary-light hover:text-primary transition-all cursor-pointer"
             >
               {g}
-            </span>
+            </button>
           ))}
         </div>
         {/* Rating strip */}
@@ -919,7 +939,7 @@ const TestimonialsSection: React.FC = () => (
 // CTA BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTASection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) => (
+const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet }) => (
   <section className="relative py-24 overflow-hidden bg-primary">
     {/* Dot grid */}
     <div
@@ -961,11 +981,15 @@ const CTASection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) =
       </p>
 
       <div className="flex flex-wrap justify-center gap-4">
-        <Button variant="white" size="lg" className="text-primary font-extrabold gap-2 hover:bg-white/90 shadow-md" onClick={onGetStarted}>
-          Get Started Free
+        <Button
+          variant="white"
+          size="lg"
+          className="text-primary font-extrabold gap-2 hover:bg-white/90 shadow-md"
+          onClick={onTryWorksheet}
+        >
+          Try a Worksheet — Free
           <ArrowRight className="size-5" />
         </Button>
-        {/* Changed from "Talk to Sales" — wrong audience */}
         <button className="inline-flex items-center gap-2 px-7 h-12 rounded-xl border-2 border-white/30 text-white text-[15px] font-bold transition-all duration-150 hover:bg-white/10 hover:border-white/50">
           <CalendarDays className="size-5" />
           Schedule a Demo
@@ -980,24 +1004,38 @@ const CTASection: React.FC<{ onGetStarted?: () => void }> = ({ onGetStarted }) =
 // ─────────────────────────────────────────────────────────────────────────────
 
 const Landing: React.FC = () => {
+  // Auth modal state (for Sign In only)
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalStep, setModalStep] = React.useState<ModalStep>('role');
 
-  const openGetStarted = () => { setModalStep('role');   setModalOpen(true); };
-  const openSignIn     = () => { setModalStep('signin'); setModalOpen(true); };
+  // Inline role selection state
+  const [roleFlowOpen, setRoleFlowOpen] = React.useState(false);
+
+  // Grade chip → search box bridge
+  const [externalGrade, setExternalGrade] = React.useState<string | null>(null);
+
+  const openSignIn = () => { setModalStep('signin'); setModalOpen(true); };
+  const openRoleFlow = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setRoleFlowOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar onSignIn={openSignIn} onGetStarted={openGetStarted} />
+      <Navbar onSignIn={openSignIn} onTryWorksheet={openRoleFlow} />
       <main className="flex-1">
-        <HeroSection onGetStarted={openGetStarted} />
-        <TrustStrip />
+        <HeroSection
+          onTryWorksheet={openRoleFlow}
+          externalGrade={externalGrade}
+          onExternalGradeHandled={() => setExternalGrade(null)}
+        />
+        <TrustStrip onGradeClick={(g) => setExternalGrade(g)} />
         <FeaturesSection />
         <DashboardPreviewSection />
         <HowItWorksSection />
         <RoleCardsSection />
         <TestimonialsSection />
-        <CTASection onGetStarted={openGetStarted} />
+        <CTASection onTryWorksheet={openRoleFlow} />
       </main>
       <Footer />
 
@@ -1005,6 +1043,11 @@ const Landing: React.FC = () => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         initialStep={modalStep}
+      />
+
+      <RoleSelectionPanel
+        isOpen={roleFlowOpen}
+        onClose={() => setRoleFlowOpen(false)}
       />
     </div>
   );

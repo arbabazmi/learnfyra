@@ -32,10 +32,10 @@ const navItems: NavItem[] = [
 
 interface NavbarProps {
   onSignIn?: () => void;
-  onGetStarted?: () => void;
+  onTryWorksheet?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onSignIn, onGetStarted }) => {
+const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
   const [isOpen, setIsOpen]   = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const location = useLocation();
@@ -121,8 +121,8 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onGetStarted }) => {
             <Button variant="ghost" size="md" onClick={onSignIn}>
               Sign In
             </Button>
-            <Button variant="primary" size="md" onClick={onGetStarted}>
-              Get Started
+            <Button variant="primary" size="md" onClick={onTryWorksheet}>
+              Try a Worksheet
             </Button>
           </div>
 
@@ -178,8 +178,8 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onGetStarted }) => {
               <Button variant="ghost" size="md" className="justify-center" onClick={() => { setIsOpen(false); onSignIn?.(); }}>
                 Sign In
               </Button>
-              <Button variant="primary" size="md" className="justify-center" onClick={() => { setIsOpen(false); onGetStarted?.(); }}>
-                Get Started
+              <Button variant="primary" size="md" className="justify-center" onClick={() => { setIsOpen(false); onTryWorksheet?.(); }}>
+                Try a Worksheet
               </Button>
             </div>
           </div>

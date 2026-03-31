@@ -386,6 +386,7 @@ app.post('/api/submit', async (req, res) => {
 let _authHandler;
 let _studentHandler;
 let _progressHandler;
+let _dashboardHandler;
 let _classHandler;
 let _analyticsHandler;
 let _certificatesHandler;
@@ -425,6 +426,18 @@ const getProgressHandler = async () => {
     _progressHandler = mod.handler;
   }
   return _progressHandler;
+};
+
+/**
+ * Returns the dashboardHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getDashboardHandler = async () => {
+  if (!_dashboardHandler) {
+    const mod = await import('./backend/handlers/dashboardHandler.js');
+    _dashboardHandler = mod.handler;
+  }
+  return _dashboardHandler;
 };
 
 /**
@@ -727,6 +740,51 @@ app.get('/api/progress/parent/:childId', async (req, res) => {
     console.error('progress route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/stats ──────────────────────────────────────────────────
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/stats', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/recent-worksheets ─────────────────────────────────────
+app.get('/api/dashboard/recent-worksheets', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/recent-worksheets', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/subject-progress ──────────────────────────────────────
+app.get('/api/dashboard/subject-progress', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/subject-progress', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });
 

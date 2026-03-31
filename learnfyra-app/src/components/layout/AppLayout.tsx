@@ -17,10 +17,12 @@ import {
   X,
   Bell,
   GraduationCap,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/ui/Logo';
 import { Badge } from '@/components/ui/Badge';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
   label: string;
@@ -48,6 +50,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
   const location = useLocation();
+  const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const SidebarContent: React.FC = () => (
@@ -112,22 +115,34 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
           );
         })}
 
-        {/* User row */}
-        <div className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-xl bg-surface">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-            <GraduationCap className="size-4" />
+        {/* User row — auth-aware */}
+        {auth.isAuthenticated && auth.user ? (
+          <div className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-xl bg-surface">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+              <GraduationCap className="size-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-foreground truncate">{auth.user.displayName}</p>
+              <p className="text-xs text-muted-foreground truncate capitalize">{auth.user.role}</p>
+            </div>
+            <button
+              onClick={auth.signOut}
+              className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-lg hover:bg-destructive/10"
+              aria-label="Sign out"
+            >
+              <LogOut className="size-4" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-foreground truncate">Student</p>
-            <p className="text-xs text-muted-foreground truncate">Grade 7</p>
-          </div>
-          <button
-            className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-lg hover:bg-destructive/10"
-            aria-label="Sign out"
+        ) : (
+          <Link
+            to="/"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-xl bg-primary-light text-primary text-sm font-bold hover:bg-primary/10 transition-colors"
           >
-            <LogOut className="size-4" />
-          </button>
-        </div>
+            <UserPlus className="size-4 shrink-0" />
+            Sign in to save progress
+          </Link>
+        )}
       </div>
     </div>
   );

@@ -34,7 +34,9 @@
       "Bash(find C:/arbab-github/learnfyra/learnfyra-app/src -name *.d.ts)",
       "Bash(npx vite:*)",
       "Bash(find /c/arbab-github/learnfyra/scripts -type f -name *.js -o -name *.sh)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)"
     ]
   }
 }
