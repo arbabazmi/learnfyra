@@ -17,6 +17,7 @@
 import { randomUUID } from 'crypto';
 import { getAuthAdapter, getOAuthAdapter } from '../../src/auth/index.js';
 import { getDbAdapter } from '../../src/db/index.js';
+import { requestPasswordReset, resetPassword as executeReset } from '../../src/auth/passwordReset.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -238,6 +239,60 @@ async function handleOAuthCallback(provider, queryStringParameters) {
 }
 
 /**
+ * POST /api/auth/forgot-password
+ * Body: { email }
+ * Always returns 200 — never reveals if the email exists.
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleForgotPassword(body) {
+  const { email } = body || {};
+
+  if (!email) {
+    return errorResponse(400, 'email is required.');
+  }
+
+  await requestPasswordReset(email);
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      message: 'If an account with that email exists, a password reset link has been sent.',
+    }),
+  };
+}
+
+/**
+ * POST /api/auth/reset-password
+ * Body: { token, newPassword }
+ * Returns 200 on success, 400 on invalid/expired/used token.
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleResetPassword(body) {
+  const { token, newPassword } = body || {};
+
+  if (!token || !newPassword) {
+    return errorResponse(400, 'token and newPassword are required.');
+  }
+
+  if (newPassword.length < 8) {
+    return errorResponse(400, 'Password must be at least 8 characters.');
+  }
+
+  await executeReset(token, newPassword);
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Password has been reset successfully.' }),
+  };
+}
+
+/**
  * Lambda handler — POST /api/auth/:action
  *
  * @param {Object} event - API Gateway event or Express-shaped mock event
@@ -276,6 +331,14 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/refresh')) {
       return await handleRefresh(body);
+    }
+
+    if (path.endsWith('/forgot-password')) {
+      return await handleForgotPassword(body);
+    }
+
+    if (path.endsWith('/reset-password')) {
+      return await handleResetPassword(body);
     }
 
     // POST /api/auth/oauth/:provider — initiate OAuth flow

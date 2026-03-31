@@ -24,7 +24,17 @@
       "Bash(npm install:*)",
       "Bash(git -C C:/arbab-github/edusheet-ai status --short)",
       "Bash(grep:*)",
-      "Bash(QB_ADAPTER=local node scripts/seed-question-bank.js)"
+      "Bash(QB_ADAPTER=local node scripts/seed-question-bank.js)",
+      "Bash(find C:/arbab-github/edusheet-ai -name *.png -o -name *.jpg -o -name *.jpeg)",
+      "Bash(cp C:/arbab-github/learnfyra/frontend/images/Logos/colored-logo.png C:/arbab-github/learnfyra/learnfyra-app/public/images/Logos/)",
+      "Bash(cp C:/arbab-github/learnfyra/frontend/images/Logos/transparent-logo.png C:/arbab-github/learnfyra/learnfyra-app/public/images/Logos/)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npm run:*)",
+      "Bash(find C:/arbab-github/learnfyra/learnfyra-app/src -name *.d.ts)",
+      "Bash(npx vite:*)",
+      "Bash(find /c/arbab-github/learnfyra/scripts -type f -name *.js -o -name *.sh)",
+      "Bash(npm ls:*)"
     ]
   }
 }

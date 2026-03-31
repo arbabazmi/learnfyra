@@ -1,11 +1,11 @@
 /**
  * @file server.js
- * @description Local development server. Serves the frontend as static files
- * and exposes /api/* routes backed by the real generators — no AWS/S3 needed.
+ * @description API-only backend server. Exposes /api/* routes backed by the
+ * real generators — no AWS/S3 needed. No frontend is served from this port.
  *
  * Usage:
- *   node server.js
- *   open http://localhost:3000
+ *   node server.js          # starts API on http://localhost:3000
+ *   cd learnfyra-app && npm run dev   # starts React frontend on http://localhost:5173
  *
  * Required env var:
  *   ANTHROPIC_API_KEY   your Anthropic API key (copy .env.example → .env)
@@ -85,9 +85,6 @@ function serializeError(err) {
 const app = express();
 app.use(morgan('dev'));
 app.use(express.json());
-
-// Serve the frontend
-app.use(express.static(join(__dirname, 'frontend')));
 
 // Serve locally generated worksheet files for download
 app.use('/local-files', express.static(LOCAL_FILES_DIR));
@@ -244,7 +241,7 @@ app.post('/api/generate', async (req, res) => {
       clientRequestId,
       metadata: {
         id: uuid,
-        solveUrl: `/solve.html?id=${uuid}`,
+        solveUrl: `/worksheet/${uuid}`,
         generatedAt: now.toISOString(),
         grade,
         subject,
@@ -523,6 +520,36 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/forgot-password ────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/forgot-password', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth forgot-password route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/reset-password ────────────────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/reset-password', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth reset-password route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── POST /api/auth/oauth/:provider ────────────────────────────────────────────
 app.post('/api/auth/oauth/:provider', async (req, res) => {
   try {
@@ -557,10 +584,34 @@ app.get('/api/auth/callback/:provider', async (req, res) => {
       },
       {},
     );
-    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+    const body = JSON.parse(result.body);
+
+    // On success, redirect to the React frontend's auth callback route.
+    // The React app reads token/user from the URL and stores in localStorage.
+    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    if (result.statusCode === 200 && body.token) {
+      const user = {
+        userId:      body.userId,
+        email:       body.email,
+        role:        body.role,
+        displayName: body.displayName,
+      };
+      const params = new URLSearchParams({
+        token: body.token,
+        user: JSON.stringify(user),
+      });
+      return res.redirect(`${frontendOrigin}/auth/callback?${params.toString()}`);
+    }
+
+    // Error case — redirect to React app with error
+    const errorMsg = encodeURIComponent(body.error || 'Authentication failed');
+    return res.redirect(`${frontendOrigin}/?authError=${errorMsg}`);
   } catch (err) {
     console.error('auth callback route error:', err);
-    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const errorMsg = encodeURIComponent('Authentication failed. Please try again.');
+    return res.redirect(`${frontendOrigin}/?authError=${errorMsg}`);
   }
 });
 
@@ -1132,14 +1183,15 @@ app.use((req, res, next) => {
   return next();
 });
 
-// Fallback for SPA (non-API paths only)
+// Non-API requests return 404 — frontend is served by Vite (port 5173), not Express.
 app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
-  res.sendFile(join(__dirname, 'frontend', 'index.html'));
+  res.status(404).json({ error: 'Frontend is served by Vite on port 5173. This server handles API routes only.' });
 });
 
 app.listen(PORT, () => {
-  console.log(`\nLearnfyra — local dev server`);
-  console.log(`  App:   http://localhost:${PORT}`);
-  console.log(`  Files: ${LOCAL_FILES_DIR}`);
-  console.log('\nReady. Open the URL above in your browser.\n');
+  console.log(`\nLearnfyra — API server (backend only)`);
+  console.log(`  API:      http://localhost:${PORT}/api`);
+  console.log(`  Files:    ${LOCAL_FILES_DIR}`);
+  console.log(`  Frontend: http://localhost:5173 (run Vite separately)`);
+  console.log('\nReady. API routes only — no frontend served from this port.\n');
 });

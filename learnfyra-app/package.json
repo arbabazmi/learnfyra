@@ -1,0 +1,34 @@
+{
+  "name": "learnfyra-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode localdev",
+    "dev:dev": "vite --mode dev",
+    "dev:qa": "vite --mode qa",
+    "build:dev": "vite build --mode dev",
+    "build:qa": "vite build --mode qa",
+    "build": "vite build --mode production",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "1.1.2",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.487.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router": "7.13.0",
+    "tailwind-merge": "3.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.12",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.7.0",
+    "tailwindcss": "4.1.12",
+    "typescript": "5.7.3",
+    "vite": "6.3.5"
+  }
+}

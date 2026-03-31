@@ -1,0 +1,25 @@
+##
+# Learnfyra local development services.
+#
+# Usage:
+#   docker compose up -d
+#   node scripts/bootstrap-local-db.js   # create DynamoDB tables
+#   node server.js                       # start API server
+##
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local
+    container_name: learnfyra-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb"
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: learnfyra-mailhog
+    ports:
+      - "1025:1025"   # SMTP — backend sends emails here
+      - "8025:8025"   # Web UI — open http://localhost:8025 to view emails
+    restart: unless-stopped
