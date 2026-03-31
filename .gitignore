@@ -39,5 +39,8 @@ coverage/
 # ── Legacy frontend (removed) ──────────────────────────────────────────────
 frontend/config.local.js
 
+# Ignore learnfyra front-end template docs
+learnfyra-docs/11-front-end-template/
+
 # ── Claude Code ─────────────────────────────────────────────────────────────
 .claude/settings.local.json
