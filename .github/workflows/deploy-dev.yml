@@ -39,6 +39,29 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Validate required GitHub secrets (dev)
+        run: |
+          set -euo pipefail
+          MISSING=0
+
+          check_secret() {
+            NAME="$1"
+            VALUE="$2"
+            if [ -z "$VALUE" ]; then
+              echo "::error::Missing required secret: $NAME"
+              MISSING=1
+            fi
+          }
+
+          check_secret "ANTHROPIC_API_KEY_DEV" "${{ secrets.ANTHROPIC_API_KEY_DEV }}"
+          check_secret "JWT_SECRET_DEV" "${{ secrets.JWT_SECRET_DEV }}"
+          check_secret "GOOGLE_CLIENT_SECRET_DEV" "${{ secrets.GOOGLE_CLIENT_SECRET_DEV }}"
+
+          if [ "$MISSING" -ne 0 ]; then
+            echo "One or more required secrets are missing or empty."
+            exit 1
+          fi
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
