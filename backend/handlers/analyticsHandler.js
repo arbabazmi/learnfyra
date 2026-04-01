@@ -343,8 +343,10 @@ export const handler = async (event, context) => {
 
     return await handleClassAnalytics(decoded, classId);
   } catch (err) {
-    console.error('analyticsHandler error:', err);
     const statusCode = err.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    if (statusCode >= 500) {
+      console.error('analyticsHandler error:', err);
+    }
     const message = statusCode < 500 ? err.message : 'Internal server error.';
     return errorResponse(statusCode, message);
   }
