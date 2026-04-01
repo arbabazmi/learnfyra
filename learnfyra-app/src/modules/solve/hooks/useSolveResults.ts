@@ -10,7 +10,7 @@ function normalizeAnswer(answer: string): string {
   return answer.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function checkAnswer(studentAnswer: string, correctAnswer: string, type: string): boolean {
+export function checkAnswer(studentAnswer: string, correctAnswer: string, type: string): boolean {
   const student = normalizeAnswer(studentAnswer);
   const correct = normalizeAnswer(correctAnswer);
 
@@ -32,7 +32,9 @@ function checkAnswer(studentAnswer: string, correctAnswer: string, type: string)
     try {
       const studentPairs = JSON.parse(studentAnswer);
       const correctPairs = JSON.parse(correctAnswer);
-      return JSON.stringify(studentPairs) === JSON.stringify(correctPairs);
+      const sortedStudent = JSON.stringify(Object.entries(studentPairs).sort());
+      const sortedCorrect = JSON.stringify(Object.entries(correctPairs).sort());
+      return sortedStudent === sortedCorrect;
     } catch {
       return false;
     }

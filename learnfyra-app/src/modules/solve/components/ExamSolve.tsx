@@ -59,11 +59,11 @@ export default function ExamSolve({ worksheet, session, onAnswer, onFlag, onNavi
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 3.5rem)' }}>
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <button onClick={() => setSidebarOpen(true)} className="text-sm font-semibold text-primary" type="button">
+        <button onClick={() => setSidebarOpen(true)} className="text-sm font-semibold text-primary min-h-[44px] px-2" type="button" aria-label="Open question navigator">
           Q {session.currentQuestionIndex + 1}/{worksheet.questions.length}
         </button>
         <CountdownTimer totalSeconds={worksheet.estimatedTimeSeconds} onTimeUp={handleTimeUp} />
-        <button onClick={() => setToolsOpen(true)} className="text-sm text-muted-foreground" type="button">
+        <button onClick={() => setToolsOpen(true)} className="text-sm text-muted-foreground min-h-[44px] px-2" type="button" aria-label="Open tools panel">
           Tools
         </button>
       </div>
@@ -74,8 +74,8 @@ export default function ExamSolve({ worksheet, session, onAnswer, onFlag, onNavi
           <div className="mb-4">
             <h2 className="text-sm font-extrabold text-foreground truncate">{worksheet.title}</h2>
             <div className="flex gap-1.5 mt-1.5">
-              <Badge variant="primary" className="text-[10px]">{worksheet.subject}</Badge>
-              <Badge variant="muted" className="text-[10px]">Grade {worksheet.grade}</Badge>
+              <Badge variant="primary" className="text-xs">{worksheet.subject}</Badge>
+              <Badge variant="muted" className="text-xs">Grade {worksheet.grade}</Badge>
             </div>
           </div>
 
@@ -169,7 +169,7 @@ export default function ExamSolve({ worksheet, session, onAnswer, onFlag, onNavi
         <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
           <div className="max-w-[720px] mx-auto">
             {/* Breadcrumb */}
-            <p className="text-xs text-muted-foreground mb-4">
+            <p className="text-[13px] text-muted-foreground mb-4">
               {worksheet.subject} <span className="mx-1">&rsaquo;</span> {worksheet.topic}
             </p>
 
@@ -190,7 +190,7 @@ export default function ExamSolve({ worksheet, session, onAnswer, onFlag, onNavi
                       Q{q.number} of {worksheet.questions.length}
                     </span>
                     <span className={cn('size-2 rounded-full', difficultyDot[q.difficulty])} />
-                    <Badge variant="muted" className="text-[10px]">{q.points} pt{q.points > 1 ? 's' : ''}</Badge>
+                    <Badge variant="muted" className="text-xs">{q.points} pt{q.points > 1 ? 's' : ''}</Badge>
                   </div>
                   <button
                     type="button"
@@ -200,13 +200,14 @@ export default function ExamSolve({ worksheet, session, onAnswer, onFlag, onNavi
                       session.flaggedQuestions.has(q.id) ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500',
                     )}
                     aria-label="Flag question"
+                    aria-pressed={session.flaggedQuestions.has(q.id)}
                   >
                     <Flag className={cn('size-4', session.flaggedQuestions.has(q.id) && 'fill-amber-500')} />
                   </button>
                 </div>
 
                 {/* Question text */}
-                <p className={cn('text-foreground font-semibold mb-6 leading-relaxed', theme.tier === 'early' ? 'text-xl' : 'text-lg')}>
+                <p className={cn('text-foreground font-semibold mb-6 leading-relaxed', theme.tier === 'early' ? 'text-2xl' : 'text-xl')}>
                   {q.question}
                 </p>
 

@@ -20,7 +20,7 @@ export default function ShortAnswerQuestion({ question, value, onChange, disable
         maxLength={maxLen}
         aria-label="Short answer"
         className={cn(
-          'w-full px-4 py-3 rounded-xl border-2 bg-card text-foreground resize-y',
+          'w-full px-4 py-3 rounded-xl border-2 bg-card text-base text-foreground resize-y',
           'placeholder:text-muted-foreground/50 transition-colors',
           'focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20',
           !showResult && 'border-border',
@@ -33,7 +33,7 @@ export default function ShortAnswerQuestion({ question, value, onChange, disable
         <span>{value.length} / {maxLen}</span>
       </div>
       {showResult && !isCorrect && (
-        <p className="mt-2 text-sm text-success font-medium">
+        <p className="mt-2 text-[15px] text-success font-medium">
           Correct answer: {question.correctAnswer}
         </p>
       )}

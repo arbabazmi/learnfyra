@@ -56,9 +56,12 @@ export default function CountdownTimer({ totalSeconds, onTimeUp, paused }: Count
 
   return (
     <motion.div
-      className={cn('flex items-center gap-2.5 px-4 py-3 rounded-xl font-mono font-bold text-2xl', bgClass, colorClass)}
+      className={cn('flex items-center gap-2.5 px-4 py-3 rounded-xl font-mono font-bold text-[28px]', bgClass, colorClass)}
       animate={isRed ? { scale: [1, 1.02, 1] } : isAmber ? { scale: [1, 1.01, 1] } : {}}
       transition={isRed ? { duration: 0.8, repeat: Infinity } : isAmber ? { duration: 1.2, repeat: Infinity } : {}}
+      aria-live={isRed ? 'assertive' : 'polite'}
+      aria-label={`Time remaining: ${formatCountdown(remaining)}`}
+      role="timer"
     >
       <Clock className="size-5 shrink-0" />
       <span>{formatCountdown(remaining)}</span>

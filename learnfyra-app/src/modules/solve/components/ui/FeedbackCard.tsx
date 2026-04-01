@@ -22,6 +22,8 @@ export default function FeedbackCard({ correct, correctAnswer, explanation, poin
       initial={{ opacity: 0, y: 16, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
+      aria-live="polite"
+      aria-atomic="true"
       className={cn(
         'mt-5 p-5 rounded-xl border-2',
         correct
@@ -43,12 +45,12 @@ export default function FeedbackCard({ correct, correctAnswer, explanation, poin
           </p>
 
           {!correct && (
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-[15px] text-muted-foreground mt-1">
               Correct answer: <span className="font-semibold text-foreground">{correctAnswer}</span>
             </p>
           )}
 
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{explanation}</p>
+          <p className="text-[15px] text-muted-foreground mt-2 leading-relaxed">{explanation}</p>
 
           {correct && pointsEarned > 0 && (
             <motion.span
@@ -64,7 +66,7 @@ export default function FeedbackCard({ correct, correctAnswer, explanation, poin
           {!correct && (
             <div className="flex items-start gap-2 mt-3 p-3 rounded-lg bg-primary-light/50">
               <Lightbulb className="size-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 <span className="font-semibold text-foreground">Pro tip:</span> Review this concept and try similar problems for practice.
               </p>
             </div>

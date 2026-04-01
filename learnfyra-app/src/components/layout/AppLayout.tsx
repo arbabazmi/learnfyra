@@ -79,7 +79,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border shrink-0">
         <Link to="/" onClick={() => setSidebarOpen(false)}>
-          <Logo size="sm" />
+          <Logo size="lg" />
         </Link>
       </div>
 

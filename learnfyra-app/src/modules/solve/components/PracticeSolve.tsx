@@ -16,6 +16,7 @@ import ConfettiEffect from './ui/ConfettiEffect';
 import QuestionRenderer from './questions/QuestionRenderer';
 import ToolsPanel from './tools/ToolsPanel';
 import { useGradeTheme } from '../hooks/useGradeTheme';
+import { checkAnswer } from '../hooks/useSolveResults';
 import type { Worksheet, SolveSession } from '../types';
 
 interface PracticeSolveProps {
@@ -69,10 +70,10 @@ export default function PracticeSolve({ worksheet, session, onAnswer, onHint, on
 
   const handleCheck = useCallback(() => {
     if (!currentAnswer) return;
-    const correct = currentAnswer.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+    const correct = checkAnswer(currentAnswer, q.correctAnswer, q.type);
     setIsCorrect(correct);
     setChecked(true);
-  }, [currentAnswer, q.correctAnswer]);
+  }, [currentAnswer, q.correctAnswer, q.type]);
 
   const handleNext = () => {
     onComplete();
@@ -108,7 +109,7 @@ export default function PracticeSolve({ worksheet, session, onAnswer, onHint, on
           <div>
             <h2 className="text-lg font-extrabold text-foreground">{worksheet.title}</h2>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant="solid-success" className="text-[10px]">Practice Mode</Badge>
+              <Badge variant="solid-success" className="text-xs">Practice Mode</Badge>
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="size-3" /> {formatElapsed(elapsed)}
               </span>
@@ -145,7 +146,7 @@ export default function PracticeSolve({ worksheet, session, onAnswer, onHint, on
                 className={cn('bg-card border border-border rounded-xl p-6 sm:p-8 shadow-card', theme.borderRadius)}
               >
                 {/* Breadcrumb */}
-                <p className="text-xs text-muted-foreground mb-3">
+                <p className="text-[13px] text-muted-foreground mb-3">
                   {worksheet.subject} <span className="mx-1">&rsaquo;</span> {worksheet.topic}
                 </p>
 
@@ -155,11 +156,11 @@ export default function PracticeSolve({ worksheet, session, onAnswer, onHint, on
                     Q{q.number} of {worksheet.questions.length}
                   </span>
                   <span className={cn('size-2 rounded-full', difficultyDot[q.difficulty])} />
-                  <Badge variant="muted" className="text-[10px]">{q.points} pt{q.points > 1 ? 's' : ''}</Badge>
+                  <Badge variant="muted" className="text-xs">{q.points} pt{q.points > 1 ? 's' : ''}</Badge>
                 </div>
 
                 {/* Question text */}
-                <p className={cn('text-foreground font-semibold mb-6 leading-relaxed', theme.tier === 'early' ? 'text-xl' : 'text-lg')}>
+                <p className={cn('text-foreground font-semibold mb-6 leading-relaxed', theme.tier === 'early' ? 'text-2xl' : 'text-xl')}>
                   {q.question}
                 </p>
 

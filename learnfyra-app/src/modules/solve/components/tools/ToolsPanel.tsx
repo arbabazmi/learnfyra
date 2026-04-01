@@ -99,6 +99,8 @@ export default function ToolsPanel({ subject, grade }: ToolsPanelProps) {
           <div key={tool.id} className="border border-border rounded-xl overflow-hidden">
             <button
               type="button"
+              disabled={tool.comingSoon}
+              aria-expanded={openTool === tool.id}
               onClick={() => !tool.comingSoon && setOpenTool(prev => prev === tool.id ? null : tool.id)}
               className={cn(
                 'flex items-center justify-between w-full px-3 py-2.5 text-sm font-semibold transition-colors',

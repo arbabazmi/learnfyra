@@ -14,7 +14,7 @@ interface MCQProps extends Omit<QuestionRendererProps, 'question'> {
 
 export default function MCQQuestion({ question, value, onChange, disabled, showResult, isCorrect }: MCQProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Answer options">
       {question.options.map(opt => {
         const isSelected = value === opt.letter;
         const isCorrectOption = question.correctAnswer === opt.letter;
@@ -25,6 +25,9 @@ export default function MCQQuestion({ question, value, onChange, disabled, showR
           <motion.button
             key={opt.letter}
             type="button"
+            role="radio"
+            aria-checked={isSelected}
+            aria-label={`Option ${opt.letter}: ${opt.text}`}
             onClick={() => !disabled && onChange(opt.letter)}
             disabled={disabled}
             whileTap={!disabled ? { scale: 0.97 } : undefined}
@@ -55,7 +58,7 @@ export default function MCQQuestion({ question, value, onChange, disabled, showR
             >
               {showCorrect ? <Check className="size-4" /> : showWrong ? <X className="size-4" /> : opt.letter}
             </span>
-            <span className="text-sm font-medium text-foreground">{opt.text}</span>
+            <span className="text-base font-medium text-foreground">{opt.text}</span>
           </motion.button>
         );
       })}

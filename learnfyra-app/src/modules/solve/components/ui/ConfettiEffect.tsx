@@ -39,15 +39,18 @@ function createParticles(level: 'max' | 'medium' | 'subtle'): Particle[] {
 
 export default function ConfettiEffect({ active, theme }: ConfettiEffectProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
+  const prefersReducedMotion = typeof window !== 'undefined'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
     if (active) {
       setParticles(createParticles(theme.celebrationLevel));
       const t = setTimeout(() => setParticles([]), 2000);
       return () => clearTimeout(t);
     }
     setParticles([]);
-  }, [active, theme.celebrationLevel]);
+  }, [active, theme.celebrationLevel, prefersReducedMotion]);
 
   if (theme.celebrationLevel === 'subtle') {
     return (

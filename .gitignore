@@ -12,6 +12,7 @@ dist/
 
 # ── Local dev data ──────────────────────────────────────────────────────────
 data-local/
+worksheet/
 worksheets/
 worksheets-local/
 
@@ -25,7 +26,9 @@ Thumbs.db
 
 # ── CDK / CloudFormation ───────────────────────────────────────────────────
 cdk.out/
+cdk.out.*/
 infra/cdk/cdk.out/
+infra/cdk/cdk.out.*/
 infra/cdk/cdk-outputs.json
 
 # ── Logs ────────────────────────────────────────────────────────────────────

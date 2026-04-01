@@ -51,8 +51,8 @@ function ScoreRing({ percentage, color }: { percentage: number; color: string })
   const offset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="relative size-36 mx-auto">
-      <svg className="size-36 -rotate-90" viewBox="0 0 128 128">
+    <div className="relative size-44 mx-auto" role="img" aria-label={`Score: ${percentage}%`}>
+      <svg className="size-44 -rotate-90" viewBox="0 0 128 128">
         <circle cx="64" cy="64" r={radius} fill="none" stroke="var(--border)" strokeWidth="8" />
         <motion.circle
           cx="64" cy="64" r={radius} fill="none"
@@ -67,7 +67,7 @@ function ScoreRing({ percentage, color }: { percentage: number; color: string })
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <motion.span
-          className="text-3xl font-extrabold text-foreground"
+          className="text-5xl font-extrabold text-foreground"
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.8 }}
@@ -226,8 +226,9 @@ export default function ResultsScreen({ results, grade, onRetake, onSwitchMode, 
                     key={f}
                     type="button"
                     onClick={() => setReviewFilter(f)}
+                    aria-pressed={reviewFilter === f}
                     className={cn(
-                      'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize',
+                      'px-3 py-2 rounded-lg text-sm font-semibold transition-colors capitalize min-h-[44px]',
                       reviewFilter === f ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-surface-2',
                     )}
                   >
@@ -253,18 +254,18 @@ export default function ResultsScreen({ results, grade, onRetake, onSwitchMode, 
                         <XCircle className="size-5 text-destructive shrink-0 mt-0.5" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground">Question {r.number}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-base font-bold text-foreground">Question {r.number}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
                           Your answer: <span className="font-semibold">{r.studentAnswer || '(skipped)'}</span>
                         </p>
                         {!r.correct && (
-                          <p className="text-xs text-success mt-0.5">
+                          <p className="text-sm text-success mt-0.5">
                             Correct: <span className="font-semibold">{r.correctAnswer}</span>
                           </p>
                         )}
-                        <p className="text-xs text-muted-foreground mt-2">{r.explanation}</p>
+                        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{r.explanation}</p>
                       </div>
-                      <Badge variant={r.correct ? 'success' : 'destructive'} className="text-[10px] shrink-0">
+                      <Badge variant={r.correct ? 'success' : 'destructive'} className="text-xs shrink-0">
                         {r.pointsEarned}/{r.pointsPossible}
                       </Badge>
                     </div>

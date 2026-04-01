@@ -49,7 +49,7 @@ export default function HintReveal({ hint1, hint2, hintsUsed, onUseHint, theme, 
             exit={{ opacity: 0, height: 0 }}
             className="mt-2 p-3 rounded-lg bg-accent-light border border-accent/20"
           >
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
               <span className="font-semibold text-accent-foreground">Hint 1:</span> {hint1}
             </p>
           </motion.div>
@@ -64,7 +64,7 @@ export default function HintReveal({ hint1, hint2, hintsUsed, onUseHint, theme, 
             exit={{ opacity: 0, height: 0 }}
             className="mt-2 p-3 rounded-lg bg-accent-light border border-accent/20"
           >
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
               <span className="font-semibold text-accent-foreground">Hint 2:</span> {hint2}
             </p>
           </motion.div>

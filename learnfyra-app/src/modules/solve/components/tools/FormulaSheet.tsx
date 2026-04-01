@@ -70,9 +70,9 @@ export default function FormulaSheet({ subject }: FormulaSheetProps) {
                 <div className="mt-1.5 space-y-1.5">
                   {section.formulas.map(f => (
                     <div key={f.name} className="p-2 rounded-lg bg-surface-2">
-                      <p className="text-[10px] text-muted-foreground">{f.name}</p>
-                      <p className="text-xs font-mono font-semibold text-foreground">{f.formula}</p>
-                      {f.description && <p className="text-[10px] text-muted-foreground mt-0.5">{f.description}</p>}
+                      <p className="text-xs text-muted-foreground">{f.name}</p>
+                      <p className="text-sm font-mono font-semibold text-foreground">{f.formula}</p>
+                      {f.description && <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>}
                     </div>
                   ))}
                 </div>

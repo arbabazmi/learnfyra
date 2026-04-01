@@ -27,7 +27,7 @@ export default function FillBlankQuestion({ question, value, onChange, disabled,
               placeholder="..."
               aria-label="Fill in the blank"
               className={cn(
-                'inline-block mx-1 min-w-[120px] px-3 py-1 text-base font-semibold text-center',
+                'inline-block mx-1 min-w-[120px] px-3 py-2.5 text-base font-semibold text-center',
                 'border-b-2 bg-transparent outline-none transition-colors',
                 'focus:border-primary',
                 !showResult && 'border-border',
@@ -40,7 +40,7 @@ export default function FillBlankQuestion({ question, value, onChange, disabled,
         </span>
       ))}
       {showResult && !isCorrect && (
-        <p className="mt-2 text-sm text-success font-medium">
+        <p className="mt-2 text-[15px] text-success font-medium">
           Correct answer: {question.correctAnswer}
         </p>
       )}

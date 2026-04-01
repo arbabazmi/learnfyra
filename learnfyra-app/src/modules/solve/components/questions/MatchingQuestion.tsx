@@ -92,7 +92,7 @@ export default function MatchingQuestion({ question, value, onChange, disabled, 
         ))}
       </svg>
 
-      <div className="grid grid-cols-2 gap-x-12 gap-y-2">
+      <div className="grid grid-cols-2 gap-x-4 sm:gap-x-12 gap-y-2">
         {/* Left column */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Terms</p>
@@ -107,12 +107,14 @@ export default function MatchingQuestion({ question, value, onChange, disabled, 
                 onClick={() => handleLeftClick(pair.id)}
                 disabled={disabled}
                 className={cn(
-                  'px-4 py-3 rounded-xl border-2 text-sm font-medium text-left transition-all',
+                  'px-4 py-3 rounded-xl border-2 text-base font-medium text-left transition-all',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   selectedLeft === pair.id && 'border-primary bg-primary-light shadow-sm',
                   isMatched && !selectedLeft && 'bg-card shadow-sm',
                   !isMatched && selectedLeft !== pair.id && 'border-border bg-card hover:border-primary/30',
                 )}
+                aria-pressed={isMatched}
+                aria-label={`Select term: ${pair.left}${isMatched ? ' (matched)' : ''}`}
                 style={color ? { borderColor: color, backgroundColor: `${color}10` } : undefined}
               >
                 {pair.left}
@@ -135,12 +137,13 @@ export default function MatchingQuestion({ question, value, onChange, disabled, 
                 onClick={() => handleRightClick(pair.id)}
                 disabled={disabled || !selectedLeft}
                 className={cn(
-                  'px-4 py-3 rounded-xl border-2 text-sm font-medium text-left transition-all',
+                  'px-4 py-3 rounded-xl border-2 text-base font-medium text-left transition-all',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   selectedLeft && !isMatched && 'border-primary/30 hover:border-primary hover:bg-primary-light cursor-pointer',
                   !selectedLeft && !isMatched && 'border-border bg-card',
                   isMatched && 'bg-card shadow-sm',
                 )}
+                aria-label={`${pair.right}${isMatched ? ' (matched)' : ''}`}
                 style={color ? { borderColor: color, backgroundColor: `${color}10` } : undefined}
               >
                 {pair.right}
