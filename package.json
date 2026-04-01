@@ -53,6 +53,11 @@
       "**/__tests__/**/*.js",
       "**/?(*.)+(spec|test).js"
     ],
+    "testPathIgnorePatterns": [
+      "[/\\\\]infra[/\\\\]cdk[/\\\\]dist[/\\\\]",
+      "[/\\\\]infra[/\\\\]cdk[/\\\\]node_modules[/\\\\]",
+      "[/\\\\]\\.claude[/\\\\]"
+    ],
     "collectCoverageFrom": [
       "src/**/*.js",
       "backend/**/*.js",
