@@ -30,6 +30,8 @@ import AchievementsPage      from './pages/AchievementsPage';
 import SettingsPage          from './pages/SettingsPage';
 import NotFoundPage          from './pages/NotFoundPage';
 import SolvePage             from './modules/solve';
+// @ts-expect-error — JSX test runner, no TS types
+import TestRunnerPage        from './pages/TestRunnerPage.jsx';
 
 /** Redirect old /worksheet/:id to /solve/:id */
 function WorksheetRedirect() {
@@ -57,6 +59,9 @@ export default function App() {
       <Route path="/reports"          element={<ReportsPage />} />
       <Route path="/achievements"     element={<AchievementsPage />} />
       <Route path="/settings"         element={<SettingsPage />} />
+
+      {/* ── Dev tools ──────────────────────────────────── */}
+      <Route path="/tests" element={<TestRunnerPage />} />
 
       {/* ── Fallback ────────────────────────────────────── */}
       <Route path="*" element={<NotFoundPage />} />
