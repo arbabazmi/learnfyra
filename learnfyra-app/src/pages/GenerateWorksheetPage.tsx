@@ -5,90 +5,28 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   ArrowLeft,
   Sparkles,
   CheckCircle,
   Timer,
-  Infinity,
   ChevronDown,
   Minus,
   Plus,
+  FileText,
+  FileDown,
+  Printer,
+  KeyRound,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
-
-// ── Topic data — keyed by subject ─────────────────────────────────────────────
-
-const TOPICS_BY_SUBJECT: Record<string, string[]> = {
-  Math: [
-    'Algebra',
-    'Geometry',
-    'Fractions',
-    'Multiplication',
-    'Division',
-    'Decimals',
-    'Percentages',
-    'Statistics & Data',
-    'Number Sense',
-    'Word Problems',
-    'Measurement',
-    'Coordinate Plane',
-  ],
-  ELA: [
-    'Reading Comprehension',
-    'Vocabulary',
-    'Grammar & Mechanics',
-    'Parts of Speech',
-    'Writing — Narrative',
-    'Writing — Informative',
-    'Figurative Language',
-    'Main Idea & Details',
-    'Context Clues',
-    'Spelling Patterns',
-  ],
-  Science: [
-    'Biology',
-    'Chemistry',
-    'Physics',
-    'Earth Science',
-    'Life Cycles',
-    'Ecosystems',
-    'Human Body',
-    'Space & Solar System',
-    'Weather & Climate',
-    'Matter & Energy',
-    'Forces & Motion',
-    'Scientific Method',
-  ],
-  'Social Studies': [
-    'US History',
-    'World Geography',
-    'Civics & Government',
-    'Economics Basics',
-    'The American Revolution',
-    'The Civil War',
-    'Ancient Civilizations',
-    'Westward Expansion',
-    'The Constitution',
-    'Map Skills',
-  ],
-  Health: [
-    'Nutrition & Diet',
-    'Human Body Systems',
-    'Mental Health & Wellness',
-    'Personal Hygiene',
-    'Physical Fitness',
-    'Disease Prevention',
-    'First Aid',
-    'Substance Awareness',
-  ],
-};
-
-const SUBJECTS = Object.keys(TOPICS_BY_SUBJECT);
+import { generateMockWorksheet, saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
+import { printWorksheet, downloadAsWord, downloadAsPDF } from '@/modules/solve/worksheetExport';
+import type { Subject } from '@/modules/solve/types';
+import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
 
 const DIFFICULTIES = [
   {
@@ -156,23 +94,25 @@ function estimateMinutes(questionCount: number, difficulty: DifficultyValue): nu
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type TimerMode = 'timed' | 'untimed';
 type GenerationState = 'idle' | 'generating' | 'success';
 
 const GenerateWorksheetPage: React.FC = () => {
   // ── Form state
   const [grade,          setGrade]          = React.useState<string>('7');
   const [subject,        setSubject]        = React.useState<string>('Math');
-  const [topic,          setTopic]          = React.useState<string>('Algebra');
+  const [topic,          setTopic]          = React.useState<string>(
+    TOPICS_BY_GRADE_SUBJECT[7]?.['Math']?.[0] ?? 'Algebra',
+  );
   const [difficulty,     setDifficulty]     = React.useState<DifficultyValue>('Medium');
   const [questionCount,  setQuestionCount]  = React.useState<number>(10);
-  const [timerMode,      setTimerMode]      = React.useState<TimerMode>('timed');
   const [selectedTypes,  setSelectedTypes]  = React.useState<string[]>(
     QUESTION_TYPES.map((t) => t.value),
   );
 
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
+  const [generatedId, setGeneratedId] = React.useState<string | null>(null);
+  const navigate = useNavigate();
 
   usePageMeta({
     title: 'Generate Worksheet',
@@ -182,14 +122,30 @@ const GenerateWorksheetPage: React.FC = () => {
   });
 
   // ── Derived values
-  const topicOptions    = TOPICS_BY_SUBJECT[subject] ?? [];
+  const gradeNum        = parseInt(grade, 10);
+  const topicOptions    = TOPICS_BY_GRADE_SUBJECT[gradeNum]?.[subject] ?? [];
   const estimatedMins   = estimateMinutes(questionCount, difficulty);
   const allTypesSelected = selectedTypes.length === QUESTION_TYPES.length;
 
-  // When subject changes, reset topic to the first option for that subject
+  // When grade changes, keep subject but reset topic to first for that grade+subject
+  const handleGradeChange = (newGrade: string) => {
+    setGrade(newGrade);
+    const g = parseInt(newGrade, 10);
+    const subjectTopics = TOPICS_BY_GRADE_SUBJECT[g]?.[subject];
+    // If current subject has no topics for this grade, keep first available subject
+    if (!subjectTopics || subjectTopics.length === 0) {
+      const firstSubj = SUBJECTS.find(s => (TOPICS_BY_GRADE_SUBJECT[g]?.[s]?.length ?? 0) > 0) ?? subject;
+      setSubject(firstSubj);
+      setTopic(TOPICS_BY_GRADE_SUBJECT[g]?.[firstSubj]?.[0] ?? '');
+    } else {
+      setTopic(subjectTopics[0]);
+    }
+  };
+
+  // When subject changes, reset topic to the first option for that grade+subject
   const handleSubjectChange = (newSubject: string) => {
     setSubject(newSubject);
-    setTopic(TOPICS_BY_SUBJECT[newSubject]?.[0] ?? '');
+    setTopic(TOPICS_BY_GRADE_SUBJECT[gradeNum]?.[newSubject]?.[0] ?? '');
   };
 
   // Toggle a question type checkbox
@@ -205,11 +161,24 @@ const GenerateWorksheetPage: React.FC = () => {
   const incrementQ = () => setQuestionCount((n) => Math.min(30, n + 1));
   const decrementQ = () => setQuestionCount((n) => Math.max(5,  n - 1));
 
-  // Mock generation
+  // Generate worksheet with mock question bank, store in localStorage
   const handleGenerate = () => {
     if (selectedTypes.length === 0) return;
     setGenState('generating');
-    setTimeout(() => setGenState('success'), 2000);
+    setTimeout(() => {
+      const worksheet = generateMockWorksheet({
+        grade: gradeNum,
+        subject: subject as Subject,
+        topic,
+        difficulty: difficulty.toLowerCase() as 'easy' | 'medium' | 'hard' | 'mixed',
+        questionCount,
+        timerMode: 'timed',
+        questionTypes: selectedTypes,
+      });
+      saveWorksheet(worksheet);
+      setGeneratedId(worksheet.worksheetId);
+      setGenState('success');
+    }, 2000);
   };
 
   // ── Shared select class
@@ -263,34 +232,122 @@ const GenerateWorksheetPage: React.FC = () => {
         </section>
 
         {/* ── Success state ──────────────────────────────────────────────── */}
-        {genState === 'success' && (
+        {genState === 'success' && generatedId && (
           <section
             aria-label="Worksheet ready"
-            className="bg-white rounded-2xl border border-border shadow-card p-8 text-center space-y-5"
+            className="bg-white rounded-2xl border border-border shadow-card p-8 space-y-6"
           >
-            <div className="w-16 h-16 rounded-2xl bg-success-light flex items-center justify-center mx-auto">
-              <CheckCircle className="size-8 text-secondary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-extrabold text-foreground">
+            {/* Header */}
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-success-light flex items-center justify-center mx-auto">
+                <CheckCircle className="size-8 text-secondary" />
+              </div>
+              <h3 className="text-xl font-extrabold text-foreground mt-4">
                 Worksheet Ready!
               </h3>
               <p className="text-sm text-muted-foreground mt-2">
                 Your worksheet has been generated with{' '}
                 <span className="font-bold text-foreground">
                   {questionCount} questions
-                </span>
-                .
+                </span>{' '}
+                — {subject}, {topic}, Grade {grade}.
               </p>
             </div>
+
+            {/* Primary CTA — solve online */}
             <div className="flex flex-wrap justify-center gap-3">
-              <Button variant="primary" size="md" className="gap-2" asChild>
-                <Link to="/worksheet/ws-new">
+              <Button variant="primary" size="lg" className="gap-2" asChild>
+                <Link to={`/solve/${generatedId}`}>
                   <Sparkles className="size-4" />
-                  Start Solving
+                  Start Solving Online
                 </Link>
               </Button>
-              <Button variant="outline" size="md" asChild>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 border-t border-border" />
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                Offline &amp; Print
+              </span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+
+            {/* Download & Print grid */}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* PDF */}
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = loadWorksheet(generatedId);
+                  if (ws) downloadAsPDF(ws);
+                }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center group-hover:bg-destructive/15 transition-colors">
+                  <FileDown className="size-5 text-destructive" />
+                </div>
+                <span className="text-sm font-bold text-foreground">Save as PDF</span>
+                <span className="text-[11px] text-muted-foreground">Print dialog → Save as PDF</span>
+              </button>
+
+              {/* Word */}
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = loadWorksheet(generatedId);
+                  if (ws) downloadAsWord(ws);
+                }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                  <FileText className="size-5 text-primary" />
+                </div>
+                <span className="text-sm font-bold text-foreground">Download Word</span>
+                <span className="text-[11px] text-muted-foreground">.doc format</span>
+              </button>
+
+              {/* Print */}
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = loadWorksheet(generatedId);
+                  if (ws) printWorksheet(ws);
+                }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+                  <Printer className="size-5 text-amber-600" />
+                </div>
+                <span className="text-sm font-bold text-foreground">Print Worksheet</span>
+                <span className="text-[11px] text-muted-foreground">Questions only</span>
+              </button>
+
+              {/* Answer Key */}
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = loadWorksheet(generatedId);
+                  if (ws) downloadAsWord(ws, true);
+                }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-secondary-light hover:border-secondary/30 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-secondary-light flex items-center justify-center group-hover:bg-secondary/15 transition-colors">
+                  <KeyRound className="size-5 text-secondary" />
+                </div>
+                <span className="text-sm font-bold text-foreground">Answer Key</span>
+                <span className="text-[11px] text-muted-foreground">.doc with answers</span>
+              </button>
+            </div>
+
+            {/* Secondary links */}
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <Button variant="ghost" size="md" asChild>
+                <Link to="/worksheet/new" onClick={() => { setGenState('idle'); setGeneratedId(null); }}>
+                  Generate Another
+                </Link>
+              </Button>
+              <Button variant="ghost" size="md" asChild>
                 <Link to="/worksheet">Back to Worksheets</Link>
               </Button>
             </div>
@@ -326,7 +383,7 @@ const GenerateWorksheetPage: React.FC = () => {
                         <select
                           id="grade-select"
                           value={grade}
-                          onChange={(e) => setGrade(e.target.value)}
+                          onChange={(e) => handleGradeChange(e.target.value)}
                           className={selectClass}
                         >
                           {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
@@ -501,78 +558,6 @@ const GenerateWorksheetPage: React.FC = () => {
                 {/* Divider */}
                 <div className="border-t border-border" />
 
-                {/* Section: Timer Mode */}
-                <div className="space-y-3">
-                  <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest">
-                    Timer Mode
-                  </h3>
-                  <div
-                    className="grid grid-cols-2 gap-2.5"
-                    role="radiogroup"
-                    aria-label="Timer mode"
-                  >
-                    {/* Timed */}
-                    {(
-                      [
-                        {
-                          value: 'timed' as TimerMode,
-                          Icon: Timer,
-                          label: 'Timed',
-                          description: 'Practice under test conditions',
-                          color: '#3D9AE8',
-                        },
-                        {
-                          value: 'untimed' as TimerMode,
-                          Icon: Infinity,
-                          label: 'Untimed',
-                          description: 'Solve at your own pace',
-                          color: '#6DB84B',
-                        },
-                      ] as const
-                    ).map(({ value, Icon, label, description, color }) => {
-                      const selected = timerMode === value;
-                      return (
-                        <label
-                          key={value}
-                          className={[
-                            'flex flex-col gap-1.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all duration-150 select-none',
-                            selected
-                              ? 'border-primary bg-primary-light'
-                              : 'border-border bg-surface hover:border-primary/30 hover:bg-primary-light/20',
-                          ].join(' ')}
-                        >
-                          <input
-                            type="radio"
-                            name="timer-mode"
-                            value={value}
-                            checked={selected}
-                            onChange={() => setTimerMode(value)}
-                            className="sr-only"
-                          />
-                          <div className="flex items-center gap-2">
-                            <Icon
-                              className="size-4 shrink-0"
-                              style={{ color: selected ? color : undefined }}
-                              aria-hidden="true"
-                            />
-                            <span
-                              className={`text-sm font-bold ${selected ? 'text-primary' : 'text-foreground'}`}
-                            >
-                              {label}
-                            </span>
-                          </div>
-                          <span className="text-xs text-muted-foreground leading-snug pl-6">
-                            {description}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-border" />
-
                 {/* Section: Question Types */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -696,9 +681,6 @@ const GenerateWorksheetPage: React.FC = () => {
                   >
                     {difficulty}
                   </Badge>
-                  <Badge variant={timerMode === 'timed' ? 'primary' : 'muted'}>
-                    {timerMode === 'timed' ? 'Timed' : 'Untimed'}
-                  </Badge>
                 </div>
 
                 {/* Stats list */}
@@ -712,10 +694,6 @@ const GenerateWorksheetPage: React.FC = () => {
                       {
                         label: 'Questions',
                         value: `${questionCount} questions · ~${estimatedMins} min`,
-                      },
-                      {
-                        label: 'Timer',
-                        value: timerMode === 'timed' ? 'Timed mode' : 'Untimed mode',
                       },
                     ] as const
                   ).map(({ label, value }) => (

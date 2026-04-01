@@ -253,7 +253,11 @@ async function handleForgotPassword(body) {
     return errorResponse(400, 'email is required.');
   }
 
-  await requestPasswordReset(email);
+  try {
+    await requestPasswordReset(email);
+  } catch {
+    // Swallow errors — never reveal whether the email exists
+  }
 
   return {
     statusCode: 200,
@@ -273,17 +277,30 @@ async function handleForgotPassword(body) {
  * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
  */
 async function handleResetPassword(body) {
-  const { token, newPassword } = body || {};
+  const { token: rawToken, newPassword } = body || {};
 
-  if (!token || !newPassword) {
+  if (!rawToken || !newPassword) {
     return errorResponse(400, 'token and newPassword are required.');
   }
+
+  // Validate token is a UUID v4 format (prevents NoSQL injection / oversized input)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(rawToken)) {
+    return errorResponse(400, 'Invalid token format.');
+  }
+
+  const token = rawToken.toLowerCase().trim();
 
   if (newPassword.length < 8) {
     return errorResponse(400, 'Password must be at least 8 characters.');
   }
 
-  await executeReset(token, newPassword);
+  try {
+    await executeReset(token, newPassword);
+  } catch (err) {
+    const code = err.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 400;
+    return errorResponse(code, err.message || 'Password reset failed.');
+  }
 
   return {
     statusCode: 200,

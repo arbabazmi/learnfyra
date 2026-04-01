@@ -55,7 +55,7 @@ export function isPasswordValid(password: string): boolean {
 }
 
 export function isEmailValid(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────

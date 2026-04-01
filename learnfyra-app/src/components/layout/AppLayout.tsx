@@ -48,10 +48,31 @@ interface AppLayoutProps {
   pageTitle?: string;
 }
 
+function getInitials(name: string | undefined): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return parts[0][0].toUpperCase();
+}
+
 const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
   const location = useLocation();
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const notifRef = React.useRef<HTMLDivElement>(null);
+
+  // Close notification dropdown on outside click
+  React.useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
 
   const SidebarContent: React.FC = () => (
     <div className="flex flex-col h-full">
@@ -204,15 +225,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
 
           {/* Topbar actions */}
           <div className="flex items-center gap-2">
-            <button
-              className="relative flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="size-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
-            </button>
+            {/* Notification bell with dropdown */}
+            <div ref={notifRef} className="relative">
+              <button
+                className="relative flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Notifications"
+                onClick={() => setNotifOpen((v) => !v)}
+              >
+                <Bell className="size-4" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-border shadow-xl p-4 z-50">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Notifications</p>
+                  <p className="text-sm text-muted-foreground">No new notifications</p>
+                </div>
+              )}
+            </div>
+            {/* User avatar — dynamic initials */}
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
-              PS
+              {getInitials(auth.user?.displayName)}
             </div>
           </div>
         </header>

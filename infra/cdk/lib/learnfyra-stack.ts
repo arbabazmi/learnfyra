@@ -578,6 +578,24 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-admin — admin question-bank routes`,
     });
 
+    // ── Lambda: Dashboard handler ──────────────────────────────────────────────
+    const dashboardFn = new NodejsFunction(this, 'DashboardFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-dashboard`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('dashboardHandler.js'),
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-dashboard — dashboard stats, recent worksheets, subject progress`,
+    });
+
     worksheetBucket.grantRead(solveFn);
     worksheetBucket.grantRead(submitFn);
 
@@ -593,11 +611,12 @@ export class LearnfyraStack extends cdk.Stack {
       rewardsFn,
       studentFn,
       adminFn,
+      dashboardFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn].forEach((fn) => {
+    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
       fn.addEnvironment('AUTH_MODE', 'cognito');
     });
@@ -670,6 +689,17 @@ export class LearnfyraStack extends cdk.Stack {
         apiKeyRequired: false,
       });
 
+    authResource
+      .addResource('forgot-password')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+    authResource
+      .addResource('reset-password')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+
     const authOauthResource = authResource.addResource('oauth');
     authOauthResource
       .addResource('{provider}')
@@ -712,6 +742,45 @@ export class LearnfyraStack extends cdk.Stack {
     progressResource
       .addResource('history')
       .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('insights')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('parent')
+      .addResource('{childId}')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Dashboard routes (JWT protected) ──────────────────────────────────────
+    const dashboardResource = apiResource.addResource('dashboard');
+    dashboardResource
+      .addResource('stats')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('recent-worksheets')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('subject-progress')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -820,6 +889,7 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Rewards', fn: rewardsFn, p95MsThreshold: 3000 },
       { id: 'Student', fn: studentFn, p95MsThreshold: 3000 },
       { id: 'Admin', fn: adminFn, p95MsThreshold: 4000 },
+      { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {

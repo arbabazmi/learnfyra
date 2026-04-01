@@ -57,21 +57,21 @@ export interface UseDashboardReturn {
 
 export function useDashboard(): UseDashboardReturn {
   const auth = useAuth();
-  const [stats, setStats] = React.useState<DashboardStats>(GUEST_STATS);
-  const [recentWorksheets, setRecentWorksheets] = React.useState<DashboardWorksheet[]>(GUEST_WORKSHEETS);
-  const [subjectProgress, setSubjectProgress] = React.useState<SubjectProgress[]>(GUEST_PROGRESS);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
   const isGuest = auth.isGuest;
+  const token = getToken();
+
+  // Initialize with appropriate defaults — guest gets dummy data, logged-in gets empty (avoids flash of fake data)
+  const EMPTY_STATS: DashboardStats = { worksheetsDone: 0, inProgress: 0, bestScore: 0, studyTime: '0m' };
+  const [stats, setStats] = React.useState<DashboardStats>(isGuest ? GUEST_STATS : EMPTY_STATS);
+  const [recentWorksheets, setRecentWorksheets] = React.useState<DashboardWorksheet[]>(isGuest ? GUEST_WORKSHEETS : []);
+  const [subjectProgress, setSubjectProgress] = React.useState<SubjectProgress[]>(isGuest ? GUEST_PROGRESS : []);
+  const [isLoading, setIsLoading] = React.useState(!isGuest);
+  const [error, setError] = React.useState<string | null>(null);
   const greeting = getGreeting();
 
   const userName = auth.isAuthenticated && auth.user
     ? auth.user.displayName.split(' ')[0]
     : (auth.selectedRole ? auth.selectedRole.charAt(0).toUpperCase() + auth.selectedRole.slice(1) : 'Student');
-
-  // Empty defaults for logged-in users (real zeros, not fake data)
-  const EMPTY_STATS: DashboardStats = { worksheetsDone: 0, inProgress: 0, bestScore: 0, studyTime: '0m' };
 
   // Fetch real data for logged-in users
   React.useEffect(() => {
@@ -82,13 +82,14 @@ export function useDashboard(): UseDashboardReturn {
       return;
     }
 
+    let isMounted = true;
     const controller = new AbortController();
     setIsLoading(true);
     setError(null);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getToken()}`,
+      'Authorization': `Bearer ${token}`,
     };
 
     Promise.all([
@@ -97,22 +98,27 @@ export function useDashboard(): UseDashboardReturn {
       fetch(`${apiUrl}/api/dashboard/subject-progress`, { headers, signal: controller.signal }).then(r => r.ok ? r.json() : null),
     ])
       .then(([s, w, p]) => {
+        if (!isMounted) return;
         setStats(s || EMPTY_STATS);
         setRecentWorksheets(Array.isArray(w) ? w : []);
         setSubjectProgress(Array.isArray(p) ? p : []);
       })
       .catch((err) => {
-        if (err.name !== 'AbortError') {
-          setError('Failed to load dashboard data.');
-          setStats(EMPTY_STATS);
-          setRecentWorksheets([]);
-          setSubjectProgress([]);
-        }
+        if (!isMounted || err.name === 'AbortError') return;
+        setError('Failed to load dashboard data.');
+        setStats(EMPTY_STATS);
+        setRecentWorksheets([]);
+        setSubjectProgress([]);
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
 
-    return () => controller.abort();
-  }, [isGuest]);
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [isGuest, token]);
 
   return { isGuest, userName, greeting, stats, recentWorksheets, subjectProgress, isLoading, error };
 }

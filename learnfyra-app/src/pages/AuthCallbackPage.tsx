@@ -6,15 +6,20 @@
 
 import * as React from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { setAuth, getSelectedRole } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/ui/Logo';
 
 const AuthCallbackPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const auth = useAuth();
   const [error, setError] = React.useState<string | null>(null);
+  const processed = React.useRef(false);
 
   React.useEffect(() => {
+    // Prevent double-processing in StrictMode
+    if (processed.current) return;
+
     const token = searchParams.get('token');
     const userRaw = searchParams.get('user');
     const errorMsg = searchParams.get('error');
@@ -32,21 +37,16 @@ const AuthCallbackPage: React.FC = () => {
 
     try {
       const user = JSON.parse(userRaw || '{}');
-      setAuth(token, user);
 
-      // Route based on role — use server role first, fall back to onboarding selection
-      const role = user.role || getSelectedRole() || 'student';
-      if (role === 'student') {
-        navigate('/dashboard', { replace: true });
-      } else if (role === 'teacher' || role === 'parent') {
-        navigate('/dashboard', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
+      // Use AuthContext signIn — updates both localStorage AND React state
+      auth.signIn(token, user);
+      processed.current = true;
+
+      navigate('/dashboard', { replace: true });
     } catch {
       navigate('/', { replace: true });
     }
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, auth]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">

@@ -16,7 +16,7 @@
  *   *                  404 Not Found
  */
 
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route, Navigate, useParams } from 'react-router';
 import Landing               from './pages/Landing';
 import AuthCallbackPage      from './pages/AuthCallbackPage';
 import ForgotPasswordPage    from './pages/ForgotPasswordPage';
@@ -25,17 +25,24 @@ import VerifyResetCodePage   from './pages/VerifyResetCodePage';
 import DashboardPage         from './pages/DashboardPage';
 import WorksheetsListPage    from './pages/WorksheetsListPage';
 import GenerateWorksheetPage from './pages/GenerateWorksheetPage';
-import WorksheetPage         from './pages/WorksheetPage';
 import ReportsPage           from './pages/ReportsPage';
 import AchievementsPage      from './pages/AchievementsPage';
 import SettingsPage          from './pages/SettingsPage';
 import NotFoundPage          from './pages/NotFoundPage';
+import SolvePage             from './modules/solve';
+
+/** Redirect old /worksheet/:id to /solve/:id */
+function WorksheetRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/solve/${id}`} replace />;
+}
 
 export default function App() {
   return (
     <Routes>
       {/* ── Public ──────────────────────────────────────── */}
       <Route path="/"              element={<Landing />} />
+      <Route path="/solve/:worksheetId" element={<SolvePage />} />
       <Route path="/auth/callback"          element={<AuthCallbackPage />} />
       <Route path="/auth/forgot-password"  element={<ForgotPasswordPage />} />
       <Route path="/auth/reset-password"   element={<ResetPasswordPage />} />
@@ -46,7 +53,7 @@ export default function App() {
       <Route path="/dashboard"        element={<DashboardPage />} />
       <Route path="/worksheet"        element={<WorksheetsListPage />} />
       <Route path="/worksheet/new"    element={<GenerateWorksheetPage />} />
-      <Route path="/worksheet/:id"    element={<WorksheetPage />} />
+      <Route path="/worksheet/:id"    element={<WorksheetRedirect />} />
       <Route path="/reports"          element={<ReportsPage />} />
       <Route path="/achievements"     element={<AchievementsPage />} />
       <Route path="/settings"         element={<SettingsPage />} />

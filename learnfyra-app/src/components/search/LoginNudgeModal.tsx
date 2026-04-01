@@ -41,11 +41,11 @@ const LoginNudgeModal: React.FC<LoginNudgeModalProps> = ({
   isOpen, onContinueAsGuest, onGoogleSignIn, onEmailSignIn,
 }) => {
   React.useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      markNudgeShown();
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    markNudgeShown();
+    return () => { document.body.style.overflow = prev; };
   }, [isOpen]);
 
   if (!isOpen) return null;

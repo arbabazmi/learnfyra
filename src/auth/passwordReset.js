@@ -148,10 +148,15 @@ export async function resetPassword(tokenId, newPassword) {
     throw err;
   }
 
+  // Mark the token as used FIRST (prevent race condition / reuse)
+  const marked = await db.updateItem(RESET_TABLE, tokenId, { used: true });
+  if (!marked) {
+    const err = new Error('Failed to process reset token.');
+    err.statusCode = 500;
+    throw err;
+  }
+
   // Hash the new password and update the user record
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   await db.updateItem(USERS_TABLE, record.userId, { passwordHash });
-
-  // Mark the token as used
-  await db.updateItem(RESET_TABLE, record.tokenId, { used: true });
 }
