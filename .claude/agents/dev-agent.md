@@ -26,6 +26,11 @@ src/templates/   worksheet.html.js, styles.css.js
 src/utils/       fileUtils.js, logger.js, retryUtils.js
 backend/handlers/ generateHandler.js, downloadHandler.js
 backend/middleware/ validator.js
+
+## Online Solve (v3.0 — in progress)
+src/solve/       scorer.js, resultBuilder.js
+backend/handlers/ solveHandler.js, submitHandler.js
+frontend/        solve.html, css/solve.css, js/solve.js
 ```
 
 Always read an existing file fully before modifying it.

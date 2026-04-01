@@ -1,0 +1,32 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/arbab-github/learnfyra/.claude/hooks/syntax-check.cjs",
+            "timeout": 10,
+            "statusMessage": "Checking syntax..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/arbab-github/learnfyra/.claude/hooks/test-handlers.cjs",
+            "timeout": 120,
+            "async": true,
+            "statusMessage": "Running tests..."
+          }
+        ]
+      }
+    ]
+  }
+}

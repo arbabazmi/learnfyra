@@ -23,6 +23,7 @@ CloudFront (HTTPS + caching)
   └── /*     → S3 static frontend
 
 Lambda: learnfyra-generate (60s/1024MB), learnfyra-download (30s/256MB), learnfyra-list (10s/128MB)
+        learnfyra-solve (10s/128MB), learnfyra-submit (15s/256MB)   ← deploy after local feature is complete
 S3: worksheets bucket (private), frontend bucket (public), logs bucket (private)
 Secrets Manager: learnfyra/{env}/secrets → ANTHROPIC_API_KEY
 ```

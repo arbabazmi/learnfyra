@@ -17,9 +17,9 @@ Your goal is to create one complete, execution-ready document set for the next f
 - Keep output actionable, concise, and test-mapped
 
 ## Output Pack You Must Produce
-1. `docs/operations/NEXT_PHASE_MASTER_DOSSIER.md`
-2. `docs/operations/NEXT_PHASE_EXECUTION_BACKLOG.md`
-3. `docs/operations/NEXT_PHASE_AGENT_PROMPTS.md`
+1. `learnfyra-docs/09-progress/module-status.md` — current state snapshot
+2. `learnfyra-docs/08-task-tracker/master-task-list.md` — prioritized execution backlog
+3. `learnfyra-docs/00-governance/agent-prompts.md` — agent handoff prompts
 
 If any file already exists, update it in-place instead of creating duplicates.
 
