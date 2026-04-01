@@ -58,11 +58,11 @@ describe('putItem', () => {
 
 describe('getItem — single key table', () => {
   it('returns the item when found', async () => {
-    const item = { certificateId: 'cert-1', score: 95 };
+    const item = { id: 'cert-1', score: 95 };
     ddbMock.on(GetCommand).resolves({ Item: item });
     const result = await dynamoDbAdapter.getItem('certificates', 'cert-1');
     expect(result).toEqual(item);
-    expect(ddbMock.commandCalls(GetCommand)[0].args[0].input.Key).toEqual({ certificateId: 'cert-1' });
+    expect(ddbMock.commandCalls(GetCommand)[0].args[0].input.Key).toEqual({ id: 'cert-1' });
   });
 
   it('returns null when item is not found', async () => {
@@ -72,22 +72,20 @@ describe('getItem — single key table', () => {
   });
 });
 
-// ─── getItem — composite key ─────────────────────────────────────────────────
+// ─── getItem — attempts table (formerly composite key) ───────────────────────
 
-describe('getItem — composite key table', () => {
-  it('queries by PK and returns first result', async () => {
-    const item = { userId: 'u1', sortKey: 'ws1#ts', score: 80 };
-    ddbMock.on(QueryCommand).resolves({ Items: [item] });
-    const result = await dynamoDbAdapter.getItem('worksheetattempts', 'u1');
+describe('getItem — attempts table', () => {
+  it('returns the item when found by attemptId', async () => {
+    const item = { attemptId: 'a1', score: 80 };
+    ddbMock.on(GetCommand).resolves({ Item: item });
+    const result = await dynamoDbAdapter.getItem('worksheetattempts', 'a1');
     expect(result).toEqual(item);
-    const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.ExpressionAttributeValues[':pkval']).toBe('u1');
-    expect(call.args[0].input.Limit).toBe(1);
+    expect(ddbMock.commandCalls(GetCommand)[0].args[0].input.Key).toEqual({ attemptId: 'a1' });
   });
 
-  it('returns null when no items found', async () => {
-    ddbMock.on(QueryCommand).resolves({ Items: [] });
-    const result = await dynamoDbAdapter.getItem('worksheetattempts', 'u-none');
+  it('returns null when no item found', async () => {
+    ddbMock.on(GetCommand).resolves({ Item: undefined });
+    const result = await dynamoDbAdapter.getItem('worksheetattempts', 'no-such');
     expect(result).toBeNull();
   });
 });
@@ -96,7 +94,7 @@ describe('getItem — composite key table', () => {
 
 describe('deleteItem — single key table', () => {
   it('returns true and calls DeleteCommand when item exists', async () => {
-    ddbMock.on(GetCommand).resolves({ Item: { certificateId: 'c1' } });
+    ddbMock.on(GetCommand).resolves({ Item: { id: 'c1' } });
     ddbMock.on(DeleteCommand).resolves({});
     const result = await dynamoDbAdapter.deleteItem('certificates', 'c1');
     expect(result).toBe(true);
@@ -163,12 +161,12 @@ describe('queryByField', () => {
 
 describe('updateItem — single key table', () => {
   it('calls UpdateCommand and returns updated attributes', async () => {
-    const updated = { certificateId: 'c1', score: 99 };
+    const updated = { id: 'c1', score: 99 };
     ddbMock.on(UpdateCommand).resolves({ Attributes: updated });
     const result = await dynamoDbAdapter.updateItem('certificates', 'c1', { score: 99 });
     expect(result).toEqual(updated);
     const call = ddbMock.commandCalls(UpdateCommand)[0];
-    expect(call.args[0].input.Key).toEqual({ certificateId: 'c1' });
+    expect(call.args[0].input.Key).toEqual({ id: 'c1' });
     expect(call.args[0].input.UpdateExpression).toContain('SET');
   });
 
@@ -183,26 +181,26 @@ describe('updateItem — single key table', () => {
 
 describe('queryByPk', () => {
   it('queries by PK and returns all items', async () => {
-    const items = [{ userId: 'u1', sortKey: 'ws1', score: 80 }];
+    const items = [{ attemptId: 'a1', score: 80 }];
     ddbMock.on(QueryCommand).resolves({ Items: items });
-    const result = await dynamoDbAdapter.queryByPk('worksheetattempts', 'u1');
+    const result = await dynamoDbAdapter.queryByPk('worksheetattempts', 'a1');
     expect(result).toEqual(items);
     const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.ExpressionAttributeValues[':pkval']).toBe('u1');
+    expect(call.args[0].input.ExpressionAttributeValues[':pkval']).toBe('a1');
   });
 
   it('passes IndexName option to QueryCommand', async () => {
     ddbMock.on(QueryCommand).resolves({ Items: [] });
-    await dynamoDbAdapter.queryByPk('worksheetattempts', 'u1', { indexName: 'userId-index' });
-    expect(ddbMock.commandCalls(QueryCommand)[0].args[0].input.IndexName).toBe('userId-index');
+    await dynamoDbAdapter.queryByPk('worksheetattempts', 'a1', { indexName: 'studentId-index' });
+    expect(ddbMock.commandCalls(QueryCommand)[0].args[0].input.IndexName).toBe('studentId-index');
   });
 
   it('paginates across multiple pages', async () => {
     ddbMock
       .on(QueryCommand)
-      .resolvesOnce({ Items: [{ userId: 'u1', sortKey: 'sk1' }], LastEvaluatedKey: { sortKey: 'sk1' } })
-      .resolvesOnce({ Items: [{ userId: 'u1', sortKey: 'sk2' }] });
-    const result = await dynamoDbAdapter.queryByPk('worksheetattempts', 'u1');
+      .resolvesOnce({ Items: [{ attemptId: 'a1' }], LastEvaluatedKey: { attemptId: 'a1' } })
+      .resolvesOnce({ Items: [{ attemptId: 'a2' }] });
+    const result = await dynamoDbAdapter.queryByPk('worksheetattempts', 'a1');
     expect(result).toHaveLength(2);
   });
 });
