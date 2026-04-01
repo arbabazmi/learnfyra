@@ -69,14 +69,6 @@ export class LearnfyraStack extends cdk.Stack {
       prod:    '1079696386286-edsmfmdk6j8073qnm05uii6b2c6o655o.apps.googleusercontent.com',
     };
 
-    // OAuth callback base URLs per environment
-    const callbackBaseUrls: Record<string, string> = {
-      dev:     'https://dev.learnfyra.com',
-      staging: 'https://qa.learnfyra.com',
-      prod:    'https://www.learnfyra.com',
-    };
-    const callbackBaseUrl = callbackBaseUrls[appEnv] ?? 'http://localhost:3000';
-
     const rootDomainName = props.rootDomainName;
     const hostedZoneId = props.hostedZoneId;
     const zone =
@@ -106,6 +98,46 @@ export class LearnfyraStack extends cdk.Stack {
     const authDomainName = isProd
       ? `auth.${rootDomainName}`
       : `auth.${dnsEnvLabel}.${rootDomainName}`;
+
+    // Cognito OAuth URLs by environment.
+    // Note: appEnv=staging maps to the QA domain set.
+    const cognitoOAuthUrlsByEnv: Record<'dev' | 'staging' | 'prod', { callbackUrls: string[]; logoutUrls: string[] }> = {
+      dev: {
+        callbackUrls: [
+          'https://web.dev.learnfyra.com/callback',
+          'http://localhost:5173/callback',
+        ],
+        logoutUrls: [
+          'https://dev.learnfyra.com',
+          'https://web.dev.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      staging: {
+        callbackUrls: [
+          'https://qa.learnfyra.com/callback',
+          'https://web.qa.learnfyra.com/callback',
+          'http://localhost:5173/callback',
+        ],
+        logoutUrls: [
+          'https://qa.learnfyra.com',
+          'https://web.qa.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      prod: {
+        callbackUrls: [
+          'https://learnfyra.com/callback',
+          'https://www.learnfyra.com/callback',
+        ],
+        logoutUrls: [
+          'https://learnfyra.com',
+          'https://www.learnfyra.com',
+        ],
+      },
+    };
+
+    const oauthUrls = cognitoOAuthUrlsByEnv[appEnv];
 
     let cloudFrontCertificate: acm.ICertificate | undefined;
     if (enableCustomDomains) {
@@ -305,8 +337,8 @@ export class LearnfyraStack extends cdk.Stack {
           cognito.OAuthScope.OPENID,
           cognito.OAuthScope.PROFILE,
         ],
-        callbackUrls: [`${callbackBaseUrl}/api/auth/callback/google`],
-        logoutUrls: [callbackBaseUrl],
+        callbackUrls: oauthUrls.callbackUrls,
+        logoutUrls: oauthUrls.logoutUrls,
       },
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.GOOGLE,
@@ -358,6 +390,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+        MOCK_AI: 'false',
         SSM_PARAM_NAME: `/learnfyra/${appEnv}/anthropic-api-key`,
         MAX_RETRIES: isProd ? '0' : '1',
         ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
@@ -644,8 +677,47 @@ export class LearnfyraStack extends cdk.Stack {
     authFn.addEnvironment('COGNITO_DOMAIN', cognitoDomainUrl);
 
     [generateFn, adminFn].forEach((fn) => {
-      fn.addEnvironment('QB_ADAPTER', 'local');
+      fn.addEnvironment('QB_ADAPTER', 'dynamodb');
+      fn.addEnvironment('DYNAMO_ENV', appEnv);
+      fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
     });
+
+    const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;
+    const dynamoIndexArnPattern = `${dynamoTableArnPattern}/index/*`;
+
+    [
+      generateFn,
+      authFn,
+      progressFn,
+      analyticsFn,
+      classFn,
+      rewardsFn,
+      studentFn,
+      adminFn,
+      dashboardFn,
+    ].forEach((fn) => {
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'dynamodb:GetItem',
+            'dynamodb:PutItem',
+            'dynamodb:UpdateItem',
+            'dynamodb:DeleteItem',
+            'dynamodb:Query',
+            'dynamodb:Scan',
+            'dynamodb:BatchGetItem',
+            'dynamodb:BatchWriteItem',
+          ],
+          resources: [dynamoTableArnPattern, dynamoIndexArnPattern],
+        })
+      );
+    });
+
+    // In dev, bypass QuestionBank lookup and route all requests to AI generation.
+    // This populates the bank from scratch. Toggle off once bank is sufficiently populated.
+    if (appEnv === 'dev') {
+      generateFn.addEnvironment('SKIP_BANK_LOOKUP', 'true');
+    }
 
     const apiResource = api.root.addResource('api');
 
