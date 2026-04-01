@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import {
   LayoutDashboard,
   FileText,
@@ -57,8 +57,14 @@ function getInitials(name: string | undefined): string {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+  const handleSignOut = () => {
+    auth.signOut();
+    navigate('/', { replace: true });
+  };
   const [notifOpen, setNotifOpen] = React.useState(false);
   const notifRef = React.useRef<HTMLDivElement>(null);
 
@@ -147,7 +153,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
               <p className="text-xs text-muted-foreground truncate capitalize">{auth.user.role}</p>
             </div>
             <button
-              onClick={auth.signOut}
+              onClick={handleSignOut}
               className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-lg hover:bg-destructive/10"
               aria-label="Sign out"
             >

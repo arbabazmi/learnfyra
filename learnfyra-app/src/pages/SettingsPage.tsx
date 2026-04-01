@@ -20,6 +20,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiUrl } from '@/lib/env';
+import { getToken } from '@/lib/auth';
 
 // ── Inline toggle switch ────────────────────────────────────────────────────
 
@@ -130,19 +133,24 @@ const GoogleIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 // ── Save toast ──────────────────────────────────────────────────────────────
 
-const SaveToast: React.FC<{ visible: boolean }> = ({ visible }) => (
+const SaveToast: React.FC<{ visible: boolean; isError?: boolean; message?: string }> = ({ visible, isError = false, message }) => (
   <div
     className={cn(
       'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5',
-      'bg-foreground text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-lg',
+      'text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-lg',
       'transition-all duration-300',
+      isError ? 'bg-destructive' : 'bg-foreground',
       visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none',
     )}
     role="status"
     aria-live="polite"
   >
-    <CheckCircle className="size-4 text-secondary shrink-0" />
-    Changes saved successfully
+    {isError ? (
+      <AlertTriangle className="size-4 shrink-0" />
+    ) : (
+      <CheckCircle className="size-4 text-secondary shrink-0" />
+    )}
+    {message || 'Changes saved successfully'}
   </div>
 );
 
@@ -204,9 +212,40 @@ const SettingsPage: React.FC = () => {
     keywords: 'settings, profile, preferences, notifications, account',
   });
 
-  // ── Profile state ────────────────────────────────────────────────────────
-  const [fullName, setFullName]   = React.useState('Priya Student');
-  const [grade, setGrade]         = React.useState('7');
+  const auth = useAuth();
+
+  // ── Profile state — seeded from auth context ────────────────────────────
+  const [fullName, setFullName]   = React.useState('');
+  const [email, setEmail]         = React.useState('');
+  const [authType, setAuthType]   = React.useState('');
+  const [grade, setGrade]         = React.useState('');
+  const [profileLoading, setProfileLoading] = React.useState(true);
+
+  // Seed from auth context immediately, then fetch full profile from API
+  React.useEffect(() => {
+    if (auth.user) {
+      setFullName(auth.user.displayName || '');
+      setEmail(auth.user.email || '');
+    }
+
+    const token = getToken();
+    if (!token) { setProfileLoading(false); return; }
+
+    fetch(`${apiUrl}/api/student/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          if (data.displayName) setFullName(data.displayName);
+          if (data.email) setEmail(data.email);
+          if (data.grade) setGrade(String(data.grade));
+          if (data.authType) setAuthType(data.authType);
+        }
+      })
+      .catch(() => { /* profile fetch failed — use auth context data */ })
+      .finally(() => setProfileLoading(false));
+  }, [auth.user]);
 
   // ── Learning preferences state ───────────────────────────────────────────
   const [defaultSubject,    setDefaultSubject]    = React.useState('Math');
@@ -226,9 +265,13 @@ const SettingsPage: React.FC = () => {
 
   // ── Toast state ──────────────────────────────────────────────────────────
   const [toastVisible, setToastVisible] = React.useState(false);
+  const [toastError, setToastError] = React.useState(false);
+  const [toastMessage, setToastMessage] = React.useState('');
   const toastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showSaveToast = () => {
+  const showToast = (message: string, isError = false) => {
+    setToastMessage(message);
+    setToastError(isError);
     setToastVisible(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToastVisible(false), 2800);
@@ -240,16 +283,38 @@ const SettingsPage: React.FC = () => {
     };
   }, []);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const initials = fullName
+    ? fullName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
+  const isGoogleAuth = authType.includes('google') || authType.includes('oauth');
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: PATCH /api/profile { fullName, grade }
-    showSaveToast();
+    const token = getToken();
+    if (!token) { showToast('You must be signed in to save.', true); return; }
+    try {
+      const res = await fetch(`${apiUrl}/api/student/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ displayName: fullName, grade: grade ? Number(grade) : undefined }),
+      });
+      if (res.ok) {
+        showToast('Profile saved successfully');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to save profile.', true);
+      }
+    } catch {
+      showToast('Network error. Please try again.', true);
+    }
   };
 
   const handleSavePreferences = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: PATCH /api/preferences { defaultSubject, defaultDifficulty, questionCount, timedMode, soundEffects }
-    showSaveToast();
+    // TODO: PATCH /api/preferences
+    showToast('Preferences saved successfully');
   };
 
   return (
@@ -268,9 +333,9 @@ const SettingsPage: React.FC = () => {
                   <div
                     className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-extrabold select-none"
                     style={{ background: 'linear-gradient(135deg, #3D9AE8 0%, #6DB84B 100%)' }}
-                    aria-label="Profile avatar — initials PS"
+                    aria-label={`Profile avatar — initials ${initials}`}
                   >
-                    PS
+                    {profileLoading ? '...' : initials}
                   </div>
                   <button
                     type="button"
@@ -302,7 +367,7 @@ const SettingsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Email — disabled, Google-connected */}
+                {/* Email — read-only */}
                 <div>
                   <label
                     htmlFor="email"
@@ -311,22 +376,27 @@ const SettingsPage: React.FC = () => {
                     Email
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                      <GoogleIcon className="size-4" />
-                    </div>
+                    {isGoogleAuth && (
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                        <GoogleIcon className="size-4" />
+                      </div>
+                    )}
                     <input
                       id="email"
                       type="email"
-                      value="priya@school.edu"
+                      value={email}
                       disabled
                       className={cn(
                         inputCls,
-                        'pl-10 pr-36 opacity-75 cursor-not-allowed bg-muted',
+                        'opacity-75 cursor-not-allowed bg-muted',
+                        isGoogleAuth ? 'pl-10 pr-36' : 'pr-36',
                       )}
                       aria-describedby="emailHint"
                     />
                     <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                      <Badge variant="success" id="emailHint">Connected via Google</Badge>
+                      <Badge variant="success" id="emailHint">
+                        {isGoogleAuth ? 'Connected via Google' : 'Email account'}
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -633,7 +703,7 @@ const SettingsPage: React.FC = () => {
       </div>
 
       {/* ── Save toast ────────────────────────────────────────────── */}
-      <SaveToast visible={toastVisible} />
+      <SaveToast visible={toastVisible} isError={toastError} message={toastMessage} />
     </AppLayout>
   );
 };

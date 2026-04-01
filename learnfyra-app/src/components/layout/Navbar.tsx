@@ -10,11 +10,12 @@
  */
 
 import * as React from 'react';
-import { Link, useLocation } from 'react-router';
-import { Menu, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { Menu, X, LogOut, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
   label: string;
@@ -39,6 +40,13 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
   const [isOpen, setIsOpen]   = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const auth = useAuth();
+
+  const handleSignOut = () => {
+    auth.signOut();
+    navigate('/', { replace: true });
+  };
 
   // Scroll-aware shadow / backdrop
   React.useEffect(() => {
@@ -118,12 +126,33 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
 
           {/* ── Desktop CTAs ─────────────────────────────────── */}
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="md" onClick={onSignIn}>
-              Sign In
-            </Button>
-            <Button variant="primary" size="md" onClick={onTryWorksheet}>
-              Try a Worksheet
-            </Button>
+            {auth.isAuthenticated && auth.user ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors',
+                    'text-foreground hover:bg-muted',
+                  )}
+                >
+                  <User className="size-4" />
+                  {auth.user.displayName}
+                </Link>
+                <Button variant="ghost" size="md" onClick={handleSignOut}>
+                  <LogOut className="size-4 mr-1.5" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="md" onClick={onSignIn}>
+                  Sign In
+                </Button>
+                <Button variant="primary" size="md" onClick={onTryWorksheet}>
+                  Try a Worksheet
+                </Button>
+              </>
+            )}
           </div>
 
           {/* ── Mobile hamburger ─────────────────────────────── */}
@@ -175,12 +204,31 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
               ),
             )}
             <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
-              <Button variant="ghost" size="md" className="justify-center" onClick={() => { setIsOpen(false); onSignIn?.(); }}>
-                Sign In
-              </Button>
-              <Button variant="primary" size="md" className="justify-center" onClick={() => { setIsOpen(false); onTryWorksheet?.(); }}>
-                Try a Worksheet
-              </Button>
+              {auth.isAuthenticated && auth.user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground rounded-lg hover:bg-muted transition-colors"
+                  >
+                    <User className="size-4" />
+                    {auth.user.displayName}
+                  </Link>
+                  <Button variant="ghost" size="md" className="justify-center" onClick={() => { setIsOpen(false); handleSignOut(); }}>
+                    <LogOut className="size-4 mr-1.5" />
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" size="md" className="justify-center" onClick={() => { setIsOpen(false); onSignIn?.(); }}>
+                    Sign In
+                  </Button>
+                  <Button variant="primary" size="md" className="justify-center" onClick={() => { setIsOpen(false); onTryWorksheet?.(); }}>
+                    Try a Worksheet
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

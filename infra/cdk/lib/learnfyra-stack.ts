@@ -301,6 +301,29 @@ export class LearnfyraStack extends cdk.Stack {
       }
     );
 
+    const questionBankTable = createTable(
+      'QuestionBankTable',
+      `LearnfyraQuestionBank-${appEnv}`,
+      'questionId',
+      {
+        gsis: [
+          {
+            // GSI-1: efficient lookup by grade+subject+topic, optionally narrowed by type+difficulty
+            indexName: 'GSI-1',
+            partitionKeyName: 'lookupKey',
+            sortKeyName: 'typeDifficulty',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
+          {
+            // dedupeHash-index: lightweight duplicate detection (KEYS_ONLY to minimise cost)
+            indexName: 'dedupeHash-index',
+            partitionKeyName: 'dedupeHash',
+            projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+          },
+        ],
+      }
+    );
+
     const generationLogTable = createTable(
       'GenerationLogTable',
       `LearnfyraGenerationLog-${appEnv}`,

@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { googleOAuth, isLocal, mailhogUrl } from '@/lib/env';
 import { setSelectedRole, getSelectedRole, type UserRole } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   signIn,
   signUp,
@@ -215,6 +216,7 @@ const PasswordStrengthBar: React.FC<{ password: string }> = ({ password }) => {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'role' }) => {
   const navigate = useNavigate();
+  const auth = useAuth();
 
   // Step state
   const [step, setStep] = React.useState<ModalStep>(initialStep);
@@ -360,6 +362,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     setApiError('');
     try {
       await signIn(email, password);
+      auth.refresh();
       onClose();
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -377,6 +380,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     setApiError('');
     try {
       await signUp(displayName, email, password, signupRole);
+      auth.refresh();
       onClose();
       navigate('/dashboard', { replace: true });
     } catch (err) {
