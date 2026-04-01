@@ -188,29 +188,174 @@ export class LearnfyraStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
-    // ── DynamoDB: Question bank table (AWS runtime source of truth) ─────────
-    const questionBankTable = new dynamodb.Table(this, 'QuestionBankTable', {
-      tableName: `LearnfyraQuestionBank-${appEnv}`,
-      partitionKey: { name: 'questionId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: !isDev,
-      removalPolicy,
+    const createTable = (
+      id: string,
+      tableName: string,
+      partitionKeyName: string,
+      options: {
+        sortKeyName?: string;
+        ttlAttribute?: string;
+        gsis?: Array<{
+          indexName: string;
+          partitionKeyName: string;
+          sortKeyName?: string;
+          projectionType?: dynamodb.ProjectionType;
+        }>;
+      } = {}
+    ) => {
+      const table = new dynamodb.Table(this, id, {
+        tableName,
+        partitionKey: { name: partitionKeyName, type: dynamodb.AttributeType.STRING },
+        ...(options.sortKeyName && {
+          sortKey: { name: options.sortKeyName, type: dynamodb.AttributeType.STRING },
+        }),
+        ...(options.ttlAttribute && { timeToLiveAttribute: options.ttlAttribute }),
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecovery: !isDev,
+        removalPolicy,
+      });
+
+      options.gsis?.forEach((gsi) => {
+        table.addGlobalSecondaryIndex({
+          indexName: gsi.indexName,
+          partitionKey: { name: gsi.partitionKeyName, type: dynamodb.AttributeType.STRING },
+          ...(gsi.sortKeyName && {
+            sortKey: { name: gsi.sortKeyName, type: dynamodb.AttributeType.STRING },
+          }),
+          projectionType: gsi.projectionType ?? dynamodb.ProjectionType.ALL,
+        });
+      });
+
+      return table;
+    };
+
+    const usersTable = createTable('UsersTable', `LearnfyraUsers-${appEnv}`, 'userId', {
+      gsis: [
+        {
+          indexName: 'email-index',
+          partitionKeyName: 'email',
+        },
+      ],
     });
 
-    // GSI used for deterministic lookup by curriculum key + type/difficulty.
-    questionBankTable.addGlobalSecondaryIndex({
-      indexName: 'GSI-1',
-      partitionKey: { name: 'lookupKey', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'typeDifficulty', type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.ALL,
+    const attemptsTable = createTable('AttemptsTable', `LearnfyraAttempts-${appEnv}`, 'attemptId', {
+      gsis: [
+        {
+          indexName: 'studentId-index',
+          partitionKeyName: 'studentId',
+        },
+      ],
     });
 
-    // GSI used for dedupe checks before inserts.
-    questionBankTable.addGlobalSecondaryIndex({
-      indexName: 'dedupeHash-index',
-      partitionKey: { name: 'dedupeHash', type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    const aggregatesTable = createTable(
+      'AggregatesTable',
+      `LearnfyraAggregates-${appEnv}`,
+      'id'
+    );
+
+    const certificatesTable = createTable(
+      'CertificatesTable',
+      `LearnfyraCertificates-${appEnv}`,
+      'id',
+      {
+        gsis: [
+          {
+            indexName: 'studentId-index',
+            partitionKeyName: 'studentId',
+          },
+        ],
+      }
+    );
+
+    const rewardProfilesTable = createTable(
+      'RewardProfilesTable',
+      `LearnfyraRewardProfiles-${appEnv}`,
+      'id'
+    );
+
+    const classesTable = createTable('ClassesTable', `LearnfyraClasses-${appEnv}`, 'classId', {
+      gsis: [
+        {
+          indexName: 'inviteCode-index',
+          partitionKeyName: 'inviteCode',
+          projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+        },
+      ],
     });
+
+    const membershipsTable = createTable(
+      'MembershipsTable',
+      `LearnfyraMemberships-${appEnv}`,
+      'id',
+      {
+        gsis: [
+          {
+            indexName: 'studentId-index',
+            partitionKeyName: 'studentId',
+          },
+          {
+            indexName: 'classId-index',
+            partitionKeyName: 'classId',
+          },
+        ],
+      }
+    );
+
+    const generationLogTable = createTable(
+      'GenerationLogTable',
+      `LearnfyraGenerationLog-${appEnv}`,
+      'worksheetId'
+    );
+
+    const modelConfigTable = createTable(
+      'ModelConfigTable',
+      `LearnfyraModelConfig-${appEnv}`,
+      'id'
+    );
+    const modelAuditLogTable = createTable(
+      'ModelAuditLogTable',
+      `LearnfyraModelAuditLog-${appEnv}`,
+      'id'
+    );
+    const questionExposureHistoryTable = createTable(
+      'QuestionExposureHistoryTable',
+      `LearnfyraQuestionExposureHistory-${appEnv}`,
+      'id'
+    );
+
+    const configTable = createTable('ConfigTable', `LearnfyraConfig-${appEnv}`, 'configKey');
+    const passwordResetsTable = createTable(
+      'PasswordResetsTable',
+      `LearnfyraPasswordResets-${appEnv}`,
+      'tokenId',
+      {
+        ttlAttribute: 'expiresAt',
+      }
+    );
+    const parentLinksTable = createTable('ParentLinksTable', `LearnfyraParentLinks-${appEnv}`, 'id');
+    const adminPoliciesTable = createTable(
+      'AdminPoliciesTable',
+      `LearnfyraAdminPolicies-${appEnv}`,
+      'id'
+    );
+    const adminAuditEventsTable = createTable(
+      'AdminAuditEventsTable',
+      `LearnfyraAdminAuditEvents-${appEnv}`,
+      'id'
+    );
+    const adminIdempotencyTable = createTable(
+      'AdminIdempotencyTable',
+      `LearnfyraAdminIdempotency-${appEnv}`,
+      'id',
+      {
+        ttlAttribute: 'expiresAt',
+      }
+    );
+    const repeatCapOverridesTable = createTable(
+      'RepeatCapOverridesTable',
+      `LearnfyraRepeatCapOverrides-${appEnv}`,
+      'id'
+    );
 
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
@@ -679,6 +824,78 @@ export class LearnfyraStack extends cdk.Stack {
       fn.addEnvironment('AUTH_MODE', 'cognito');
     });
 
+    [
+      generateFn,
+      authFn,
+      submitFn,
+      progressFn,
+      analyticsFn,
+      classFn,
+      rewardsFn,
+      studentFn,
+      adminFn,
+      dashboardFn,
+    ].forEach((fn) => {
+      fn.addEnvironment('APP_RUNTIME', 'aws');
+      fn.addEnvironment('DYNAMO_ENV', appEnv);
+    });
+
+    authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    authFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+
+    generateFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    generateFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    generateFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
+    generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+
+    progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    progressFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    progressFn.addEnvironment('PARENT_LINKS_TABLE_NAME', parentLinksTable.tableName);
+    progressFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    analyticsFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    analyticsFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    analyticsFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    analyticsFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    analyticsFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    classFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    classFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    classFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    rewardsFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    rewardsFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    rewardsFn.addEnvironment('REWARD_PROFILES_TABLE_NAME', rewardProfilesTable.tableName);
+    rewardsFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    studentFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    studentFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    studentFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    dashboardFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    dashboardFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+
+    adminFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    adminFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    adminFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    adminFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    adminFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    adminFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    adminFn.addEnvironment('GENLOG_TABLE_NAME', generationLogTable.tableName);
+    adminFn.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+    adminFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    adminFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    adminFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
+    adminFn.addEnvironment('REWARD_PROFILES_TABLE_NAME', rewardProfilesTable.tableName);
+    adminFn.addEnvironment('PARENT_LINKS_TABLE_NAME', parentLinksTable.tableName);
+    adminFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+    adminFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    adminFn.addEnvironment('ADMIN_AUDIT_EVENTS_TABLE_NAME', adminAuditEventsTable.tableName);
+    adminFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
+    adminFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+
     apiAuthorizerFn.addEnvironment('JWT_SECRET', jwtSecretValue);
     apiAuthorizerFn.addEnvironment('AUTH_MODE', 'cognito');
 
@@ -704,8 +921,7 @@ export class LearnfyraStack extends cdk.Stack {
     [generateFn, adminFn].forEach((fn) => {
       fn.addEnvironment('QB_ADAPTER', 'dynamodb');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
-      fn.addEnvironment('QB_TABLE_NAME', questionBankTable.tableName);
-      questionBankTable.grantReadWriteData(fn);
+      fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
     });
 
     const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;

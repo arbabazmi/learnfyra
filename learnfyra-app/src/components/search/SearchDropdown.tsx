@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react';
-import { ArrowRight, Search } from 'lucide-react';
+import { Dice5, ArrowRight, Search } from 'lucide-react';
 import { FilterChipRow } from './FilterChips';
 import { WorksheetResultCard } from './WorksheetResultCard';
 import { SearchResultsSkeleton } from './SearchResultsSkeleton';
@@ -50,7 +50,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
 
       {/* ── Section A: Filter chips ────────────────────── */}
       <div className="space-y-2.5" role="radiogroup" aria-label="Filters">
-        <FilterChipRow label="Grade" options={ALL_GRADES} selected={grade} onSelect={onSetGrade} displayLabel={(g) => g.replace('Grade ', '')} />
+        <FilterChipRow label="Grade" options={ALL_GRADES} selected={grade} onSelect={onSetGrade} />
         <FilterChipRow label="Subject" options={ALL_SUBJECTS} selected={subject} onSelect={onSetSubject} />
         <FilterChipRow label="Level" options={ALL_COMPLEXITIES} selected={complexity} onSelect={onSetComplexity} />
       </div>
@@ -76,8 +76,8 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
       ) : null}
 
       {/* ── Section C: Quick actions ───────────────────── */}
-      {(grade || subject) && !query && (
-        <div className="border-t border-border pt-3">
+      <div className="border-t border-border pt-3 space-y-1">
+        {(grade || subject) && !query && (
           <button
             onClick={onBrowseAll}
             className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary hover:bg-primary-light/50 transition-colors text-left"
@@ -85,8 +85,15 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
             <ArrowRight className="size-4 shrink-0" />
             Browse all{subject ? ` ${subject}` : ''} worksheets{grade ? ` for ${grade}` : ''}
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={onSurprise}
+          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-surface transition-colors text-left"
+        >
+          <Dice5 className="size-4 shrink-0" />
+          Surprise me — pick a random worksheet
+        </button>
+      </div>
     </div>
   </div>
 );
