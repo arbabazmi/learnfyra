@@ -105,8 +105,8 @@ export class LearnfyraStack extends cdk.Stack {
     const cognitoOAuthUrlsByEnv: Record<'dev' | 'staging' | 'prod', { callbackUrls: string[]; logoutUrls: string[] }> = {
       dev: {
         callbackUrls: [
-          'https://web.dev.learnfyra.com/callback',
-          'http://localhost:5173/callback',
+          'https://web.dev.learnfyra.com/api/auth/callback/google',
+          'http://localhost:5173/api/auth/callback/google',
         ],
         logoutUrls: [
           'https://dev.learnfyra.com',
@@ -116,9 +116,9 @@ export class LearnfyraStack extends cdk.Stack {
       },
       staging: {
         callbackUrls: [
-          'https://qa.learnfyra.com/callback',
-          'https://web.qa.learnfyra.com/callback',
-          'http://localhost:5173/callback',
+          'https://qa.learnfyra.com/api/auth/callback/google',
+          'https://web.qa.learnfyra.com/api/auth/callback/google',
+          'http://localhost:5173/api/auth/callback/google',
         ],
         logoutUrls: [
           'https://qa.learnfyra.com',
@@ -128,8 +128,8 @@ export class LearnfyraStack extends cdk.Stack {
       },
       prod: {
         callbackUrls: [
-          'https://learnfyra.com/callback',
-          'https://www.learnfyra.com/callback',
+          'https://learnfyra.com/api/auth/callback/google',
+          'https://www.learnfyra.com/api/auth/callback/google',
         ],
         logoutUrls: [
           'https://learnfyra.com',
