@@ -42,7 +42,8 @@
       "Bash(JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION=1 npx cdk synth --context env=dev --quiet --output cdk.out.new)",
       "Bash(find /c/arbab-github/learnfyra -type d -name *solve*)",
       "Bash(find /c/arbab-github/learnfyra -type f \\\\\\(-name *solve* -o -name *worksheet* \\\\\\) -not -path */node_modules/* -not -path */.git/* -not -path */coverage/* -not -path */.claude/*)",
-      "Bash(find /c/arbab-github/learnfyra -type f \\\\\\(-name *.env* -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx -o -name *.json \\\\\\))"
+      "Bash(find /c/arbab-github/learnfyra -type f \\\\\\(-name *.env* -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx -o -name *.json \\\\\\))",
+      "Bash(find /c/arbab-github/learnfyra -name *auth* -type f \\\\\\(-name *.ts -o -name *.js \\\\\\))"
     ]
   }
 }
