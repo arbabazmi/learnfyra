@@ -7,14 +7,26 @@ import { useState, useRef, useCallback } from "react";
  * No AI — every result is based on actual response status codes and JSON shapes.
  *
  * Usage: Import as a React component in a Vite dev page or render standalone.
- * Requires the Express server running at the configured API_BASE.
+ * Select the target environment from the dropdown before running.
  */
 
-const API_BASE = "http://localhost:3000";
+const ENVIRONMENTS = {
+  local: { label: "Local", url: "http://localhost:3000", description: "Local Express server" },
+  dev:   { label: "Dev",   url: "https://api.dev.learnfyra.com", description: "AWS dev environment" },
+  qa:    { label: "QA",    url: "https://api.qa.learnfyra.com", description: "AWS QA/staging environment" },
+  prod:  { label: "Prod",  url: "https://api.learnfyra.com", description: "Production (read-only tests)" },
+};
+
+// Tests that create/mutate data — skip these on prod to avoid pollution
+const MUTATING_TEST_IDS = new Set([
+  "auth-register", "auth-login", "auth-login-bad-password",
+  "profile-patch", "profile-patch-invalid",
+]);
 
 // ─── Test definitions ────────────────────────────────────────────────────────
 
-function makeTests(ctx) {
+function makeTests(ctx, envKey) {
+  const isProd = envKey === "prod";
   return [
     // ── Auth ──────────────────────────────────────────────────────────────
     {
@@ -359,8 +371,13 @@ function makeTests(ctx) {
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
+// apiBase is set per-run from the selected environment
+let _apiBase = ENVIRONMENTS.local.url;
+
+function setApiBase(url) { _apiBase = url; }
+
 async function rawFetch(method, path, body, opts = {}) {
-  const url = `${API_BASE}${path}`;
+  const url = `${_apiBase}${path}`;
   const headers = { ...(opts.headers || {}) };
   if (body && method !== "GET") headers["Content-Type"] = "application/json";
 
@@ -377,7 +394,7 @@ async function api(method, path, body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const url = `${API_BASE}${path}`;
+  const url = `${_apiBase}${path}`;
   const opts = { method, headers };
   if (body && method !== "GET") opts.body = JSON.stringify(body);
 
@@ -398,6 +415,7 @@ function assert(condition, message) {
 const STATUS_COLORS = {
   PASS:    { bg: "#052e16", border: "#166534", text: "#4ade80", label: "PASS" },
   FAIL:    { bg: "#450a0a", border: "#991b1b", text: "#f87171", label: "FAIL" },
+  SKIPPED: { bg: "#1c1917", border: "#44403c", text: "#fbbf24", label: "SKIP" },
   RUNNING: { bg: "#1e1b4b", border: "#4338ca", text: "#a5b4fc", label: "..." },
   PENDING: { bg: "#1c1917", border: "#44403c", text: "#a8a29e", label: "—" },
 };
@@ -464,18 +482,36 @@ function TestRow({ test, result, idx }) {
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [envKey, setEnvKey] = useState("local");
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState({});
-  const [counts, setCounts] = useState({ total: 0, pass: 0, fail: 0, done: 0 });
+  const [counts, setCounts] = useState({ total: 0, pass: 0, fail: 0, done: 0, skipped: 0 });
   const ctxRef = useRef({});
+
+  const env = ENVIRONMENTS[envKey];
+  const isProd = envKey === "prod";
 
   const runAll = useCallback(async () => {
     setRunning(true);
     setResults({});
     ctxRef.current = {};
+    setApiBase(ENVIRONMENTS[envKey].url);
 
-    const tests = makeTests(ctxRef.current);
-    setCounts({ total: tests.length, pass: 0, fail: 0, done: 0 });
+    const allTests = makeTests(ctxRef.current, envKey);
+    // On prod, skip mutating tests to avoid data pollution
+    const tests = allTests.filter(t => !(isProd && MUTATING_TEST_IDS.has(t.id)));
+    const skipped = allTests.length - tests.length;
+
+    setCounts({ total: tests.length, pass: 0, fail: 0, done: 0, skipped });
+
+    // Mark skipped tests
+    if (skipped > 0) {
+      allTests.forEach(t => {
+        if (MUTATING_TEST_IDS.has(t.id) && isProd) {
+          setResults(prev => ({ ...prev, [t.id]: { status: "SKIPPED", message: "Skipped on prod (mutating test)" } }));
+        }
+      });
+    }
 
     let pass = 0, fail = 0;
 
@@ -497,13 +533,13 @@ export default function App() {
         }));
       }
 
-      setCounts({ total: tests.length, pass, fail, done: pass + fail });
+      setCounts({ total: tests.length, pass, fail, done: pass + fail, skipped });
     }
 
     setRunning(false);
-  }, []);
+  }, [envKey, isProd]);
 
-  const tests = makeTests(ctxRef.current);
+  const allTests = makeTests(ctxRef.current, envKey);
   const pct = counts.total > 0 ? Math.round((counts.pass / counts.total) * 100) : 0;
 
   return (
@@ -518,8 +554,39 @@ export default function App() {
           Learnfyra Integration Tests
         </h1>
         <p style={{ fontSize: 12, color: "#374151", margin: "4px 0 0" }}>
-          Real HTTP requests against {API_BASE} — no AI, no mocks
+          Real HTTP requests — no AI, no mocks
         </p>
+      </div>
+
+      {/* Environment selector */}
+      <div style={{
+        display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap",
+      }}>
+        {Object.entries(ENVIRONMENTS).map(([key, e]) => (
+          <button
+            key={key}
+            disabled={running}
+            onClick={() => { setEnvKey(key); setResults({}); setCounts({ total: 0, pass: 0, fail: 0, done: 0, skipped: 0 }); }}
+            style={{
+              background: envKey === key ? "#166534" : "#111",
+              color: envKey === key ? "#4ade80" : "#666",
+              border: `1px solid ${envKey === key ? "#166534" : "#222"}`,
+              borderRadius: 6, padding: "6px 14px",
+              fontSize: 12, fontWeight: 600, cursor: running ? "default" : "pointer",
+              opacity: running ? 0.5 : 1,
+            }}
+          >
+            {e.label}
+          </button>
+        ))}
+        <span style={{ color: "#374151", fontSize: 11, alignSelf: "center", marginLeft: 6 }}>
+          {env.url}
+        </span>
+        {isProd && (
+          <span style={{ color: "#fbbf24", fontSize: 10, alignSelf: "center", fontWeight: 600 }}>
+            (read-only — mutating tests skipped)
+          </span>
+        )}
       </div>
 
       {/* Stats bar */}
@@ -548,6 +615,11 @@ export default function App() {
             <span style={{ color: counts.fail > 0 ? "#f87171" : "#374151", fontSize: 12, fontWeight: 600 }}>
               {counts.fail} fail
             </span>
+            {counts.skipped > 0 && (
+              <span style={{ color: "#fbbf24", fontSize: 12, fontWeight: 600 }}>
+                {counts.skipped} skipped
+              </span>
+            )}
             <span style={{ color: "#374151", fontSize: 12 }}>
               {counts.done}/{counts.total}
             </span>
@@ -571,7 +643,7 @@ export default function App() {
 
       {/* Test list */}
       <div>
-        {tests.map((test, i) => (
+        {allTests.map((test, i) => (
           <TestRow key={test.id} test={test} result={results[test.id]} idx={i} />
         ))}
       </div>
@@ -589,8 +661,8 @@ export default function App() {
             fontSize: 13, fontWeight: 700,
           }}>
             {counts.fail === 0
-              ? `All ${counts.total} tests passed`
-              : `${counts.fail} of ${counts.total} tests failed`}
+              ? `All ${counts.total} tests passed${counts.skipped ? ` (${counts.skipped} skipped)` : ""}`
+              : `${counts.fail} of ${counts.total} tests failed${counts.skipped ? ` (${counts.skipped} skipped)` : ""}`}
           </span>
         </div>
       )}
