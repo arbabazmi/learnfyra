@@ -14,6 +14,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -185,6 +186,30 @@ export class LearnfyraStack extends cdk.Stack {
       removalPolicy,
       autoDeleteObjects: !isProd,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    });
+
+    // ── DynamoDB: Question bank table (AWS runtime source of truth) ─────────
+    const questionBankTable = new dynamodb.Table(this, 'QuestionBankTable', {
+      tableName: `LearnfyraQuestionBank-${appEnv}`,
+      partitionKey: { name: 'questionId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: !isDev,
+      removalPolicy,
+    });
+
+    // GSI used for deterministic lookup by curriculum key + type/difficulty.
+    questionBankTable.addGlobalSecondaryIndex({
+      indexName: 'GSI-1',
+      partitionKey: { name: 'lookupKey', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'typeDifficulty', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // GSI used for dedupe checks before inserts.
+    questionBankTable.addGlobalSecondaryIndex({
+      indexName: 'dedupeHash-index',
+      partitionKey: { name: 'dedupeHash', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
 
     // ── API Gateway ────────────────────────────────────────────────────────────
@@ -679,7 +704,8 @@ export class LearnfyraStack extends cdk.Stack {
     [generateFn, adminFn].forEach((fn) => {
       fn.addEnvironment('QB_ADAPTER', 'dynamodb');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
-      fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
+      fn.addEnvironment('QB_TABLE_NAME', questionBankTable.tableName);
+      questionBankTable.grantReadWriteData(fn);
     });
 
     const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;
