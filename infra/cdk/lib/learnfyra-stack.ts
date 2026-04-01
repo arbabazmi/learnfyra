@@ -69,14 +69,6 @@ export class LearnfyraStack extends cdk.Stack {
       prod:    '1079696386286-edsmfmdk6j8073qnm05uii6b2c6o655o.apps.googleusercontent.com',
     };
 
-    // OAuth callback base URLs per environment
-    const callbackBaseUrls: Record<string, string> = {
-      dev:     'https://dev.learnfyra.com',
-      staging: 'https://qa.learnfyra.com',
-      prod:    'https://www.learnfyra.com',
-    };
-    const callbackBaseUrl = callbackBaseUrls[appEnv] ?? 'http://localhost:3000';
-
     const rootDomainName = props.rootDomainName;
     const hostedZoneId = props.hostedZoneId;
     const zone =
@@ -106,6 +98,46 @@ export class LearnfyraStack extends cdk.Stack {
     const authDomainName = isProd
       ? `auth.${rootDomainName}`
       : `auth.${dnsEnvLabel}.${rootDomainName}`;
+
+    // Cognito OAuth URLs by environment.
+    // Note: appEnv=staging maps to the QA domain set.
+    const cognitoOAuthUrlsByEnv: Record<'dev' | 'staging' | 'prod', { callbackUrls: string[]; logoutUrls: string[] }> = {
+      dev: {
+        callbackUrls: [
+          'https://web.dev.learnfyra.com/callback',
+          'http://localhost:5173/callback',
+        ],
+        logoutUrls: [
+          'https://dev.learnfyra.com',
+          'https://web.dev.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      staging: {
+        callbackUrls: [
+          'https://qa.learnfyra.com/callback',
+          'https://web.qa.learnfyra.com/callback',
+          'http://localhost:5173/callback',
+        ],
+        logoutUrls: [
+          'https://qa.learnfyra.com',
+          'https://web.qa.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      prod: {
+        callbackUrls: [
+          'https://learnfyra.com/callback',
+          'https://www.learnfyra.com/callback',
+        ],
+        logoutUrls: [
+          'https://learnfyra.com',
+          'https://www.learnfyra.com',
+        ],
+      },
+    };
+
+    const oauthUrls = cognitoOAuthUrlsByEnv[appEnv];
 
     let cloudFrontCertificate: acm.ICertificate | undefined;
     if (enableCustomDomains) {
@@ -305,8 +337,8 @@ export class LearnfyraStack extends cdk.Stack {
           cognito.OAuthScope.OPENID,
           cognito.OAuthScope.PROFILE,
         ],
-        callbackUrls: [`${callbackBaseUrl}/api/auth/callback/google`],
-        logoutUrls: [callbackBaseUrl],
+        callbackUrls: oauthUrls.callbackUrls,
+        logoutUrls: oauthUrls.logoutUrls,
       },
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.GOOGLE,
@@ -358,6 +390,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+        MOCK_AI: 'false',
         SSM_PARAM_NAME: `/learnfyra/${appEnv}/anthropic-api-key`,
         MAX_RETRIES: isProd ? '0' : '1',
         ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
@@ -578,6 +611,24 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-admin — admin question-bank routes`,
     });
 
+    // ── Lambda: Dashboard handler ──────────────────────────────────────────────
+    const dashboardFn = new NodejsFunction(this, 'DashboardFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-dashboard`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('dashboardHandler.js'),
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-dashboard — dashboard stats, recent worksheets, subject progress`,
+    });
+
     worksheetBucket.grantRead(solveFn);
     worksheetBucket.grantRead(submitFn);
 
@@ -593,11 +644,12 @@ export class LearnfyraStack extends cdk.Stack {
       rewardsFn,
       studentFn,
       adminFn,
+      dashboardFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn].forEach((fn) => {
+    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
       fn.addEnvironment('AUTH_MODE', 'cognito');
     });
@@ -625,8 +677,47 @@ export class LearnfyraStack extends cdk.Stack {
     authFn.addEnvironment('COGNITO_DOMAIN', cognitoDomainUrl);
 
     [generateFn, adminFn].forEach((fn) => {
-      fn.addEnvironment('QB_ADAPTER', 'local');
+      fn.addEnvironment('QB_ADAPTER', 'dynamodb');
+      fn.addEnvironment('DYNAMO_ENV', appEnv);
+      fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
     });
+
+    const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;
+    const dynamoIndexArnPattern = `${dynamoTableArnPattern}/index/*`;
+
+    [
+      generateFn,
+      authFn,
+      progressFn,
+      analyticsFn,
+      classFn,
+      rewardsFn,
+      studentFn,
+      adminFn,
+      dashboardFn,
+    ].forEach((fn) => {
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'dynamodb:GetItem',
+            'dynamodb:PutItem',
+            'dynamodb:UpdateItem',
+            'dynamodb:DeleteItem',
+            'dynamodb:Query',
+            'dynamodb:Scan',
+            'dynamodb:BatchGetItem',
+            'dynamodb:BatchWriteItem',
+          ],
+          resources: [dynamoTableArnPattern, dynamoIndexArnPattern],
+        })
+      );
+    });
+
+    // In dev, bypass QuestionBank lookup and route all requests to AI generation.
+    // This populates the bank from scratch. Toggle off once bank is sufficiently populated.
+    if (appEnv === 'dev') {
+      generateFn.addEnvironment('SKIP_BANK_LOOKUP', 'true');
+    }
 
     const apiResource = api.root.addResource('api');
 
@@ -666,6 +757,17 @@ export class LearnfyraStack extends cdk.Stack {
       });
     authResource
       .addResource('refresh')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+
+    authResource
+      .addResource('forgot-password')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+    authResource
+      .addResource('reset-password')
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
@@ -712,6 +814,45 @@ export class LearnfyraStack extends cdk.Stack {
     progressResource
       .addResource('history')
       .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('insights')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('parent')
+      .addResource('{childId}')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Dashboard routes (JWT protected) ──────────────────────────────────────
+    const dashboardResource = apiResource.addResource('dashboard');
+    dashboardResource
+      .addResource('stats')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('recent-worksheets')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('subject-progress')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -820,6 +961,7 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Rewards', fn: rewardsFn, p95MsThreshold: 3000 },
       { id: 'Student', fn: studentFn, p95MsThreshold: 3000 },
       { id: 'Admin', fn: adminFn, p95MsThreshold: 4000 },
+      { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {

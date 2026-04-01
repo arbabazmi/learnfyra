@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PostToolUse hook (async): runs npm test when a handler or solve file is edited
-const PROJECT_ROOT = 'C:/arbab-github/edusheet-ai';
+const PROJECT_ROOT = 'C:/arbab-github/learnfyra';
 
 let d = '';
 process.stdin.resume();

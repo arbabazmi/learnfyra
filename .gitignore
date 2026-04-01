@@ -1,35 +1,49 @@
-# Dependencies
+# ── Dependencies ────────────────────────────────────────────────────────────
 node_modules/
 
-# Environment variables
-.env
+# ── Build output ────────────────────────────────────────────────────────────
+dist/
+*.tsbuildinfo
 
-# Generated worksheets
+# ── Environment variables (secrets) ────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Local dev data ──────────────────────────────────────────────────────────
+data-local/
+worksheet/
 worksheets/
 worksheets-local/
 
-# Coverage reports
-coverage/
-
-# OS files
+# ── OS / editor artifacts ───────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# Editor directories
-.vscode/
+*.swp
+*.swo
+*~
 .idea/
 
-# Logs
+# ── CDK / CloudFormation ───────────────────────────────────────────────────
+cdk.out/
+cdk.out.*/
+infra/cdk/cdk.out/
+infra/cdk/cdk.out.*/
+infra/cdk/cdk-outputs.json
+
+# ── Logs ────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
 
-# Local frontend config (copy of config.local.example.js with real values)
+# ── Coverage / test artifacts ───────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Legacy frontend (removed) ──────────────────────────────────────────────
 frontend/config.local.js
 
-# CDK generated output
-cdk.out/
-infra/cdk/cdk.out/
-infra/cdk/cdk-outputs.json
-cdk.out/cdk.out
-worksheets/
-worksheets-local/
+# Ignore learnfyra front-end template docs
+learnfyra-docs/11-front-end-template/
+
+# ── Claude Code ─────────────────────────────────────────────────────────────
+.claude/settings.local.json

@@ -81,6 +81,7 @@ const TABLE_CONFIG = {
   questionbank:      { envVar: 'QB_TABLE_NAME',           suffix: 'QuestionBank',     pk: 'questionId'                     },
   generationlog:     { envVar: 'GENLOG_TABLE_NAME',       suffix: 'GenerationLog',    pk: 'worksheetId'                    },
   config:            { envVar: 'CONFIG_TABLE_NAME',       suffix: 'Config',           pk: 'configKey'                      },
+  passwordresets:    { envVar: 'PWRESET_TABLE_NAME',      suffix: 'PasswordResets',   pk: 'tokenId'                        },
 };
 
 /**
