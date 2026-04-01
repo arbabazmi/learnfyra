@@ -110,7 +110,7 @@ const SmartSearchBox: React.FC<SmartSearchBoxProps> = ({ externalGrade, onExtern
 
   return (
     <>
-      <div ref={dropdown.containerRef} className="relative w-full max-w-[540px]">
+      <div ref={dropdown.containerRef} className="relative z-10 w-full max-w-[540px]">
         {/* ── Search input ────────────────────────────────── */}
         <form onSubmit={handleSearch} className="relative">
           <div
