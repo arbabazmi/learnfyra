@@ -584,6 +584,7 @@ app.post('/api/auth/oauth/:provider', async (req, res) => {
 });
 
 // ── GET /api/auth/callback/:provider ──────────────────────────────────────────
+// The handler now returns a 302 redirect directly — just forward it.
 app.get('/api/auth/callback/:provider', async (req, res) => {
   try {
     const fn = await getAuthHandler();
@@ -597,29 +598,13 @@ app.get('/api/auth/callback/:provider', async (req, res) => {
       },
       {},
     );
-    const body = JSON.parse(result.body);
 
-    // On success, redirect to the React frontend's auth callback route.
-    // The React app reads token/user from the URL and stores in localStorage.
-    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-    if (result.statusCode === 200 && body.token) {
-      const user = {
-        userId:      body.userId,
-        email:       body.email,
-        role:        body.role,
-        displayName: body.displayName,
-      };
-      const params = new URLSearchParams({
-        token: body.token,
-        user: JSON.stringify(user),
-      });
-      return res.redirect(`${frontendOrigin}/auth/callback?${params.toString()}`);
+    if (result.statusCode === 302 && result.headers?.Location) {
+      return res.redirect(result.headers.Location);
     }
 
-    // Error case — redirect to React app with error
-    const errorMsg = encodeURIComponent(body.error || 'Authentication failed');
-    return res.redirect(`${frontendOrigin}/?authError=${errorMsg}`);
+    // Fallback: forward status + body as-is
+    res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('auth callback route error:', err);
     const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';

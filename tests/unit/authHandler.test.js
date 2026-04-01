@@ -551,10 +551,11 @@ describe('authHandler — GET /api/auth/callback/:provider happy path', () => {
       },
       mockContext,
     );
-    expect(result.statusCode).toBe(200);
+    expect(result.statusCode).toBe(302);
+    expect(result.headers.Location).toContain('/auth/callback?');
   });
 
-  it('response body contains userId, email, role, and token', async () => {
+  it('redirect Location contains token and user data', async () => {
     const result = await handler(
       {
         httpMethod: 'GET',
@@ -565,10 +566,13 @@ describe('authHandler — GET /api/auth/callback/:provider happy path', () => {
       },
       mockContext,
     );
-    const body = JSON.parse(result.body);
-    expect(body).toHaveProperty('userId', VALID_STUDENT_ID);
-    expect(body).toHaveProperty('token', 'oauth-jwt-token');
-    expect(body).toHaveProperty('role', 'student');
+    const location = result.headers.Location;
+    expect(location).toContain('token=oauth-jwt-token');
+    expect(location).toContain('user=');
+    const url = new URL(location);
+    const user = JSON.parse(url.searchParams.get('user'));
+    expect(user.userId).toBe(VALID_STUDENT_ID);
+    expect(user.role).toBe('student');
   });
 
   it('calls handleCallback with provider, code, and state', async () => {
@@ -605,7 +609,7 @@ describe('authHandler — GET /api/auth/callback/:provider happy path', () => {
 
 describe('authHandler — GET /api/auth/callback/:provider missing code', () => {
 
-  it('returns 400 when code query param is absent', async () => {
+  it('returns 302 redirect with error when code query param is absent', async () => {
     const result = await handler(
       {
         httpMethod: 'GET',
@@ -616,7 +620,8 @@ describe('authHandler — GET /api/auth/callback/:provider missing code', () => 
       },
       mockContext,
     );
-    expect(result.statusCode).toBe(400);
+    expect(result.statusCode).toBe(302);
+    expect(result.headers.Location).toContain('authError=');
   });
 
   it('CORS headers are present on 400 callback response', async () => {

@@ -218,23 +218,58 @@ async function handleOAuthInitiate(provider) {
  * production adapter. The stub adapter skips it — see oauthStubAdapter.js.
  */
 async function handleOAuthCallback(provider, queryStringParameters) {
+  const frontendUrl = process.env.OAUTH_CALLBACK_BASE_URL || process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
+
   if (!provider) {
-    return errorResponse(400, 'OAuth provider is required.');
+    return redirectToFrontend(frontendUrl, null, 'OAuth provider is required.');
   }
 
-  const { code, state } = queryStringParameters || {};
+  const { code, state, error_description } = queryStringParameters || {};
+
+  if (error_description) {
+    return redirectToFrontend(frontendUrl, null, error_description);
+  }
 
   if (!code) {
-    return errorResponse(400, 'OAuth authorization code is required.');
+    return redirectToFrontend(frontendUrl, null, 'OAuth authorization code is required.');
   }
 
-  const oauthAdapter = getOAuthAdapter();
-  const result = await oauthAdapter.handleCallback(provider, code, state);
+  try {
+    const oauthAdapter = getOAuthAdapter();
+    const result = await oauthAdapter.handleCallback(provider, code, state);
 
+    return redirectToFrontend(frontendUrl, result, null);
+  } catch (err) {
+    return redirectToFrontend(frontendUrl, null, err.message || 'Authentication failed.');
+  }
+}
+
+/**
+ * Builds a 302 redirect response to the frontend auth callback page.
+ * On success: redirects to /auth/callback?token=...&user=...
+ * On error:   redirects to /?authError=...
+ */
+function redirectToFrontend(frontendUrl, result, errorMsg) {
+  if (result && result.token) {
+    const user = JSON.stringify({
+      userId: result.userId,
+      email: result.email,
+      role: result.role,
+      displayName: result.displayName,
+    });
+    const params = new URLSearchParams({ token: result.token, user });
+    return {
+      statusCode: 302,
+      headers: { ...corsHeaders, Location: `${frontendUrl}/auth/callback?${params.toString()}` },
+      body: '',
+    };
+  }
+
+  const msg = encodeURIComponent(errorMsg || 'Authentication failed');
   return {
-    statusCode: 200,
-    headers: corsHeaders,
-    body: JSON.stringify(result),
+    statusCode: 302,
+    headers: { ...corsHeaders, Location: `${frontendUrl}/?authError=${msg}` },
+    body: '',
   };
 }
 
