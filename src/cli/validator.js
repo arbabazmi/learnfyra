@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/cli/validator.js
  * @description Input validation functions for CLI prompts and batch config
  * @agent DEV
@@ -8,7 +8,7 @@ const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
 const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Mixed'];
 const VALID_FORMATS = ['PDF', 'Word (.docx)', 'HTML', 'All Three'];
 const MIN_QUESTIONS = 5;
-const MAX_QUESTIONS = 10;
+const MAX_QUESTIONS = 30;
 const MIN_GRADE = 1;
 const MAX_GRADE = 10;
 
@@ -27,7 +27,7 @@ export function validateGrade(grade) {
 }
 
 /**
- * Validates that question count is within allowed range (5–10)
+ * Validates that question count is within allowed range (5â€“10)
  * @param {number} count - Number of questions
  * @throws {Error} If count is out of range
  * @returns {true}

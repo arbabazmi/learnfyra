@@ -3,24 +3,23 @@
  * @description Database adapter factory. Returns the correct adapter based on
  * APP_RUNTIME environment variable.
  *
- * Local dev:  APP_RUNTIME=local (or unset) → localDbAdapter (JSON files in data-local/)
- * AWS Lambda: APP_RUNTIME=aws              → DynamoDB adapter (not yet implemented)
+ * Local dev (JSON files): APP_RUNTIME=local (or unset) → localDbAdapter
+ * Local dev (DynamoDB):   APP_RUNTIME=dynamodb          → dynamoDbAdapter (DYNAMODB_ENDPOINT=http://localhost:8000)
+ * AWS Lambda:             APP_RUNTIME=aws               → dynamoDbAdapter (AWS DynamoDB)
  */
 
 import { localDbAdapter } from './localDbAdapter.js';
+import { dynamoDbAdapter } from './dynamoDbAdapter.js';
 
 /**
  * Returns the active database adapter for the current runtime environment.
  *
- * @returns {typeof localDbAdapter} The database adapter instance
- * @throws {Error} When APP_RUNTIME=aws (DynamoDB adapter not yet implemented)
+ * @returns {typeof localDbAdapter | typeof dynamoDbAdapter} The database adapter instance
  */
 export function getDbAdapter() {
-  if (process.env.APP_RUNTIME === 'aws') {
-    throw new Error(
-      'DynamoDB adapter not yet implemented — set APP_RUNTIME=local for local dev'
-    );
+  const runtime = process.env.APP_RUNTIME;
+  if (runtime === 'dynamodb' || runtime === 'aws') {
+    return dynamoDbAdapter;
   }
-
   return localDbAdapter;
 }

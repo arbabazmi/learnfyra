@@ -1,0 +1,152 @@
+# DynamoDB Access Patterns
+
+This document maps every application query to its DynamoDB table access pattern, operation type, and any GSI used.
+
+## LearnfyraQuestionBank
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get question by ID | GetItem | PK=questionId | None |
+| Check if question exists (dedupeHash) | Query + filter | Scan dedupeHash (small table) or GSI if needed | None (dedupeHash not indexed — use Scan with FilterExpression for now; add GSI if performance degrades) |
+| Get N questions for grade/subject/topic/type/difficulty | Query | GSI-1 PK=lookupKey, SK begins_with typeDifficulty | GSI-1 |
+| Save new question | PutItem | PK=questionId | — |
+| Increment timesUsed | UpdateItem | PK=questionId, ADD timesUsed 1 | — |
+
+**GSI-1 query example:**
+```javascript
+{
+  TableName: 'LearnfyraQuestionBank-{env}',
+  IndexName: 'GSI-1',
+  KeyConditionExpression: 'lookupKey = :lk AND begins_with(typeDifficulty, :td)',
+  ExpressionAttributeValues: {
+    ':lk': 'grade#3#subject#Math#topic#Multiplication',
+    ':td': 'multiple-choice#Medium'
+  },
+  Limit: 5
+}
+```
+
+## LearnfyraUsers
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get user by ID | GetItem | PK=userId | None |
+| Get user by email (auth) | Query | email-index PK=email | email-index |
+| Update user role | UpdateItem | PK=userId | — |
+| Update precomputed aggregates after attempt | UpdateItem | PK=userId | — |
+| List users (admin pagination) | Scan with filter | — | None |
+| Soft-delete user | UpdateItem | PK=userId, set deletedAt | — |
+
+**email-index query example:**
+```javascript
+{
+  TableName: 'LearnfyraUsers-{env}',
+  IndexName: 'email-index',
+  KeyConditionExpression: 'email = :e',
+  ExpressionAttributeValues: { ':e': 'user@example.com' }
+}
+```
+
+## LearnfyraWorksheetAttempt
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get all attempts for a student | Query | PK=userId | None |
+| Get attempts for student + worksheet | Query | PK=userId, SK begins_with worksheetId | None |
+| Get latest attempt for student | Query + reverse sort | PK=userId, ScanIndexForward=false, Limit=1 | None |
+| Check if student completed a specific worksheet | Query + filter | PK=userId, SK begins_with worksheetId | None |
+| Write new attempt | PutItem | PK=userId, SK=worksheetId#{timestamp} | — |
+
+**Pagination for history:**
+```javascript
+{
+  TableName: 'LearnfyraWorksheetAttempt-{env}',
+  KeyConditionExpression: 'userId = :uid',
+  ExpressionAttributeValues: { ':uid': 'user-uuid' },
+  ScanIndexForward: false,   // descending by SK (most recent first)
+  Limit: 20,
+  ExclusiveStartKey: lastEvaluatedKey   // pagination cursor
+}
+```
+
+## LearnfyraClasses
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get class by ID | GetItem | PK=classId | None |
+| Get class by join code | Scan + filter (joinCode) | — | None (add GSI if slow) |
+| List classes for teacher | Query | teacherId-index PK=teacherId | teacherId-index |
+| Update student count | UpdateItem | PK=classId, ADD studentCount 1/-1 | — |
+| Archive class | UpdateItem | PK=classId, set archivedAt | — |
+
+## LearnfyraClassMemberships
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| List students in class | Query | PK=classId | None |
+| List classes for student | Query | studentId-index PK=studentId | studentId-index |
+| Check if student is in class | GetItem | PK=classId, SK=studentId | None |
+| Add student to class | PutItem | PK=classId, SK=studentId | — |
+| Remove student from class | UpdateItem | PK=classId, SK=studentId, set status=removed | — |
+
+## LearnfyraCertificates
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get certificate by ID | GetItem | PK=certificateId | None |
+| List certificates for student | Query | userId-index PK=userId | userId-index |
+| Check if certificate exists for worksheetId+userId | Query + filter | userId-index, filter worksheetId | userId-index |
+| Create certificate | PutItem | PK=certificateId | — |
+
+## LearnfyraGenerationLog
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get log for worksheetId | GetItem | PK=worksheetId | None |
+| Write generation log | PutItem | PK=worksheetId | — |
+| Admin: scan recent logs (reporting) | Scan with filter on generatedAt | — | None (or add GSI on generatedAt if frequent) |
+
+Note: This table uses DynamoDB TTL (`ttl` attribute) for automatic expiry after 7 days, matching the S3 lifecycle rule.
+
+## LearnfyraConfig
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Get config value | GetItem | PK=configKey | None |
+| Update config value | PutItem | PK=configKey | — |
+| List all config keys (admin) | Scan | — | None (small table) |
+
+## Performance Notes
+
+### Question Bank
+The GSI-1 lookup is the most frequent access pattern (every worksheet generation). DynamoDB PAY_PER_REQUEST handles burst traffic well. For very high traffic, consider read replicas (DynamoDB Global Tables) — not needed for Phase 1.
+
+### Users Table
+The email-index GSI is used on every authentication. This is a high-frequency, low-latency operation. Ensure the GSI is provisioned consistently with the table (both PAY_PER_REQUEST).
+
+### WorksheetAttempt
+The Query-by-userId pattern with reverse sort is O(1) for the most recent attempt and O(n) for full history. Dashboard aggregates avoid this by using precomputed fields in the Users table.
+
+### Config Table
+All Lambda functions read config on the critical path (check maintenance mode, get active model). Cache config in Lambda module scope with a 60-second TTL to avoid per-invocation DynamoDB reads:
+
+```javascript
+let _configCache = {};
+let _configCachedAt = 0;
+const CONFIG_TTL_MS = 60 * 1000;
+
+async function getConfig(key) {
+  if (Date.now() - _configCachedAt < CONFIG_TTL_MS && _configCache[key]) {
+    return _configCache[key];
+  }
+  const result = await dynamodb.send(new GetItemCommand({
+    TableName: `LearnfyraConfig-${process.env.NODE_ENV}`,
+    Key: { configKey: { S: key } }
+  }));
+  _configCache[key] = result.Item?.value?.S ?? result.Item?.value?.N;
+  _configCachedAt = Date.now();
+  return _configCache[key];
+}
+```
+
+This pattern is safe for Lambda because the module-level cache persists across warm invocations within the same container.

@@ -28,6 +28,31 @@ const ssmMock = mockClient(SSMClient);
 
 // ─── Module mocks (must all appear before any dynamic import()) ───────────────
 
+// Auth middleware — returns a teacher token by default; individual tests can override
+const mockValidateToken = jest.fn().mockResolvedValue({
+  sub: 'teacher-user-123',
+  email: 'teacher@learnfyra.com',
+  role: 'teacher',
+});
+const mockAssertRole = jest.fn(); // no-op (passes) by default
+const mockDbGetItem = jest.fn();
+const mockDbListAll = jest.fn();
+const mockDbPutItem = jest.fn();
+
+const mockBuildStudentKey = jest.fn().mockReturnValue('student:test-student-1');
+const mockResolveEffectiveRepeatCap = jest.fn().mockResolvedValue({
+  capPercent: 10,
+  appliedBy: 'default',
+  sourceId: null,
+});
+const mockGetSeenQuestionSignatures = jest.fn().mockResolvedValue(new Set());
+const mockRecordExposureHistory = jest.fn().mockResolvedValue(0);
+
+jest.unstable_mockModule('../../backend/middleware/authMiddleware.js', () => ({
+  validateToken: mockValidateToken,
+  assertRole: mockAssertRole,
+}));
+
 jest.unstable_mockModule('../../src/ai/assembler.js', () => ({
   assembleWorksheet: jest.fn().mockResolvedValue({
     worksheet: sampleWorksheet,
@@ -54,6 +79,21 @@ jest.unstable_mockModule('../../src/exporters/answerKey.js', () => ({
   exportAnswerKey: jest.fn().mockResolvedValue(['/tmp/answer-key.pdf']),
 }));
 
+jest.unstable_mockModule('../../src/db/index.js', () => ({
+  getDbAdapter: jest.fn(() => ({
+    getItem: mockDbGetItem,
+    listAll: mockDbListAll,
+    putItem: mockDbPutItem,
+  })),
+}));
+
+jest.unstable_mockModule('../../src/ai/repeatCapPolicy.js', () => ({
+  buildStudentKey: mockBuildStudentKey,
+  resolveEffectiveRepeatCap: mockResolveEffectiveRepeatCap,
+  getSeenQuestionSignatures: mockGetSeenQuestionSignatures,
+  recordExposureHistory: mockRecordExposureHistory,
+}));
+
 // Mock fs so readFileSync (used inside uploadToS3) returns a fake buffer
 jest.unstable_mockModule('fs', () => ({
   promises: {
@@ -72,6 +112,7 @@ const { handler } = await import('../../backend/handlers/generateHandler.js');
 const { assembleWorksheet } = await import('../../src/ai/assembler.js');
 const { exportWorksheet } = await import('../../src/exporters/index.js');
 const { exportAnswerKey } = await import('../../src/exporters/answerKey.js');
+const { validateToken, assertRole } = await import('../../backend/middleware/authMiddleware.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +156,10 @@ beforeEach(() => {
   // and throws if it is missing, so the env var must be present in tests.
   process.env.WORKSHEET_BUCKET_NAME = 'test-bucket';
 
+  // Restore default auth mock — teacher passes through
+  validateToken.mockResolvedValue({ sub: 'teacher-user-123', email: 'teacher@learnfyra.com', role: 'teacher' });
+  assertRole.mockImplementation(() => {}); // passes
+
   // Restore default mock implementations after clearAllMocks
   assembleWorksheet.mockResolvedValue({
     worksheet: sampleWorksheet,
@@ -133,6 +178,10 @@ beforeEach(() => {
   });
   exportWorksheet.mockResolvedValue(['/tmp/worksheet.pdf']);
   exportAnswerKey.mockResolvedValue(['/tmp/answer-key.pdf']);
+  mockBuildStudentKey.mockReturnValue('student:test-student-1');
+  mockResolveEffectiveRepeatCap.mockResolvedValue({ capPercent: 10, appliedBy: 'default', sourceId: null });
+  mockGetSeenQuestionSignatures.mockResolvedValue(new Set());
+  mockRecordExposureHistory.mockResolvedValue(0);
 });
 
 // ─── CORS preflight ───────────────────────────────────────────────────────────
@@ -363,17 +412,17 @@ describe('generateHandler — S3 upload call counts', () => {
     s3Mock.on(PutObjectCommand).resolves({});
   });
 
-  it('calls PutObjectCommand twice when includeAnswerKey is true', async () => {
+  it('calls PutObjectCommand three times when includeAnswerKey is true (worksheet + solve-data + answer-key)', async () => {
     await handler(mockEvent(validBody), mockContext);
     const calls = s3Mock.commandCalls(PutObjectCommand);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
   });
 
-  it('calls PutObjectCommand once when includeAnswerKey is false', async () => {
+  it('calls PutObjectCommand twice when includeAnswerKey is false (worksheet + solve-data)', async () => {
     const body = { ...validBody, includeAnswerKey: false };
     await handler(mockEvent(body), mockContext);
     const calls = s3Mock.commandCalls(PutObjectCommand);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
 
   it('first S3 upload key contains worksheet.pdf', async () => {
@@ -382,10 +431,22 @@ describe('generateHandler — S3 upload call counts', () => {
     expect(firstCall.args[0].input.Key).toContain('worksheet.pdf');
   });
 
-  it('second S3 upload key contains answer-key.pdf', async () => {
+  it('second S3 upload key is solve-data.json', async () => {
     await handler(mockEvent(validBody), mockContext);
     const secondCall = s3Mock.commandCalls(PutObjectCommand)[1];
-    expect(secondCall.args[0].input.Key).toContain('answer-key.pdf');
+    expect(secondCall.args[0].input.Key).toContain('solve-data.json');
+  });
+
+  it('solve-data.json S3 upload has application/json content type', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const solveDataCall = s3Mock.commandCalls(PutObjectCommand)[1];
+    expect(solveDataCall.args[0].input.ContentType).toBe('application/json');
+  });
+
+  it('third S3 upload key contains answer-key.pdf', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const thirdCall = s3Mock.commandCalls(PutObjectCommand)[2];
+    expect(thirdCall.args[0].input.Key).toContain('answer-key.pdf');
   });
 
 });
@@ -419,8 +480,8 @@ describe('generateHandler — 400 validation errors', () => {
     expect(result.statusCode).toBe(400);
   });
 
-  it('returns 400 for questionCount 11 (above maximum)', async () => {
-    const result = await handler(mockEvent({ ...validBody, questionCount: 11 }), mockContext);
+  it('returns 400 for questionCount 31 (above maximum)', async () => {
+    const result = await handler(mockEvent({ ...validBody, questionCount: 31 }), mockContext);
     expect(result.statusCode).toBe(400);
   });
 
@@ -610,6 +671,121 @@ describe('generateHandler — 500 assembler error', () => {
     assembleWorksheet.mockRejectedValueOnce(new Error('Claude API unavailable'));
     const result = await handler(mockEvent(validBody), mockContext);
     expect(result.headers['Access-Control-Expose-Headers']).toBe('x-request-id,x-client-request-id');
+  });
+
+});
+
+// ─── Auth enforcement (TASK-GEN-001) ─────────────────────────────────────────
+
+describe('generateHandler — auth enforcement', () => {
+
+  it('returns 401 when Authorization header is missing', async () => {
+    const err = new Error('Missing or invalid Authorization header.');
+    err.statusCode = 401;
+    validateToken.mockRejectedValueOnce(err);
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('returns success: false on 401', async () => {
+    const err = new Error('Missing or invalid Authorization header.');
+    err.statusCode = 401;
+    validateToken.mockRejectedValueOnce(err);
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(JSON.parse(result.body).success).toBe(false);
+  });
+
+  it('returns WG_UNAUTHORIZED code on 401', async () => {
+    const err = new Error('Missing or invalid Authorization header.');
+    err.statusCode = 401;
+    validateToken.mockRejectedValueOnce(err);
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(JSON.parse(result.body).code).toBe('WG_UNAUTHORIZED');
+  });
+
+  it('returns 403 when role is not teacher or admin', async () => {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    assertRole.mockImplementationOnce(() => { throw err; });
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(403);
+  });
+
+  it('returns WG_FORBIDDEN code on 403', async () => {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    assertRole.mockImplementationOnce(() => { throw err; });
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(JSON.parse(result.body).code).toBe('WG_FORBIDDEN');
+  });
+
+  it('returns CORS headers on 401 response', async () => {
+    const err = new Error('Missing or invalid Authorization header.');
+    err.statusCode = 401;
+    validateToken.mockRejectedValueOnce(err);
+    const result = await handler(mockEvent(validBody), mockContext);
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('does not call assembleWorksheet when auth fails', async () => {
+    const err = new Error('Missing or invalid Authorization header.');
+    err.statusCode = 401;
+    validateToken.mockRejectedValueOnce(err);
+    await handler(mockEvent(validBody), mockContext);
+    expect(assembleWorksheet).not.toHaveBeenCalled();
+  });
+
+});
+
+// ─── teacherId and solve-data.json (TASK-GEN-002 + TASK-GEN-004) ─────────────
+
+describe('generateHandler — teacherId and solve-data.json', () => {
+
+  beforeEach(() => {
+    s3Mock.on(PutObjectCommand).resolves({});
+  });
+
+  it('metadata contains teacherId from the JWT sub claim', async () => {
+    const result = await handler(mockEvent(validBody), mockContext);
+    const { metadata } = JSON.parse(result.body);
+    expect(metadata.teacherId).toBe('teacher-user-123');
+  });
+
+  it('solve-data.json S3 upload body contains worksheetId', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const solveDataCall = s3Mock.commandCalls(PutObjectCommand).find(
+      (c) => c.args[0].input.Key.includes('solve-data.json')
+    );
+    const uploaded = JSON.parse(solveDataCall.args[0].input.Body);
+    expect(uploaded).toHaveProperty('worksheetId');
+  });
+
+  it('solve-data.json body contains teacherId', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const solveDataCall = s3Mock.commandCalls(PutObjectCommand).find(
+      (c) => c.args[0].input.Key.includes('solve-data.json')
+    );
+    const uploaded = JSON.parse(solveDataCall.args[0].input.Body);
+    expect(uploaded.teacherId).toBe('teacher-user-123');
+  });
+
+  it('solve-data.json body contains questions array', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const solveDataCall = s3Mock.commandCalls(PutObjectCommand).find(
+      (c) => c.args[0].input.Key.includes('solve-data.json')
+    );
+    const uploaded = JSON.parse(solveDataCall.args[0].input.Body);
+    expect(Array.isArray(uploaded.questions)).toBe(true);
+  });
+
+  it('solve-data.json S3 key is under the same base path as the worksheet', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const calls = s3Mock.commandCalls(PutObjectCommand);
+    const worksheetKey = calls[0].args[0].input.Key;
+    const solveDataKey = calls[1].args[0].input.Key;
+    // Both should share the same worksheets/{date}/{uuid}/ prefix
+    const prefix = worksheetKey.replace('/worksheet.pdf', '');
+    expect(solveDataKey).toContain(prefix);
   });
 
 });

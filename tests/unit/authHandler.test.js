@@ -14,11 +14,12 @@ const VALID_TEACHER_ID   = '22222222-2222-4222-8222-222222222222';
 
 // ─── Mock auth adapter methods ────────────────────────────────────────────────
 
-const mockCreateUser    = jest.fn();
-const mockFindUser      = jest.fn();
-const mockVerifyPassword = jest.fn();
-const mockGenerateToken = jest.fn();
-const mockVerifyToken   = jest.fn();
+const mockCreateUser         = jest.fn();
+const mockFindUser           = jest.fn();
+const mockVerifyPassword     = jest.fn();
+const mockGenerateToken      = jest.fn();
+const mockVerifyToken        = jest.fn();
+const mockRefreshAccessToken = jest.fn();
 
 // ─── Mock OAuth stub adapter methods ─────────────────────────────────────────
 
@@ -31,25 +32,26 @@ const mockPutItem       = jest.fn();
 const mockGetItem       = jest.fn();
 const mockQueryByField  = jest.fn();
 
+// ─── Mock passwordReset module methods ────────────────────────────────────────
+
+const mockRequestPasswordReset = jest.fn();
+const mockExecuteReset         = jest.fn();
+
 // ─── Mock ../../src/auth/index.js BEFORE any dynamic import ──────────────────
 
 jest.unstable_mockModule('../../src/auth/index.js', () => ({
   getAuthAdapter: jest.fn(() => ({
-    createUser:      mockCreateUser,
-    findUserByEmail: mockFindUser,
-    verifyPassword:  mockVerifyPassword,
-    generateToken:   mockGenerateToken,
-    verifyToken:     mockVerifyToken,
+    createUser:          mockCreateUser,
+    findUserByEmail:     mockFindUser,
+    verifyPassword:      mockVerifyPassword,
+    generateToken:       mockGenerateToken,
+    verifyToken:         mockVerifyToken,
+    refreshAccessToken:  mockRefreshAccessToken,
   })),
-}));
-
-// ─── Mock ../../src/auth/oauthStubAdapter.js BEFORE any dynamic import ───────
-
-jest.unstable_mockModule('../../src/auth/oauthStubAdapter.js', () => ({
-  oauthStubAdapter: {
+  getOAuthAdapter: jest.fn(() => ({
     initiateOAuth:  mockInitiateOAuth,
     handleCallback: mockHandleCallback,
-  },
+  })),
 }));
 
 // ─── Mock ../../src/db/index.js BEFORE any dynamic import ────────────────────
@@ -60,6 +62,13 @@ jest.unstable_mockModule('../../src/db/index.js', () => ({
     getItem:      mockGetItem,
     queryByField: mockQueryByField,
   })),
+}));
+
+// ─── Mock ../../src/auth/passwordReset.js BEFORE any dynamic import ──────────
+
+jest.unstable_mockModule('../../src/auth/passwordReset.js', () => ({
+  requestPasswordReset: mockRequestPasswordReset,
+  resetPassword:        mockExecuteReset,
 }));
 
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
@@ -660,6 +669,85 @@ describe('authHandler — Lambda context guard', () => {
 
 });
 
+// ─── POST /api/auth/refresh — happy path ──────────────────────────────────────
+
+describe('authHandler — POST /api/auth/refresh happy path', () => {
+
+  beforeEach(() => {
+    mockRefreshAccessToken.mockReturnValue('new-access-token');
+  });
+
+  it('returns 200 for a valid refresh token', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(200);
+  });
+
+  it('response body contains { token }', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('token', 'new-access-token');
+  });
+
+  it('calls authAdapter.refreshAccessToken with the refreshToken from body', async () => {
+    await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(mockRefreshAccessToken).toHaveBeenCalledWith('valid-refresh-jwt');
+  });
+
+  it('CORS headers are present on 200 refresh response', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'valid-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── POST /api/auth/refresh — error cases ────────────────────────────────────
+
+describe('authHandler — POST /api/auth/refresh error cases', () => {
+
+  it('returns 400 when refreshToken field is missing from body', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', {}),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 401 when refreshAccessToken throws (invalid/expired token)', async () => {
+    mockRefreshAccessToken.mockImplementation(() => {
+      throw new Error('jwt expired');
+    });
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'expired-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('CORS headers are present on 401 refresh response', async () => {
+    mockRefreshAccessToken.mockImplementation(() => {
+      throw new Error('jwt malformed');
+    });
+    const result = await handler(
+      mockPostEvent('/api/auth/refresh', { refreshToken: 'bad-refresh-jwt' }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
 // ─── Malformed JSON body ──────────────────────────────────────────────────────
 
 describe('authHandler — malformed JSON body', () => {
@@ -699,6 +787,132 @@ describe('authHandler — malformed JSON body', () => {
         headers: {},
         body: '{{{',
       },
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+
+describe('authHandler — POST /api/auth/forgot-password', () => {
+
+  it('returns 400 when email is missing', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/forgot-password', {}),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 200 with a generic message when email is provided (calls requestPasswordReset)', async () => {
+    mockRequestPasswordReset.mockResolvedValue(undefined);
+
+    const result = await handler(
+      mockPostEvent('/api/auth/forgot-password', { email: 'user@test.com' }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockRequestPasswordReset).toHaveBeenCalledWith('user@test.com');
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('message');
+  });
+
+  // REGRESSION TEST — handleForgotPassword does not catch errors thrown by
+  // requestPasswordReset. This test will FAIL until DEV wraps the call in a
+  // try/catch and returns 200 regardless (no email enumeration).
+  it('always returns 200 even when requestPasswordReset throws (no email enumeration)', async () => {
+    mockRequestPasswordReset.mockRejectedValue(new Error('User not found'));
+
+    const result = await handler(
+      mockPostEvent('/api/auth/forgot-password', { email: 'ghost@test.com' }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('message');
+  });
+
+  it('CORS headers are present on forgot-password responses', async () => {
+    mockRequestPasswordReset.mockResolvedValue(undefined);
+
+    const result = await handler(
+      mockPostEvent('/api/auth/forgot-password', { email: 'user@test.com' }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+
+describe('authHandler — POST /api/auth/reset-password', () => {
+
+  it('returns 400 when token is missing', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { newPassword: 'NewPass1!' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when newPassword is missing', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { token: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when newPassword is shorter than 8 characters', async () => {
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { token: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff', newPassword: 'short' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.error).toMatch(/8 characters/i);
+  });
+
+  it('returns 200 on a successful password reset', async () => {
+    mockExecuteReset.mockResolvedValue(undefined);
+
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { token: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', newPassword: 'NewPass1!' }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockExecuteReset).toHaveBeenCalledWith('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'NewPass1!');
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('message');
+  });
+
+  // REGRESSION TEST — handleResetPassword does not catch errors thrown by
+  // executeReset. This test will FAIL until DEV wraps the call in a try/catch
+  // and returns 400 for expired/invalid/already-used tokens.
+  it('returns 400 when executeReset throws (expired or invalid token)', async () => {
+    mockExecuteReset.mockRejectedValue(new Error('Reset token is invalid or has expired.'));
+
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { token: 'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa', newPassword: 'NewPass1!' }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('error');
+  });
+
+  it('CORS headers are present on reset-password responses', async () => {
+    mockExecuteReset.mockResolvedValue(undefined);
+
+    const result = await handler(
+      mockPostEvent('/api/auth/reset-password', { token: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', newPassword: 'NewPass1!' }),
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();

@@ -3,14 +3,20 @@
  * @description Factory that returns the correct question bank adapter for the
  * current environment.
  *
- * Adapter selection:
- *   QB_ADAPTER=local (default) → localQuestionBankAdapter (in-memory, dev/test)
- *   QB_ADAPTER=s3              → s3QuestionBankAdapter    (not yet implemented)
+ * Adapter selection via QB_ADAPTER environment variable:
+ *   QB_ADAPTER=local              → localQuestionBankAdapter  (in-memory, dev/test)
+ *   QB_ADAPTER=dynamodb | aws     → dynamoAdapter             (DynamoDB, staging/prod)
  *
  * Usage:
  *   import { getQuestionBankAdapter } from '../../src/questionBank/index.js';
- *   const qb = getQuestionBankAdapter();
+ *   const qb = await getQuestionBankAdapter();
  *   const question = await qb.addQuestion({ ... });
+ *
+ * Local DynamoDB dev:
+ *   QB_ADAPTER=dynamodb DYNAMODB_ENDPOINT=http://localhost:8000 node …
+ *
+ * AWS Lambda (staging / prod):
+ *   QB_ADAPTER=aws  (DYNAMODB_ENDPOINT not set — SDK uses regional endpoint)
  */
 
 // Adapter type is frozen after first call — changes to QB_ADAPTER after
@@ -21,7 +27,7 @@ let _adapter = null;
  * Returns the singleton question bank adapter instance.
  * The adapter is chosen by the QB_ADAPTER environment variable (default: 'local').
  *
- * @returns {{ addQuestion, getQuestion, listQuestions, questionExists, incrementReuseCount }}
+ * @returns {Promise<{ addQuestion, addIfNotExists, getQuestion, listQuestions, questionExists, incrementReuseCount }>}
  */
 export async function getQuestionBankAdapter() {
   if (_adapter) return _adapter;
@@ -41,5 +47,18 @@ export async function getQuestionBankAdapter() {
     return _adapter;
   }
 
-  throw new Error(`Unknown QB_ADAPTER value: "${mode}". Supported values: local`);
+  if (mode === 'dynamodb' || mode === 'aws') {
+    const mod = await import('./dynamoAdapter.js');
+    _adapter = {
+      addQuestion:          mod.addQuestion,
+      addIfNotExists:       mod.addIfNotExists,
+      getQuestion:          mod.getQuestion,
+      listQuestions:        mod.listQuestions,
+      questionExists:       mod.questionExists,
+      incrementReuseCount:  mod.incrementReuseCount,
+    };
+    return _adapter;
+  }
+
+  throw new Error(`Unknown QB_ADAPTER value: "${mode}". Supported values: local, dynamodb`);
 }

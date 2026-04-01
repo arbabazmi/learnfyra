@@ -74,6 +74,7 @@ beforeAll(async () => {
       ...process.env,
       PORT: String(port),
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'test-key',
+      QB_ADAPTER: 'local', // force in-memory adapter — test exercises routes, not DynamoDB
       NODE_ENV: 'test',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

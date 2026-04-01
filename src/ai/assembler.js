@@ -28,6 +28,7 @@ import { withRetry } from '../utils/retryUtils.js';
 import { getQuestionBankAdapter } from '../questionBank/index.js';
 import { recordQuestionReuse } from '../questionBank/reuseHook.js';
 import { logger } from '../utils/logger.js';
+import { buildQuestionSignature } from './repeatCapPolicy.js';
 
 // ─── Model tiers ──────────────────────────────────────────────────────────────
 
@@ -176,6 +177,42 @@ function sampleN(arr, n) {
   return copy.slice(0, count);
 }
 
+function shuffled(arr) {
+  return sampleN(arr, arr.length);
+}
+
+/**
+ * Selects up to questionCount candidates while enforcing repeat allowance.
+ * @param {Object[]} candidates
+ * @param {number} questionCount
+ * @param {Set<string>} seenSignatures
+ * @param {number} maxRepeatQuestions
+ * @returns {{ selected: Object[], repeatUsed: number }}
+ */
+function selectWithRepeatCap(candidates, questionCount, seenSignatures, maxRepeatQuestions) {
+  const selected = [];
+  let repeatUsed = 0;
+
+  const inOrder = shuffled(candidates);
+  for (const q of inOrder) {
+    if (selected.length >= questionCount) break;
+
+    const sig = buildQuestionSignature(q);
+    const isSeen = seenSignatures.has(sig);
+    if (!isSeen) {
+      selected.push(q);
+      continue;
+    }
+
+    if (repeatUsed < maxRepeatQuestions) {
+      selected.push(q);
+      repeatUsed += 1;
+    }
+  }
+
+  return { selected, repeatUsed };
+}
+
 /**
  * Returns whether full per-question provenance should be attached.
  * @param {string} provenanceLevel
@@ -270,14 +307,35 @@ export async function assembleWorksheet(options) {
     difficulty,
     questionCount,
     provenanceLevel = 'summary',
+    repeatCapPercent = 100,
+    seenQuestionSignatures,
   } = options;
 
-  // ── Step 1: Query the bank ──────────────────────────────────────────────────
-  const qb = await getQuestionBankAdapter();
-  const candidates = await qb.listQuestions({ grade, subject, topic, difficulty });
+  const seenSignatures = seenQuestionSignatures instanceof Set
+    ? seenQuestionSignatures
+    : new Set(Array.isArray(seenQuestionSignatures) ? seenQuestionSignatures : []);
+  const effectiveRepeatCapPercent = Math.max(0, Math.min(100, Number(repeatCapPercent)));
+  const maxRepeatQuestions = Math.floor(questionCount * (effectiveRepeatCapPercent / 100));
 
-  // ── Step 2: Randomly select up to questionCount banked questions ────────────
-  const bankedSelected = sampleN(candidates, questionCount);
+  // ── Step 1: Query the bank ──────────────────────────────────────────────────
+  const skipBankLookup = process.env.SKIP_BANK_LOOKUP === 'true';
+  const qb = await getQuestionBankAdapter();
+
+  let bankedSelected = [];
+  let repeatUsed = 0;
+  let candidates = [];
+
+  if (skipBankLookup) {
+    logger.info('Assembler — SKIP_BANK_LOOKUP=true, bypassing bank query — all questions from AI');
+  } else {
+    candidates = await qb.listQuestions({ grade, subject, topic, difficulty });
+
+    // ── Step 2: Randomly select up to questionCount banked questions ──────────
+    const result = selectWithRepeatCap(candidates, questionCount, seenSignatures, maxRepeatQuestions);
+    bankedSelected = result.selected;
+    repeatUsed = result.repeatUsed;
+  }
+
   const fromBank       = bankedSelected.length;
   const missingCount   = questionCount - fromBank;
 
@@ -297,6 +355,28 @@ export async function assembleWorksheet(options) {
     logger.info(`Assembler — generating ${missingCount} question(s) using model: ${generationModel}`);
 
     generatedQuestions = await generateMissingQuestions(options, missingCount, generationModel);
+
+    const filteredGenerated = [];
+    for (const q of generatedQuestions) {
+      const sig = buildQuestionSignature(q);
+      const isSeen = seenSignatures.has(sig);
+      if (!isSeen) {
+        filteredGenerated.push(q);
+        continue;
+      }
+      if (repeatUsed < maxRepeatQuestions) {
+        filteredGenerated.push(q);
+        repeatUsed += 1;
+      }
+    }
+    generatedQuestions = filteredGenerated;
+
+    if (generatedQuestions.length < missingCount) {
+      throw new Error(
+        `Unable to satisfy repeat cap (${effectiveRepeatCapPercent}%). ` +
+        `Needed ${missingCount} generated questions, got ${generatedQuestions.length}.`
+      );
+    }
 
     // ── Step 5–6: Validate and store each new question ────────────────────────
     for (let i = 0; i < generatedQuestions.length; i++) {
@@ -385,7 +465,14 @@ export async function assembleWorksheet(options) {
     questions:    renumbered,
   };
 
-  const bankStats = { fromBank, generated: missingCount, totalStored };
+  const bankStats = {
+    fromBank,
+    generated: missingCount,
+    totalStored,
+    repeatCapPercent: effectiveRepeatCapPercent,
+    maxRepeatQuestions,
+    repeatUsed,
+  };
 
   if (provenanceLevel === 'none') {
     return { worksheet, bankStats };

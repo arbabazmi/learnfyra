@@ -243,8 +243,8 @@ describe('validateGenerateBody() — questionCount boundaries', () => {
     );
   });
 
-  it('throws for questionCount 11 (above maximum)', () => {
-    expect(() => validateGenerateBody(validBody({ questionCount: 11 }))).toThrow(
+  it('throws for questionCount 31 (above maximum)', () => {
+    expect(() => validateGenerateBody(validBody({ questionCount: 31 }))).toThrow(
       'questionCount must be'
     );
   });

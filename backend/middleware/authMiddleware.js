@@ -8,6 +8,7 @@
  */
 
 import { getAuthAdapter } from '../../src/auth/index.js';
+import { getDbAdapter } from '../../src/db/index.js';
 
 /**
  * Reads the Authorization header (case-insensitive), strips the "Bearer " prefix,
@@ -63,6 +64,43 @@ export async function validateToken(event) {
 export function requireRole(decoded, allowedRoles) {
   if (!allowedRoles.includes(decoded.role)) {
     const err = new Error('Forbidden');
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+export { requireRole as assertRole };
+
+/**
+ * Asserts that an active parent-child link exists between the requesting parent
+ * and the target child. Non-parent roles pass through without a DB check.
+ *
+ * Designed for handler use: call this when a parent tries to access a specific
+ * student's data (e.g. progress, worksheets assigned to child).
+ *
+ * @param {{ sub: string, email: string, role: string }} decoded - Decoded JWT payload
+ * @param {string} childId - The target student's userId from the request
+ * @returns {Promise<void>}
+ * @throws {Error} With .statusCode = 400 when childId is missing (parent only)
+ * @throws {Error} With .statusCode = 403 when no active link exists (parent only)
+ */
+export async function assertParentLink(decoded, childId) {
+  if (decoded.role !== 'parent') {
+    return; // non-parents pass through — link check is parent-only
+  }
+
+  if (!childId) {
+    const err = new Error('childId is required to access student data as a parent.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const db = getDbAdapter();
+  const links = await db.queryByField('parentLinks', 'parentId', decoded.sub);
+  const activeLink = links.find((l) => l.childId === childId && l.status === 'active');
+
+  if (!activeLink) {
+    const err = new Error('Access denied: no active parent-child link for this student.');
     err.statusCode = 403;
     throw err;
   }

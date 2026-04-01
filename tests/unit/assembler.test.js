@@ -541,3 +541,58 @@ describe('assembleWorksheet — error handling', () => {
   });
 
 });
+
+describe('assembleWorksheet — repeat cap enforcement', () => {
+  beforeEach(() => {
+    mockMessagesCreate.mockResolvedValue(claudeResponse(2));
+  });
+
+  it('allows no repeated questions when repeatCapPercent is 0', async () => {
+    const banked = [
+      makeQuestion({ questionId: 'q-seen-1', question: 'Seen Q1' }),
+      makeQuestion({ questionId: 'q-seen-2', question: 'Seen Q2' }),
+      makeQuestion({ questionId: 'q-new-1', question: 'New Q1' }),
+      makeQuestion({ questionId: 'q-new-2', question: 'New Q2' }),
+      makeQuestion({ questionId: 'q-new-3', question: 'New Q3' }),
+    ];
+    mockListQuestions.mockReturnValue(banked);
+
+    const seen = new Set(['id:q-seen-1', 'id:q-seen-2']);
+    const { worksheet, bankStats } = await assembleWorksheet({
+      ...baseOptions,
+      questionCount: 5,
+      repeatCapPercent: 0,
+      seenQuestionSignatures: seen,
+    });
+
+    expect(worksheet.questions).toHaveLength(5);
+    expect(bankStats.repeatUsed).toBe(0);
+  });
+
+  it('respects max repeated question allowance floor(questionCount*percent/100)', async () => {
+    const banked = [
+      makeQuestion({ questionId: 'q-seen-1' }),
+      makeQuestion({ questionId: 'q-seen-2' }),
+      makeQuestion({ questionId: 'q-seen-3' }),
+      makeQuestion({ questionId: 'q-new-1' }),
+      makeQuestion({ questionId: 'q-new-2' }),
+      makeQuestion({ questionId: 'q-new-3' }),
+      makeQuestion({ questionId: 'q-new-4' }),
+      makeQuestion({ questionId: 'q-new-5' }),
+      makeQuestion({ questionId: 'q-new-6' }),
+      makeQuestion({ questionId: 'q-new-7' }),
+    ];
+    mockListQuestions.mockReturnValue(banked);
+
+    const seen = new Set(['id:q-seen-1', 'id:q-seen-2', 'id:q-seen-3']);
+    const { bankStats } = await assembleWorksheet({
+      ...baseOptions,
+      questionCount: 10,
+      repeatCapPercent: 10,
+      seenQuestionSignatures: seen,
+    });
+
+    expect(bankStats.maxRepeatQuestions).toBe(1);
+    expect(bankStats.repeatUsed).toBeLessThanOrEqual(1);
+  });
+});

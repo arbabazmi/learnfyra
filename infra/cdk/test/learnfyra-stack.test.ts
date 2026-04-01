@@ -248,9 +248,24 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('sets log retention policy for Lambda log groups', () => {
-    template.resourceCountIs('Custom::LogRetention', 11);
+    template.resourceCountIs('Custom::LogRetention', 12);
     template.hasResourceProperties('Custom::LogRetention', {
       RetentionInDays: 30,
+    });
+  });
+
+  test('creates API Gateway token authorizer', () => {
+    template.hasResourceProperties('AWS::ApiGateway::Authorizer', {
+      Type: 'TOKEN',
+      IdentitySource: 'method.request.header.Authorization',
+    });
+  });
+
+  test('protects /api/generate POST with custom authorizer', () => {
+    template.hasResourceProperties('AWS::ApiGateway::Method', {
+      HttpMethod: 'POST',
+      AuthorizationType: 'CUSTOM',
+      AuthorizerId: Match.anyValue(),
     });
   });
 
@@ -432,6 +447,90 @@ describe('LearnfyraStack (staging)', () => {
   test('staging worksheet bucket uses correct naming convention', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: 'learnfyra-staging-s3-worksheets',
+    });
+  });
+});
+
+describe('LearnfyraStack (dev) — Cognito Google OAuth', () => {
+  let template: Template;
+  beforeAll(() => {
+    template = makeStack('dev');
+  });
+
+  test('creates a Cognito User Pool', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPool', {
+      UserPoolName: 'learnfyra-dev-user-pool',
+    });
+  });
+
+  test('Cognito User Pool has email sign-in alias', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPool', {
+      UsernameAttributes: ['email'],
+    });
+  });
+
+  test('creates Google identity provider', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
+      ProviderName: 'Google',
+      ProviderType: 'Google',
+    });
+  });
+
+  test('Google IdP has the correct dev client ID', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
+      ProviderDetails: Match.objectLike({
+        client_id: '1079696386286-m95l3vrmh157sgji4njii0afftoglc9b.apps.googleusercontent.com',
+      }),
+    });
+  });
+
+  test('creates Cognito App Client with authorization_code grant', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      ClientName: 'learnfyra-dev-app-client',
+      AllowedOAuthFlows: ['code'],
+      GenerateSecret: false,
+    });
+  });
+
+  test('App Client callback URL points to /api/auth/callback/google', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      CallbackURLs: Match.arrayWith([
+        Match.stringLikeRegexp('/api/auth/callback/google'),
+      ]),
+    });
+  });
+
+  test('App Client supports Google as identity provider', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      SupportedIdentityProviders: Match.arrayWith(['Google']),
+    });
+  });
+
+  test('creates Cognito domain with correct prefix', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'learnfyra-dev',
+    });
+  });
+
+  test('auth Lambda has AUTH_MODE=cognito env var', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-auth',
+      Environment: Match.objectLike({
+        Variables: Match.objectLike({
+          AUTH_MODE: 'cognito',
+        }),
+      }),
+    });
+  });
+
+  test('auth Lambda has COGNITO_DOMAIN env var', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-auth',
+      Environment: Match.objectLike({
+        Variables: Match.objectLike({
+          COGNITO_DOMAIN: Match.anyValue(),
+        }),
+      }),
     });
   });
 });

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file backend/middleware/validator.js
  * @description Validates incoming API Gateway event bodies for worksheet generation
  */
@@ -43,6 +43,26 @@ function normalizeOptionalDate(value) {
 }
 
 /**
+ * Returns a normalized identifier string, or empty when omitted.
+ * @param {unknown} value
+ * @param {string} fieldName
+ * @returns {string}
+ */
+function normalizeOptionalId(value, fieldName) {
+  if (value == null || value === '') return '';
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string.`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be 1-128 characters and use only letters, numbers, underscores, or hyphens.`);
+  }
+  return trimmed;
+}
+
+/**
  * Validates and normalises the parsed request body for POST /api/generate.
  * Throws a descriptive Error with a user-facing message on any violation.
  * @param {Object} body - Parsed JSON body from the Lambda event
@@ -53,7 +73,7 @@ export function validateGenerateBody(body) {
     throw new Error('Request body must be a JSON object.');
   }
 
-  // grade: required, integer 1–10
+  // grade: required, integer 1â€“10
   const grade = Number(body.grade);
   if (!Number.isInteger(grade) || grade < 1 || grade > 10) {
     throw new Error('grade must be an integer between 1 and 10.');
@@ -64,12 +84,16 @@ export function validateGenerateBody(body) {
     throw new Error(`subject must be one of: ${VALID_SUBJECTS.join(', ')}.`);
   }
 
-  // topic: required, non-empty string, max 200 characters
+  // topic: required, non-empty string, max 200 characters, safe characters only
   if (typeof body.topic !== 'string' || !body.topic.trim()) {
     throw new Error('topic must be a non-empty string.');
   }
   if (body.topic.trim().length > 200) {
     throw new Error('topic must be 200 characters or fewer.');
+  }
+  // Block characters that enable prompt injection: double-quotes, newlines, null bytes
+  if (/["\x00\n\r]/.test(body.topic)) {
+    throw new Error('topic contains invalid characters.');
   }
 
   // difficulty: required, one of valid list
@@ -77,10 +101,10 @@ export function validateGenerateBody(body) {
     throw new Error(`difficulty must be one of: ${VALID_DIFFICULTIES.join(', ')}.`);
   }
 
-  // questionCount: required, integer 5–10
+  // questionCount: required, integer 5â€“10
   const questionCount = Number(body.questionCount);
-  if (!Number.isInteger(questionCount) || questionCount < 5 || questionCount > 10) {
-    throw new Error('questionCount must be an integer between 5 and 10.');
+  if (!Number.isInteger(questionCount) || questionCount < 5 || questionCount > 30) {
+    throw new Error('questionCount must be an integer between 5 and 30.');
   }
 
   // format: required, one of valid list
@@ -106,6 +130,8 @@ export function validateGenerateBody(body) {
   const period = normalizeOptionalString(body.period, 40);
   const className = normalizeOptionalString(body.className, 80);
   const worksheetDate = normalizeOptionalDate(body.worksheetDate);
+  const studentId = normalizeOptionalId(body.studentId, 'studentId');
+  const parentId = normalizeOptionalId(body.parentId, 'parentId');
 
   return {
     grade,
@@ -122,5 +148,7 @@ export function validateGenerateBody(body) {
     teacherName,
     period,
     className,
+    studentId,
+    parentId,
   };
 }

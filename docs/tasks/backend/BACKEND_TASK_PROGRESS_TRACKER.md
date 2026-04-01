@@ -3,6 +3,12 @@
 Last updated: 2026-03-26
 Owner: Backend execution stream
 
+> **FRESH START — M01 + M03 Re-baseline (2026-03-26)**
+> Full requirements, code audit, IaC audit, and task items for M01 Auth and M03 Generator
+> have been written to: `docs/tasks/backend/M01-M03-REQUIREMENTS-AND-TASKS.md`
+> Tasks below (legacy sprint plan) remain for reference.
+> New task IDs use TASK-AUTH-NNN and TASK-GEN-NNN format defined in the new document.
+
 ## Status Legend
 - completed
 - in-progress
