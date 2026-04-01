@@ -73,15 +73,27 @@ const getDynamoEnv = () => process.env.DYNAMO_ENV || process.env.NODE_ENV || 'lo
  *   sk      — RANGE key attribute name (undefined if no sort key)
  */
 const TABLE_CONFIG = {
-  users:             { envVar: 'USERS_TABLE_NAME',        suffix: 'Users',            pk: 'userId'                         },
-  worksheetattempts: { envVar: 'ATTEMPTS_TABLE_NAME',     suffix: 'WorksheetAttempt', pk: 'userId',     sk: 'sortKey'       },
-  certificates:      { envVar: 'CERTIFICATES_TABLE_NAME', suffix: 'Certificates',     pk: 'certificateId'                  },
-  classes:           { envVar: 'CLASSES_TABLE_NAME',      suffix: 'Classes',          pk: 'classId'                        },
-  classmemberships:  { envVar: 'MEMBERSHIPS_TABLE_NAME',  suffix: 'ClassMemberships', pk: 'classId',    sk: 'studentId'     },
-  questionbank:      { envVar: 'QB_TABLE_NAME',           suffix: 'QuestionBank',     pk: 'questionId'                     },
-  generationlog:     { envVar: 'GENLOG_TABLE_NAME',       suffix: 'GenerationLog',    pk: 'worksheetId'                    },
-  config:            { envVar: 'CONFIG_TABLE_NAME',       suffix: 'Config',           pk: 'configKey'                      },
-  passwordresets:    { envVar: 'PWRESET_TABLE_NAME',      suffix: 'PasswordResets',   pk: 'tokenId'                        },
+  users:              { envVar: 'USERS_TABLE_NAME',               suffix: 'Users',              pk: 'userId'      },
+  attempts:           { envVar: 'ATTEMPTS_TABLE_NAME',            suffix: 'Attempts',           pk: 'attemptId'   },
+  worksheetattempts:  { envVar: 'ATTEMPTS_TABLE_NAME',            suffix: 'Attempts',           pk: 'attemptId'   },
+  aggregates:         { envVar: 'AGGREGATES_TABLE_NAME',          suffix: 'Aggregates',         pk: 'id'          },
+  certificates:       { envVar: 'CERTIFICATES_TABLE_NAME',        suffix: 'Certificates',       pk: 'id'          },
+  rewardprofiles:     { envVar: 'REWARD_PROFILES_TABLE_NAME',     suffix: 'RewardProfiles',     pk: 'id'          },
+  classes:            { envVar: 'CLASSES_TABLE_NAME',             suffix: 'Classes',            pk: 'classId'     },
+  memberships:        { envVar: 'MEMBERSHIPS_TABLE_NAME',         suffix: 'Memberships',        pk: 'id'          },
+  classmemberships:   { envVar: 'MEMBERSHIPS_TABLE_NAME',         suffix: 'Memberships',        pk: 'id'          },
+  questionbank:       { envVar: 'QB_TABLE_NAME',                  suffix: 'QuestionBank',       pk: 'questionId'  },
+  generationlog:      { envVar: 'GENLOG_TABLE_NAME',              suffix: 'GenerationLog',      pk: 'worksheetId' },
+  config:             { envVar: 'CONFIG_TABLE_NAME',              suffix: 'Config',             pk: 'configKey'   },
+  modelconfig:        { envVar: 'MODEL_CONFIG_TABLE_NAME',        suffix: 'ModelConfig',        pk: 'id'          },
+  modelauditlog:      { envVar: 'MODEL_AUDIT_LOG_TABLE_NAME',     suffix: 'ModelAuditLog',      pk: 'id'          },
+  questionexposurehistory: { envVar: 'QUESTION_EXPOSURE_HISTORY_TABLE_NAME', suffix: 'QuestionExposureHistory', pk: 'id' },
+  passwordresets:     { envVar: 'PWRESET_TABLE_NAME',             suffix: 'PasswordResets',     pk: 'tokenId'     },
+  parentlinks:        { envVar: 'PARENT_LINKS_TABLE_NAME',        suffix: 'ParentLinks',        pk: 'id'          },
+  adminpolicies:      { envVar: 'ADMIN_POLICIES_TABLE_NAME',      suffix: 'AdminPolicies',      pk: 'id'          },
+  adminauditevents:   { envVar: 'ADMIN_AUDIT_EVENTS_TABLE_NAME',  suffix: 'AdminAuditEvents',   pk: 'id'          },
+  adminidempotency:   { envVar: 'ADMIN_IDEMPOTENCY_TABLE_NAME',   suffix: 'AdminIdempotency',   pk: 'id'          },
+  repeatcapoverrides: { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME', suffix: 'RepeatCapOverrides', pk: 'id'         },
 };
 
 /**
