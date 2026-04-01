@@ -252,7 +252,7 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExt
           </p>
 
           {/* ── Smart Search Box ──────────────────────────── */}
-          <div className="mt-8 animate-fade-up delay-300">
+          <div className="relative z-10 mt-8 animate-fade-up delay-300">
             <SmartSearchBox externalGrade={externalGrade} onExternalGradeHandled={onExternalGradeHandled} />
           </div>
 
