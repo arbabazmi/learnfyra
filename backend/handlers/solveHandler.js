@@ -155,13 +155,14 @@ export const handler = async (event, context) => {
     };
   } catch (err) {
     console.error('solveHandler error:', err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        error: 'Internal server error.',
-        code: 'SOLVE_INTERNAL_ERROR',
-      }),
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const solveBody = {
+      error: isDebug ? err.message : 'Internal server error.',
+      code: 'SOLVE_INTERNAL_ERROR',
     };
+    if (isDebug) {
+      solveBody._debug = { stack: err.stack, handler: 'solveHandler', statusCode: 500, timestamp: new Date().toISOString() };
+    }
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify(solveBody) };
   }
 };

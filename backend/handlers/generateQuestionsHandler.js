@@ -66,7 +66,14 @@ export const handler = async (event, context) => {
     };
   } catch (err) {
     console.error('[generateQuestionsHandler] error:', err);
-    return _error(500, err.message || 'Internal server error');
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const gqResponse = _error(500, err.message || 'Internal server error');
+    if (isDebug) {
+      const parsedBody = JSON.parse(gqResponse.body);
+      parsedBody._debug = { stack: err.stack, handler: 'generateQuestionsHandler', statusCode: 500, timestamp: new Date().toISOString() };
+      gqResponse.body = JSON.stringify(parsedBody);
+    }
+    return gqResponse;
   }
 };
 

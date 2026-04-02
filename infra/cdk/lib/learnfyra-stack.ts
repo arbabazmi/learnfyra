@@ -921,6 +921,7 @@ export class LearnfyraStack extends cdk.Stack {
     ].forEach((fn) => {
       fn.addEnvironment('APP_RUNTIME', 'aws');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
+      if (isDev) fn.addEnvironment('DEBUG_MODE', 'true');
     });
 
     authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
