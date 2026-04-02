@@ -223,6 +223,9 @@ const SettingsPage: React.FC = () => {
 
   // Seed from auth context immediately, then fetch full profile from API
   React.useEffect(() => {
+    let isMounted = true;
+    const abort = new AbortController();
+
     if (auth.user) {
       setFullName(auth.user.displayName || '');
       setEmail(auth.user.email || '');
@@ -233,9 +236,11 @@ const SettingsPage: React.FC = () => {
 
     fetch(`${apiUrl}/api/student/profile`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: abort.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (!isMounted) return;
         if (data) {
           if (data.displayName) setFullName(data.displayName);
           if (data.email) setEmail(data.email);
@@ -243,8 +248,13 @@ const SettingsPage: React.FC = () => {
           if (data.authType) setAuthType(data.authType);
         }
       })
-      .catch(() => { /* profile fetch failed — use auth context data */ })
-      .finally(() => setProfileLoading(false));
+      .catch((err) => {
+        if (!isMounted || err.name === 'AbortError') return;
+        console.warn('Profile fetch failed:', err.message);
+      })
+      .finally(() => { if (isMounted) setProfileLoading(false); });
+
+    return () => { isMounted = false; abort.abort(); };
   }, [auth.user]);
 
   // ── Learning preferences state ───────────────────────────────────────────
@@ -289,11 +299,13 @@ const SettingsPage: React.FC = () => {
     : '?';
 
   const isGoogleAuth = authType.includes('google') || authType.includes('oauth');
+  const [isSaving, setIsSaving] = React.useState(false);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = getToken();
     if (!token) { showToast('You must be signed in to save.', true); return; }
+    setIsSaving(true);
     try {
       const res = await fetch(`${apiUrl}/api/student/profile`, {
         method: 'PATCH',
@@ -303,11 +315,14 @@ const SettingsPage: React.FC = () => {
       if (res.ok) {
         showToast('Profile saved successfully');
       } else {
-        const data = await res.json().catch(() => ({}));
+        let data: Record<string, string> = {};
+        try { data = await res.json(); } catch { /* malformed JSON */ }
         showToast(data.error || 'Failed to save profile.', true);
       }
     } catch {
       showToast('Network error. Please try again.', true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -425,8 +440,8 @@ const SettingsPage: React.FC = () => {
               </div>
 
               <div className="mt-6">
-                <Button type="submit" variant="primary" size="md">
-                  Save Changes
+                <Button type="submit" variant="primary" size="md" disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>

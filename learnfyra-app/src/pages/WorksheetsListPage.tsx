@@ -16,11 +16,16 @@ import {
   HelpCircle,
   ArrowRight,
   FileText,
+  LogIn,
+  Loader2,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiUrl } from '@/lib/env';
+import { getToken } from '@/lib/auth';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type WorksheetStatus = 'completed' | 'new' | 'in-progress';
@@ -42,17 +47,61 @@ interface Worksheet {
   date: string;
 }
 
-// ── Mock data — replace with GET /api/worksheets ───────────────────────────
-const worksheets: Worksheet[] = [
-  { id: 'ws-001', title: 'Linear Equations',     subject: 'Math',          grade: 7, topic: 'Algebra',      difficulty: 'Medium', score: 90,   totalPoints: 10, questionCount: 10, estimatedTime: '20 min', status: 'completed',   date: 'Mar 28, 2026' },
-  { id: 'ws-002', title: 'Cell Biology Basics',  subject: 'Science',       grade: 7, topic: 'Biology',      difficulty: 'Easy',   score: 80,   totalPoints: 10, questionCount: 8,  estimatedTime: '15 min', status: 'completed',   date: 'Mar 27, 2026' },
-  { id: 'ws-003', title: 'The American Revolution', subject: 'Social Studies', grade: 7, topic: 'US History', difficulty: 'Hard', score: null, totalPoints: 10, questionCount: 12, estimatedTime: '25 min', status: 'new',         date: 'Mar 26, 2026' },
-  { id: 'ws-004', title: 'Parts of Speech',      subject: 'ELA',           grade: 7, topic: 'Grammar',      difficulty: 'Easy',   score: null, totalPoints: 10, questionCount: 10, estimatedTime: '15 min', status: 'in-progress', date: 'Mar 25, 2026' },
-  { id: 'ws-005', title: 'Fraction Operations',  subject: 'Math',          grade: 7, topic: 'Fractions',    difficulty: 'Medium', score: 95,   totalPoints: 10, questionCount: 10, estimatedTime: '20 min', status: 'completed',   date: 'Mar 24, 2026' },
-  { id: 'ws-006', title: 'The Water Cycle',      subject: 'Science',       grade: 7, topic: 'Earth Science', difficulty: 'Easy',  score: 70,   totalPoints: 10, questionCount: 8,  estimatedTime: '15 min', status: 'completed',   date: 'Mar 23, 2026' },
-  { id: 'ws-007', title: 'Persuasive Writing',   subject: 'ELA',           grade: 7, topic: 'Writing',      difficulty: 'Hard',   score: null, totalPoints: 10, questionCount: 5,  estimatedTime: '30 min', status: 'new',         date: 'Mar 22, 2026' },
-  { id: 'ws-008', title: 'Geometry Basics',      subject: 'Math',          grade: 7, topic: 'Geometry',     difficulty: 'Medium', score: null, totalPoints: 10, questionCount: 10, estimatedTime: '20 min', status: 'in-progress', date: 'Mar 21, 2026' },
-];
+// ── API attempt shape returned by GET /api/progress/history ───────────────
+interface AttemptRecord {
+  attemptId: string;
+  worksheetId: string;
+  grade: number;
+  subject: string;
+  topic: string;
+  difficulty: string;
+  totalScore: number;
+  totalPoints: number;
+  percentage: number | null;
+  timeTaken: number;
+  timed: boolean;
+  createdAt: string;
+}
+
+/** Maps a raw attempt record to the internal Worksheet display shape. */
+function attemptToWorksheet(a: AttemptRecord): Worksheet {
+  const validSubjects: Subject[] = ['Math', 'Science', 'ELA', 'Social Studies', 'Health'];
+  const validDifficulties: Difficulty[] = ['Easy', 'Medium', 'Hard', 'Mixed'];
+
+  const subject = validSubjects.includes(a.subject as Subject)
+    ? (a.subject as Subject)
+    : 'Math';
+
+  const difficulty = validDifficulties.includes(a.difficulty as Difficulty)
+    ? (a.difficulty as Difficulty)
+    : 'Medium';
+
+  const score = a.percentage != null ? Math.round(a.percentage) : null;
+  const status: WorksheetStatus = score != null ? 'completed' : 'in-progress';
+
+  const date = a.createdAt
+    ? new Date(a.createdAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
+
+  return {
+    id: a.attemptId || a.worksheetId,
+    title: `${a.topic} — Grade ${a.grade}`,
+    subject,
+    grade: a.grade,
+    topic: a.topic,
+    difficulty,
+    score,
+    totalPoints: a.totalPoints || 10,
+    questionCount: 0,
+    estimatedTime: '',
+    status,
+    date,
+  };
+}
 
 // ── Config maps ────────────────────────────────────────────────────────────
 const statusConfig: Record<WorksheetStatus, { label: string; variant: 'success' | 'primary' | 'warning' }> = {
@@ -297,6 +346,30 @@ const EmptyState: React.FC<{ hasFilters: boolean }> = ({ hasFilters }) => (
   </div>
 );
 
+// ── Guest sign-in prompt ─────────────────────────────────────────────────────
+const GuestPrompt: React.FC = () => (
+  <div className="flex flex-col items-center justify-center py-20 text-center">
+    <div
+      className="w-20 h-20 rounded-2xl bg-primary-light flex items-center justify-center mb-5"
+      aria-hidden="true"
+    >
+      <LogIn className="size-10 text-primary opacity-60" />
+    </div>
+    <h3 className="text-base font-extrabold text-foreground mb-1">
+      Sign in to see your worksheets
+    </h3>
+    <p className="text-sm text-muted-foreground max-w-xs mb-6">
+      Your worksheet history is saved to your account. Sign in to browse, filter, and continue where you left off.
+    </p>
+    <Button variant="primary" size="md" className="gap-2" asChild>
+      <Link to="/?signin=1">
+        <LogIn className="size-4" />
+        Sign In
+      </Link>
+    </Button>
+  </div>
+);
+
 // ── Main page ────────────────────────────────────────────────────────────────
 const WorksheetsListPage: React.FC = () => {
   usePageMeta({
@@ -305,10 +378,61 @@ const WorksheetsListPage: React.FC = () => {
     keywords: 'worksheets list, student practice, worksheet history, subject filter',
   });
 
+  const auth = useAuth();
+  const token = getToken();
+
+  const [worksheets, setWorksheets] = React.useState<Worksheet[]>([]);
+  const [isLoading, setIsLoading]   = React.useState(!auth.isGuest);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey]   = React.useState(0);
+
   const [search, setSearch]           = React.useState('');
   const [subjectFilter, setSubject]   = React.useState('all');
   const [statusFilter, setStatus]     = React.useState('all');
   const [viewMode, setViewMode]       = React.useState<'grid' | 'list'>('grid');
+
+  // ── Fetch worksheet history for authenticated users ───────────────────────
+  React.useEffect(() => {
+    if (auth.isGuest) {
+      setWorksheets([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const controller = new AbortController();
+    setIsLoading(true);
+    setFetchError(null);
+
+    fetch(`${apiUrl}/api/progress/history?limit=100`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { attempts: AttemptRecord[] }) => {
+        if (!isMounted) return;
+        const mapped = Array.isArray(data.attempts)
+          ? data.attempts.map(attemptToWorksheet)
+          : [];
+        setWorksheets(mapped);
+      })
+      .catch((err: Error) => {
+        if (!isMounted || err.name === 'AbortError') return;
+        setFetchError('Failed to load worksheets. Please try again.');
+        setWorksheets([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [auth.isGuest, token, reloadKey]);
 
   // ── Filtered worksheets ──────────────────────────────────────────────────
   const filtered = React.useMemo(() => {
@@ -323,7 +447,7 @@ const WorksheetsListPage: React.FC = () => {
       const matchStatus  = statusFilter  === 'all' || ws.status  === statusFilter;
       return matchSearch && matchSubject && matchStatus;
     });
-  }, [search, subjectFilter, statusFilter]);
+  }, [worksheets, search, subjectFilter, statusFilter]);
 
   const hasFilters = search.trim() !== '' || subjectFilter !== 'all' || statusFilter !== 'all';
 
@@ -342,7 +466,9 @@ const WorksheetsListPage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-extrabold text-foreground">My Worksheets</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {worksheets.length} worksheet{worksheets.length !== 1 ? 's' : ''} in your library
+              {isLoading
+                ? 'Loading your library...'
+                : `${worksheets.length} worksheet${worksheets.length !== 1 ? 's' : ''} in your library`}
             </p>
           </div>
           <Button variant="primary" size="md" className="gap-2 shrink-0" asChild>
@@ -354,7 +480,7 @@ const WorksheetsListPage: React.FC = () => {
         </div>
 
         {/* ── Toolbar: search + filters + view toggle ──────────────── */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        {!auth.isGuest && <div className="flex flex-col sm:flex-row gap-3">
 
           {/* Search */}
           <div className="relative flex-1 min-w-0">
@@ -433,17 +559,36 @@ const WorksheetsListPage: React.FC = () => {
               <List className="size-4" />
             </button>
           </div>
-        </div>
+        </div>}
 
         {/* ── Results count ─────────────────────────────────────────── */}
-        {hasFilters && filtered.length > 0 && (
+        {!isLoading && !auth.isGuest && hasFilters && filtered.length > 0 && (
           <p className="text-xs text-muted-foreground -mt-2">
             Showing <span className="font-bold text-foreground">{filtered.length}</span> of {worksheets.length} worksheets
           </p>
         )}
 
         {/* ── Content area ──────────────────────────────────────────── */}
-        {filtered.length === 0 ? (
+        {auth.isGuest ? (
+          <div className="bg-white rounded-2xl border border-border shadow-card">
+            <GuestPrompt />
+          </div>
+        ) : isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="size-8 text-primary animate-spin" aria-label="Loading worksheets" />
+          </div>
+        ) : fetchError ? (
+          <div className="bg-white rounded-2xl border border-border shadow-card flex flex-col items-center justify-center py-16 text-center gap-3">
+            <p className="text-sm font-bold text-destructive">{fetchError}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setReloadKey((k) => k + 1)}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-border shadow-card">
             <EmptyState hasFilters={hasFilters} />
           </div>
