@@ -172,11 +172,6 @@ const GenerateWorksheetPage: React.FC = () => {
     if (selectedTypes.length === 0 || generatingRef.current) return;
 
     const token = getToken();
-    if (!token) {
-      setGenError('Please sign in to generate worksheets.');
-      return;
-    }
-
     generatingRef.current = true;
     setGenState('generating');
     setGenError('');
