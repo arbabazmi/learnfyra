@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import { getAuthAdapter, getOAuthAdapter } from '../../src/auth/index.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { requestPasswordReset, resetPassword as executeReset } from '../../src/auth/passwordReset.js';
+import { signToken } from '../../src/auth/tokenUtils.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -349,6 +350,28 @@ async function handleResetPassword(body) {
 }
 
 /**
+ * POST /api/auth/guest
+ * Issues a short-lived guest JWT so unauthenticated users can access
+ * solve/submit endpoints (protected by the API Gateway authorizer).
+ * No credentials required — the token has role='guest' and a 2-hour expiry.
+ *
+ * @returns {{ statusCode: number, headers: Object, body: string }}
+ */
+function handleGuest() {
+  const guestId = `guest-${randomUUID()}`;
+  const token = signToken(
+    { sub: guestId, email: '', role: 'guest' },
+    '2h',
+  );
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ token, guestId, expiresIn: 7200 }),
+  };
+}
+
+/**
  * Lambda handler — POST /api/auth/:action
  *
  * @param {Object} event - API Gateway event or Express-shaped mock event
@@ -387,6 +410,10 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/refresh')) {
       return await handleRefresh(body);
+    }
+
+    if (path.endsWith('/guest')) {
+      return handleGuest();
     }
 
     if (path.endsWith('/forgot-password')) {

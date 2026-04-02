@@ -1122,6 +1122,11 @@ export class LearnfyraStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
+    authResource
+      .addResource('guest')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
 
     authResource
       .addResource('forgot-password')
@@ -1152,7 +1157,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('submit')
       .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     apiResource
@@ -1160,7 +1166,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('{worksheetId}')
       .addMethod('GET', new apigateway.LambdaIntegration(solveFn, { proxy: true }), {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const progressResource = apiResource.addResource('progress');

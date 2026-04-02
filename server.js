@@ -554,6 +554,21 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/guest ──────────────────────────────────────────────────────
+app.post('/api/auth/guest', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/guest', headers: req.headers, body: '{}' },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth guest route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── POST /api/auth/forgot-password ────────────────────────────────────────────
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {

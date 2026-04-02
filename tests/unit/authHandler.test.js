@@ -71,6 +71,14 @@ jest.unstable_mockModule('../../src/auth/passwordReset.js', () => ({
   resetPassword:        mockExecuteReset,
 }));
 
+// ─── Mock ../../src/auth/tokenUtils.js — signToken used by handleGuest ──────
+
+const mockSignToken = jest.fn().mockReturnValue('mock-guest-jwt-token');
+
+jest.unstable_mockModule('../../src/auth/tokenUtils.js', () => ({
+  signToken: mockSignToken,
+}));
+
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
 
 const { handler } = await import('../../backend/handlers/authHandler.js');
@@ -920,6 +928,44 @@ describe('authHandler — POST /api/auth/reset-password', () => {
       mockPostEvent('/api/auth/reset-password', { token: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', newPassword: 'NewPass1!' }),
       mockContext,
     );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── POST /api/auth/guest ─────────────────────────────────────────────────────
+
+describe('authHandler — POST /api/auth/guest', () => {
+
+  it('returns 200 with a guest token', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.token).toBe('mock-guest-jwt-token');
+    expect(body.guestId).toMatch(/^guest-/);
+    expect(body.expiresIn).toBe(7200);
+  });
+
+  it('calls signToken with role=guest and 2h expiry', async () => {
+    await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    expect(mockSignToken).toHaveBeenCalledTimes(1);
+    const [payload, expiresIn] = mockSignToken.mock.calls[0];
+    expect(payload.role).toBe('guest');
+    expect(payload.sub).toMatch(/^guest-/);
+    expect(payload.email).toBe('');
+    expect(expiresIn).toBe('2h');
+  });
+
+  it('issues unique guestIds on consecutive calls', async () => {
+    const r1 = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    const r2 = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    const id1 = JSON.parse(r1.body).guestId;
+    const id2 = JSON.parse(r2.body).guestId;
+    expect(id1).not.toBe(id2);
+  });
+
+  it('CORS headers are present on guest response', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
