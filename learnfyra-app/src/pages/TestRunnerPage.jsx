@@ -76,8 +76,11 @@ function makeTests(ctx, envKey) {
         const res = await api("POST", "/api/auth/oauth/google", {});
         assert(res.status === 200, `Expected 200, got ${res.status}`);
         assert(res.body.authorizationUrl, "Missing authorizationUrl");
-        assert(res.body.authorizationUrl.includes("accounts.google.com"), "URL not Google");
-        return "Returns valid Google authorization URL";
+        const url = res.body.authorizationUrl;
+        const isGoogle = url.includes("accounts.google.com");
+        const isCognito = url.includes("amazoncognito.com") && url.includes("identity_provider=Google");
+        assert(isGoogle || isCognito, `URL is neither Google nor Cognito: ${url.slice(0, 80)}...`);
+        return isCognito ? "Returns Cognito-hosted Google OAuth URL" : "Returns direct Google authorization URL";
       },
     },
     {
@@ -383,7 +386,7 @@ async function rawFetch(method, path, body, opts = {}) {
   return res;
 }
 
-async function api(method, path, body, token) {
+let api = async function api(method, path, body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -391,13 +394,28 @@ async function api(method, path, body, token) {
   const opts = { method, headers };
   if (body && method !== "GET") opts.body = JSON.stringify(body);
 
-  const res = await fetch(url, opts);
-  let parsed = {};
+  let res;
   try {
-    parsed = await res.json();
-  } catch {}
+    res = await fetch(url, opts);
+  } catch (fetchErr) {
+    // Network-level failure (CORS blocked, DNS, etc.)
+    return {
+      status: 0,
+      body: { error: `Network error: ${fetchErr.message}` },
+      headers: new Headers(),
+      _fetchError: fetchErr.message,
+    };
+  }
+  let parsed = {};
+  let rawText = "";
+  try {
+    rawText = await res.text();
+    parsed = JSON.parse(rawText);
+  } catch {
+    parsed = { _rawBody: rawText || "(empty)" };
+  }
   return { status: res.status, body: parsed, headers: res.headers };
-}
+};
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -461,6 +479,43 @@ function TestRow({ test, result, idx }) {
               {result.error}
             </pre>
           )}
+          {/* API response details for failed tests */}
+          {status === "FAIL" && (result.apiError || result.fetchError || result.apiDebug) && (
+            <div style={{
+              background: "#0a0a14", border: "1px solid #1a1a3a", borderRadius: 5,
+              padding: "8px 12px", marginTop: 6,
+            }}>
+              <span style={{ color: "#6366f1", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em" }}>
+                API RESPONSE
+              </span>
+              {result.apiStatus != null && (
+                <span style={{ color: "#4b5563", fontSize: 10, marginLeft: 8 }}>
+                  HTTP {result.apiStatus}
+                </span>
+              )}
+              {result.fetchError && (
+                <p style={{ color: "#fb923c", fontSize: 11, margin: "4px 0 0", fontFamily: "monospace" }}>
+                  Fetch error: {result.fetchError}
+                </p>
+              )}
+              {result.apiError && (
+                <p style={{ color: "#f9a8d4", fontSize: 11, margin: "4px 0 0", fontFamily: "monospace" }}>
+                  {result.apiError}
+                </p>
+              )}
+              {result.apiDebug && (
+                <pre style={{
+                  color: "#94a3b8", fontSize: 10, fontFamily: "monospace",
+                  whiteSpace: "pre-wrap", margin: "6px 0 0", lineHeight: 1.5,
+                }}>
+{`handler: ${result.apiDebug.handler || "—"}
+status:  ${result.apiDebug.statusCode || "—"}
+time:    ${result.apiDebug.timestamp || "—"}
+stack:   ${result.apiDebug.stack || "—"}`}
+                </pre>
+              )}
+            </div>
+          )}
           {result.duration && (
             <span style={{ color: "#374151", fontSize: 10, marginTop: 4, display: "block" }}>
               {result.duration}ms
@@ -506,6 +561,13 @@ function buildReport(tests, results, env, counts) {
       const r = results[t.id];
       lines.push(`  ${t.label}`);
       lines.push(`    Error: ${r.error}`);
+      if (r.apiStatus != null) lines.push(`    HTTP Status: ${r.apiStatus}`);
+      if (r.fetchError) lines.push(`    Fetch Error: ${r.fetchError}`);
+      if (r.apiError) lines.push(`    API Error: ${r.apiError}`);
+      if (r.apiDebug) {
+        lines.push(`    Debug: handler=${r.apiDebug.handler || "?"}, status=${r.apiDebug.statusCode || "?"}`);
+        if (r.apiDebug.stack) lines.push(`    Stack: ${r.apiDebug.stack.split("\n").slice(0, 3).join(" | ")}`);
+      }
       lines.push(``);
     });
   }
@@ -550,8 +612,21 @@ export default function App() {
 
     let pass = 0, fail = 0;
 
+    // Track last API response per-test for debug info on failure
+    let _lastApiRes = null;
+    const _origApiFn = api;
+    // Monkey-patch to capture last response (restored after loop)
+    const _patchedApi = async (...args) => {
+      const res = await _origApiFn(...args);
+      _lastApiRes = res;
+      return res;
+    };
+    // eslint-disable-next-line no-func-assign
+    api = _patchedApi;
+
     for (const test of tests) {
       setResults(prev => ({ ...prev, [test.id]: { status: "RUNNING" } }));
+      _lastApiRes = null;
 
       const start = performance.now();
       try {
@@ -562,15 +637,27 @@ export default function App() {
       } catch (err) {
         const duration = Math.round(performance.now() - start);
         fail++;
+        // Capture the last API response for debug context
+        const lastRes = _lastApiRes;
+        const apiError = lastRes?.body?.error || "";
+        const apiDebug = lastRes?.body?._debug || null;
+        const apiStatus = lastRes?.status;
+        const fetchError = lastRes?._fetchError || "";
         setResults(prev => ({
           ...prev,
-          [test.id]: { status: "FAIL", error: err.message, duration },
+          [test.id]: {
+            status: "FAIL", error: err.message, duration,
+            apiStatus, apiError, apiDebug, fetchError,
+          },
         }));
       }
 
       setCounts({ total: tests.length, pass, fail, done: pass + fail, skipped });
     }
 
+    // Restore original api function
+    // eslint-disable-next-line no-func-assign
+    api = _origApiFn;
     setRunning(false);
   }, [envKey, isProd]);
 

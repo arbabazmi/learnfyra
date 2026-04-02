@@ -433,6 +433,26 @@ export class LearnfyraStack extends cdk.Stack {
       },
     });
 
+    // ── Gateway Responses with CORS headers ────────────────────────────────
+    // API Gateway default 4xx/5xx responses (e.g. authorizer 401, missing route 403)
+    // do not include CORS headers, so browsers block them ("Failed to fetch").
+    api.addGatewayResponse('GatewayResponseDefault4XX', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
+    api.addGatewayResponse('GatewayResponseDefault5XX', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
+
     // Origin Access Identity — grants CloudFront read access to the private bucket
     const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
       comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
@@ -822,6 +842,42 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-dashboard — dashboard stats, recent worksheets, subject progress`,
     });
 
+    // ── Lambda: Certificates handler ────────────────────────────────────────
+    const certificatesFn = new NodejsFunction(this, 'CertificatesFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-certificates`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('certificatesHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(10),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-certificates — student certificate list and download`,
+    });
+
+    // ── Lambda: Admin policies handler ────────────────────────────────────────
+    const adminPoliciesFn = new NodejsFunction(this, 'AdminPoliciesFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-admin-policies`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('adminHandler.js'),
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
+    });
+
     worksheetBucket.grantRead(solveFn);
     worksheetBucket.grantRead(submitFn);
 
@@ -838,11 +894,13 @@ export class LearnfyraStack extends cdk.Stack {
       studentFn,
       adminFn,
       dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn].forEach((fn) => {
+    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn, certificatesFn, adminPoliciesFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
       fn.addEnvironment('AUTH_MODE', 'hybrid');
     });
@@ -858,9 +916,12 @@ export class LearnfyraStack extends cdk.Stack {
       studentFn,
       adminFn,
       dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
     ].forEach((fn) => {
       fn.addEnvironment('APP_RUNTIME', 'aws');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
+      if (isDev) fn.addEnvironment('DEBUG_MODE', 'true');
     });
 
     authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
@@ -919,6 +980,18 @@ export class LearnfyraStack extends cdk.Stack {
     adminFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
     adminFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
 
+    certificatesFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    certificatesFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    adminPoliciesFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_AUDIT_EVENTS_TABLE_NAME', adminAuditEventsTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
+    adminPoliciesFn.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+    adminPoliciesFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    adminPoliciesFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    adminPoliciesFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+
     apiAuthorizerFn.addEnvironment('JWT_SECRET', jwtSecretValue);
     apiAuthorizerFn.addEnvironment('AUTH_MODE', 'cognito');
 
@@ -960,6 +1033,8 @@ export class LearnfyraStack extends cdk.Stack {
       studentFn,
       adminFn,
       dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
     ].forEach((fn) => {
       fn.addToRolePolicy(
         new iam.PolicyStatement({
@@ -1169,9 +1244,15 @@ export class LearnfyraStack extends cdk.Stack {
       });
 
     const studentResource = apiResource.addResource('student');
-    studentResource
-      .addResource('profile')
+    const studentProfileResource = studentResource.addResource('profile');
+    studentProfileResource
       .addMethod('GET', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    studentProfileResource
+      .addMethod('PATCH', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -1214,6 +1295,82 @@ export class LearnfyraStack extends cdk.Stack {
         authorizer: tokenAuthorizer,
       });
 
+    // ── Certificates routes (JWT protected) ──────────────────────────────────
+    const certificatesResource = apiResource.addResource('certificates');
+    certificatesResource
+      .addMethod('GET', new apigateway.LambdaIntegration(certificatesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    certificatesResource
+      .addResource('{id}')
+      .addResource('download')
+      .addMethod('GET', new apigateway.LambdaIntegration(certificatesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Admin policy & audit routes (JWT protected, admin role) ──────────────
+    const adminResource = apiResource.addResource('admin');
+    const adminPoliciesResource = adminResource.addResource('policies');
+    adminPoliciesResource
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('model-routing')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('budget-usage')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('validation-profile')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    const repeatCapResource = adminPoliciesResource.addResource('repeat-cap');
+    repeatCapResource
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    repeatCapResource
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    repeatCapResource
+      .addResource('overrides')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminResource
+      .addResource('audit')
+      .addResource('events')
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
     const monitoredFunctions = [
       { id: 'Generate', fn: generateFn, p95MsThreshold: isDev ? 30000 : 45000 },
       { id: 'Download', fn: downloadFn, p95MsThreshold: 4000 },
@@ -1227,6 +1384,8 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Student', fn: studentFn, p95MsThreshold: 3000 },
       { id: 'Admin', fn: adminFn, p95MsThreshold: 4000 },
       { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
+      { id: 'Certificates', fn: certificatesFn, p95MsThreshold: 3000 },
+      { id: 'AdminPolicies', fn: adminPoliciesFn, p95MsThreshold: 4000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {

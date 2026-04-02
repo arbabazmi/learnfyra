@@ -347,7 +347,12 @@ export const handler = async (event, context) => {
     if (statusCode >= 500) {
       console.error('analyticsHandler error:', err);
     }
-    const message = statusCode < 500 ? err.message : 'Internal server error.';
-    return errorResponse(statusCode, message);
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const message = (statusCode < 500 || isDebug) ? err.message : 'Internal server error.';
+    const body = { error: message };
+    if (isDebug) {
+      body._debug = { stack: err.stack, handler: 'analyticsHandler', statusCode, timestamp: new Date().toISOString() };
+    }
+    return { statusCode, headers: corsHeaders, body: JSON.stringify(body) };
   }
 };

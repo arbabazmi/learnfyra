@@ -661,14 +661,21 @@ export const handler = async (event, context) => {
       error: serializeError(err),
     });
 
-    return createErrorResponse({
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const errResponse = createErrorResponse({
       requestId,
       clientRequestId,
       statusCode: 500,
-      error: 'Worksheet generation failed. Please try again.',
+      error: isDebug ? err.message : 'Worksheet generation failed. Please try again.',
       errorCode: 'GENERATION_FAILED',
       code: mapGenerationErrorCode(err),
       stage,
     });
+    if (isDebug) {
+      const parsedBody = JSON.parse(errResponse.body);
+      parsedBody._debug = { stack: err.stack, handler: 'generateHandler', statusCode: 500, timestamp: new Date().toISOString() };
+      errResponse.body = JSON.stringify(parsedBody);
+    }
+    return errResponse;
   }
 };

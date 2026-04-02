@@ -51,11 +51,12 @@ export const handler = async (event, context) => {
       };
     }
     console.error('downloadHandler HeadObject error:', err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Could not verify file. Please try again.' }),
-    };
+    const isDebugHead = process.env.DEBUG_MODE === 'true';
+    const headBody = { error: isDebugHead ? err.message : 'Could not verify file. Please try again.' };
+    if (isDebugHead) {
+      headBody._debug = { stack: err.stack, handler: 'downloadHandler', statusCode: 500, timestamp: new Date().toISOString() };
+    }
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify(headBody) };
   }
 
   try {
@@ -69,10 +70,11 @@ export const handler = async (event, context) => {
     };
   } catch (err) {
     console.error('downloadHandler presign error:', err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Could not generate download link. Please try again.' }),
-    };
+    const isDebugPresign = process.env.DEBUG_MODE === 'true';
+    const presignBody = { error: isDebugPresign ? err.message : 'Could not generate download link. Please try again.' };
+    if (isDebugPresign) {
+      presignBody._debug = { stack: err.stack, handler: 'downloadHandler', statusCode: 500, timestamp: new Date().toISOString() };
+    }
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify(presignBody) };
   }
 };

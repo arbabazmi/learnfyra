@@ -232,7 +232,12 @@ export const handler = async (event, context) => {
   } catch (err) {
     console.error('studentHandler error:', err);
     const statusCode = err.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 500;
-    const message = statusCode < 500 ? err.message : 'Internal server error.';
-    return errorResponse(statusCode, message);
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const message = (statusCode < 500 || isDebug) ? err.message : 'Internal server error.';
+    const body = { error: message };
+    if (isDebug) {
+      body._debug = { stack: err.stack, handler: 'studentHandler', statusCode, timestamp: new Date().toISOString() };
+    }
+    return { statusCode, headers: corsHeaders, body: JSON.stringify(body) };
   }
 };

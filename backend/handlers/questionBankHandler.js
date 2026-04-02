@@ -345,7 +345,15 @@ export const handler = async (event, context) => {
     const statusCode = Number.isInteger(err.statusCode) && err.statusCode < 500
       ? err.statusCode
       : 500;
-    const e = qbError('INTERNAL', statusCode < 500 ? err.message : undefined);
-    return errorResponse(e.statusCode, e.code, statusCode < 500 ? err.message : e.error);
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const e = qbError('INTERNAL', (statusCode < 500 || isDebug) ? err.message : undefined);
+    const responseBody = (statusCode < 500 || isDebug) ? err.message : e.error;
+    const response = errorResponse(e.statusCode, e.code, responseBody);
+    if (isDebug) {
+      const parsedBody = JSON.parse(response.body);
+      parsedBody._debug = { stack: err.stack, handler: 'questionBankHandler', statusCode, timestamp: new Date().toISOString() };
+      response.body = JSON.stringify(parsedBody);
+    }
+    return response;
   }
 };

@@ -200,13 +200,14 @@ export const handler = async (event, context) => {
     };
   } catch (err) {
     console.error('submitHandler error:', err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        error: 'Internal server error.',
-        code: 'SUBMIT_INTERNAL_ERROR',
-      }),
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const submitBody = {
+      error: isDebug ? err.message : 'Internal server error.',
+      code: 'SUBMIT_INTERNAL_ERROR',
     };
+    if (isDebug) {
+      submitBody._debug = { stack: err.stack, handler: 'submitHandler', statusCode: 500, timestamp: new Date().toISOString() };
+    }
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify(submitBody) };
   }
 };
