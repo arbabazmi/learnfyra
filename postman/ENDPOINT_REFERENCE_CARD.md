@@ -1,242 +1,227 @@
 # Learnfyra API — Quick Endpoint Reference Card
 
-**Generated:** March 27, 2026  
-**Collection Version:** 1.0 — All Ready Endpoints (30+)
+**Generated:** April 2, 2026
+**Collection Version:** 2.0 — 41 Endpoints
 
 ---
 
-## 🔐 Authentication (6 endpoints)
+## Auth (8 endpoints — no token required)
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/auth/register` | POST | None | ✅ Ready |
-| `/api/auth/login` | POST | None | ✅ Ready |
-| `/api/auth/logout` | POST | None | ✅ Ready |
-| `/api/auth/oauth/:provider` | POST | None | ✅ Ready |
-| `/api/auth/callback/:provider` | GET | None | ✅ Ready |
+| # | Endpoint | Method | Notes |
+|---|----------|--------|-------|
+| 1 | `/api/auth/register` | POST | `{email, password, role, displayName}` |
+| 2 | `/api/auth/login` | POST | `{email, password}` — returns JWT |
+| 3 | `/api/auth/logout` | POST | `{}` |
+| 4 | `/api/auth/refresh` | POST | `{refreshToken}` |
+| 5 | `/api/auth/forgot-password` | POST | `{email}` |
+| 6 | `/api/auth/reset-password` | POST | `{token, newPassword}` |
+| 7 | `/api/auth/oauth/:provider` | POST | Initiates OAuth (e.g. google) |
+| 8 | `/api/auth/callback/:provider` | GET | `?code=...&state=...` |
 
-**Quick Start:** Register → Login → Capture token
-
----
-
-## 📝 Worksheet Generation & Delivery (4 endpoints)
-
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/generate` | POST | Optional | ✅ Ready |
-| `/api/solve/:worksheetId` | GET | None | ✅ Ready |
-| `/api/submit` | POST | None | ✅ Ready |
-| `/api/download?key=...` | GET | None | ✅ Ready |
-
-**Quick Start:** Generate → Solve → Submit → Download
+**Quick start:** Register → Login → capture token from response
 
 ---
 
-## 👨‍🎓 Student Routes (2 endpoints)
+## Unauthenticated (1 endpoint)
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/student/profile` | GET | Bearer | ✅ Ready |
-| `/api/student/join-class` | POST | Bearer | ✅ Ready |
-
-**Requires:** Student role + Bearer token
+| # | Endpoint | Method | Notes |
+|---|----------|--------|-------|
+| 9 | `/api/download` | GET | `?key=worksheets/...` — S3 presigned URL or local file |
 
 ---
 
-## 👩‍🏫 Teacher Routes (2 endpoints)
+## JWT Protected (Bearer token required for all below)
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/class/create` | POST | Bearer | ✅ Ready |
-| `/api/class/:id/students` | GET | Bearer | ✅ Ready |
+### Worksheet (endpoints 10-12)
 
-**Requires:** Teacher role + Bearer token
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 10 | `/api/generate` | POST | Any | `{grade, subject, topic, difficulty, questionCount, format, includeAnswerKey, generationMode, provenanceLevel}` |
+| 11 | `/api/solve/:worksheetId` | GET | Any | Returns questions only — no answers, no explanations |
+| 12 | `/api/submit` | POST | Any | `{worksheetId, answers[], timeTaken, timed}` — returns score + breakdown |
 
----
+### Student (endpoints 13-15)
 
-## 📊 Progress Tracking (2 endpoints)
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 13 | `/api/student/profile` | GET | Student | Returns profile + class memberships |
+| 14 | `/api/student/profile` | PATCH | Student | `{grade?, displayName?}` |
+| 15 | `/api/student/join-class` | POST | Student | `{inviteCode}` |
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/progress/save` | POST | Bearer | ✅ Ready |
-| `/api/progress/history` | GET | Bearer | ✅ Ready |
+### Dashboard (endpoints 16-18)
 
-**Requires:** Student role + Bearer token
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 16 | `/api/dashboard/stats` | GET | Any | Summary counts |
+| 17 | `/api/dashboard/recent-worksheets` | GET | Any | Last N worksheets |
+| 18 | `/api/dashboard/subject-progress` | GET | Any | Per-subject score summary |
 
----
+### Progress (endpoints 19-22)
 
-## 📈 Analytics (1 endpoint)
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 19 | `/api/progress/save` | POST | Student | `{worksheetId, subject, grade, score, totalPoints, timeTaken, answers[]}` |
+| 20 | `/api/progress/history` | GET | Student | `?limit=20&offset=0` |
+| 21 | `/api/progress/insights` | GET | Student | `?limit=20` |
+| 22 | `/api/progress/parent/:childId` | GET | Parent/Teacher | `?limit=20` |
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/analytics/class/:id` | GET | Bearer | ✅ Ready |
+### Class (endpoints 23-24)
 
-**Requires:** Teacher role + Bearer token
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 23 | `/api/class/create` | POST | Teacher | `{className, grade, subject}` — returns classId + inviteCode |
+| 24 | `/api/class/:id/students` | GET | Teacher | Returns array of student profiles |
 
----
+### Analytics (endpoint 25)
 
-## 🎁 Rewards & Gamification (2 endpoints)
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 25 | `/api/analytics/class/:id` | GET | Teacher | Topic breakdown with weak-topic flags |
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/rewards/student/:id` | GET | Bearer | ✅ Ready |
-| `/api/rewards/class/:id` | GET | Bearer | ✅ Ready |
+### Rewards (endpoints 26-27)
 
-**Requires:** Bearer token
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 26 | `/api/rewards/student/:id` | GET | Student | Points, streaks, badges, freeze tokens |
+| 27 | `/api/rewards/class/:id` | GET | Teacher | Class leaderboard aggregate |
 
----
+### Certificates (endpoints 28-29)
 
-## 🎓 Certificates (2 endpoints)
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 28 | `/api/certificates` | GET | Student | `?limit=20&offset=0` |
+| 29 | `/api/certificates/:id/download` | GET | Student | HTML certificate |
 
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/certificates/list` | GET | Bearer | ✅ Ready |
-| `/api/certificates/:id` | GET | Bearer | ✅ Ready |
+### Question Bank (endpoints 30-33)
 
-**Requires:** Student role + Bearer token
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 30 | `/api/qb/questions` | GET | None | `?grade=&subject=&difficulty=&type=` |
+| 31 | `/api/qb/questions` | POST | Admin | `{grade, subject, topic, difficulty, type, question, options?, answer, explanation, points}` |
+| 32 | `/api/qb/questions/:id` | GET | None | Single question with full metadata |
+| 33 | `/api/qb/questions/:id/reuse` | POST | Admin | Increments reuseCount |
 
----
+### Admin (endpoints 34-41)
 
-## 📚 Question Bank (4 endpoints)
-
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/qb/questions` | GET | None | ✅ Ready |
-| `/api/qb/questions` | POST | None | ✅ Ready |
-| `/api/qb/questions/:id` | GET | None | ✅ Ready |
-| `/api/qb/questions/:id/reuse` | POST | None | ✅ Ready |
-
-**Note:** Deduplication on POST by (grade, subject, topic, type, question-text)
-
----
-
-## ⚙️ Admin Control Plane (2 endpoints)
-
-| Endpoint | Method | Auth | Status |
-|----------|--------|------|--------|
-| `/api/admin/policies` | GET | Admin Bearer | ✅ Ready |
-| `/api/admin/policies` | PUT | Admin Bearer | ✅ Ready |
-
-**Requires:** Admin role + Bearer token + Idempotency-Key header
-
----
-
-## 🧪 Testing Commands
-
-```bash
-# Local development
-npm run dev              # Start Express server on http://localhost:3000
-
-# Automated tests
-npm test                 # Run all tests
-npm run test:unit        # Unit tests only
-npm run test:integration # Integration tests only
-npm run test:coverage    # With coverage report
-
-# Postman (Import collection from postman/Learnfyra-Complete-API.postman_collection.json)
-# Then run collection via Postman UI → Run button
-```
+| # | Endpoint | Method | Token | Notes |
+|---|----------|--------|-------|-------|
+| 34 | `/api/admin/policies` | GET | Admin | Returns all system policies |
+| 35 | `/api/admin/policies/model-routing` | PUT | Admin | Requires `Idempotency-Key` header |
+| 36 | `/api/admin/policies/budget-usage` | PUT | Admin | Requires `Idempotency-Key` header |
+| 37 | `/api/admin/policies/validation-profile` | PUT | Admin | Requires `Idempotency-Key` header |
+| 38 | `/api/admin/policies/repeat-cap` | GET | Admin | |
+| 39 | `/api/admin/policies/repeat-cap` | PUT | Admin | Requires `Idempotency-Key` header |
+| 40 | `/api/admin/policies/repeat-cap/overrides` | PUT | Admin | Requires `Idempotency-Key` header |
+| 41 | `/api/admin/audit/events` | GET | Admin | `?limit=50&offset=0` |
 
 ---
 
-## 📥 HTTP Status Codes
+## Environment URLs
+
+| Environment | Base URL |
+|-------------|----------|
+| Local Dev | http://localhost:3000 |
+| Dev (AWS) | https://api.dev.learnfyra.com |
+| QA / Staging | https://api.qa.learnfyra.com |
+| Production | https://api.learnfyra.com |
+
+---
+
+## Auth Modes
+
+| Environment | Mode |
+|-------------|------|
+| Local | Mock adapter — bcrypt + `data-local/users.json` |
+| AWS (all envs) | Hybrid — email/password + Google OAuth via Cognito |
+
+---
+
+## HTTP Status Codes
 
 | Code | Meaning | Example |
 |------|---------|---------|
 | 200 | OK | Request successful |
 | 201 | Created | Resource created |
-| 400 | Bad Request | Invalid input (see error message) |
-| 401 | Unauthorized | Missing/invalid token |
+| 400 | Bad Request | Invalid input (check body/params) |
+| 401 | Unauthorized | Missing or invalid token |
 | 403 | Forbidden | Insufficient permissions (wrong role) |
-| 404 | Not Found | Resource doesn't exist |
-| 409 | Conflict | Duplicate entry (e.g., question in bank) |
-| 500 | Server Error | Unexpected error (check logs) |
+| 404 | Not Found | Resource does not exist |
+| 409 | Conflict | Duplicate entry (e.g., question already in bank) |
+| 500 | Server Error | Unexpected error — check server logs |
 
 ---
 
-## 🔑 Auth Tokens
+## Auth Token Usage
 
-**How to Get:**
-1. POST `/api/auth/register` → create account
-2. POST `/api/auth/login` → receive JWT token
-3. Use token in Authorization header: `Bearer <token>`
-
-**Token Format:** JWT (JSON Web Token)  
-**Expiry:** 24 hours (default)  
-**Refresh:** Re-login to get new token
+1. POST `/api/auth/register` to create an account
+2. POST `/api/auth/login` to receive a JWT
+3. Set `Authorization: Bearer <token>` on all protected requests
+4. Token expiry: 24 hours. Use `/api/auth/refresh` to renew without re-login.
 
 ---
 
-## 🌐 Environment URLs
+## Debug Mode (Dev environment only)
 
-| Environment | Base URL |
-|-------------|----------|
-| Local Dev | http://localhost:3000 |
-| Staging | https://d123456.cloudfront.net (placeholder) |
-| Production | https://www.learnfyra.com |
+Set `DEBUG_MODE=true` on the dev server to expose `_debug` field in error responses:
 
----
-
-## 📦 Request/Response Format
-
-**All requests:** `Content-Type: application/json`  
-**All responses:** JSON
-
-**Example request:**
 ```json
 {
-  "grade": 4,
-  "subject": "Math",
-  "topic": "Factors"
-}
-```
-
-**Example response:**
-```json
-{
-  "success": true,
-  "worksheetId": "550e8400-e29b-41d4-a716-446655440000",
-  "metadata": { ... }
+  "error": "Validation failed",
+  "_debug": {
+    "field": "grade",
+    "received": 11,
+    "expected": "integer 1-10"
+  }
 }
 ```
 
 ---
 
-## 🚀 Import into Postman
+## Collection Variables (auto-populated by test scripts)
 
-1. Download: `postman/Learnfyra-Complete-API.postman_collection.json`
-2. Postman → Import → Select JSON
-3. Configure: `baseUrl` variable to your environment
-4. Run → Choose folder → Execute
-
----
-
-## 📖 Full Documentation
-
-For detailed workflows, examples, and troubleshooting:
-- **Setup:** `postman/README.md`
-- **Complete Guide:** `postman/POSTMAN_TESTING_GUIDE.md`
-- **Collection:** `postman/Learnfyra-Complete-API.postman_collection.json`
-
----
-
-## ✅ Status Summary
-
-- **Total Endpoints:** 30+
-- **Authentication:** ✅ 6/6 ready
-- **Worksheet:** ✅ 4/4 ready
-- **Student:** ✅ 2/2 ready
-- **Teacher:** ✅ 2/2 ready
-- **Progress:** ✅ 2/2 ready
-- **Analytics:** ✅ 1/1 ready
-- **Rewards:** ✅ 2/2 ready
-- **Certificates:** ✅ 2/2 ready
-- **Question Bank:** ✅ 4/4 ready
-- **Admin:** ✅ 2/2 ready
-
-**Overall:** 🟢 **ALL READY FOR TESTING**
+| Variable | Populated by | Used by |
+|----------|-------------|---------|
+| `studentToken` | Login (Student) | All student-role endpoints |
+| `teacherToken` | Login (Teacher) | Teacher/class/analytics endpoints |
+| `adminToken` | Login (Admin) | Admin endpoints |
+| `worksheetId` | Generate Worksheet | Solve, Submit, Download, Progress |
+| `classId` | Create Class | Class students, Analytics, Rewards |
+| `studentId` | Login (Student) | Rewards, Progress parent view |
+| `childId` | (set manually) | Progress parent view |
+| `certificateId` | List Certificates | Download Certificate |
+| `questionId` | Add Question | Get Question, Track Reuse |
+| `inviteCode` | Create Class | Join Class |
 
 ---
 
-**Last Updated:** March 27, 2026  
+## Quick Testing Commands
+
+```bash
+# Start local server
+npm run dev              # Express server on http://localhost:3000
+
+# Automated tests
+npm test                 # All tests
+npm run test:unit        # Unit tests only
+npm run test:integration # Integration tests only
+npm run test:coverage    # With coverage report (gate: 80%)
+```
+
+---
+
+## Status Summary
+
+- **Total Endpoints:** 41
+- **Auth:** 8 endpoints (no token required)
+- **Unauthenticated:** 1 endpoint (download)
+- **JWT Protected:** 32 endpoints
+- **Requires Admin role:** 9 endpoints (QB write + Admin control plane)
+- **Requires Teacher role:** 5 endpoints (class management, analytics, rewards/class)
+- **Requires Student role:** 8 endpoints (profile, join class, progress, certificates)
+
+**Overall:** ALL READY FOR TESTING
+
+---
+
+**Last Updated:** April 2, 2026
 **Print-Friendly:** Save this page as PDF for reference

@@ -292,7 +292,7 @@ function makeTests(ctx, envKey) {
       id: "generate-validation", module: "Generate", label: "POST /api/generate (empty body)",
       icon: "⚡", layer: "API",
       run: async () => {
-        const res = await api("POST", "/api/generate", {});
+        const res = await api("POST", "/api/generate", {}, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Validates input and rejects empty body";
       },
@@ -303,7 +303,7 @@ function makeTests(ctx, envKey) {
       id: "solve-invalid-id", module: "Solve", label: "GET /api/solve/:id (invalid ID)",
       icon: "📝", layer: "API",
       run: async () => {
-        const res = await api("GET", "/api/solve/not-a-uuid");
+        const res = await api("GET", "/api/solve/not-a-uuid", null, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Rejects invalid worksheet ID";
       },
@@ -312,7 +312,7 @@ function makeTests(ctx, envKey) {
       id: "submit-invalid", module: "Solve", label: "POST /api/submit (invalid body)",
       icon: "📝", layer: "API",
       run: async () => {
-        const res = await api("POST", "/api/submit", { worksheetId: "bad", answers: [] });
+        const res = await api("POST", "/api/submit", { worksheetId: "bad", answers: [] }, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Validates submit request";
       },

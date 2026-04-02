@@ -1,16 +1,21 @@
 # Postman Collection — Quick Setup Guide
 
+**Last Updated:** April 2, 2026
+**Collection Version:** 2.0 — 41 Endpoints
+
+---
+
 ## 30-Second Setup
 
 1. **Download Collection:** `postman/Learnfyra-Complete-API.postman_collection.json`
 2. **Open Postman** → Import → Select JSON file
-3. **Start Local Server:** `npm run dev` (http://localhost:3000)
-4. **Run Collection:**
+3. **Download Environment:** Import the environment file for your target (see below)
+4. **Start Local Server:** `npm run dev` (http://localhost:3000) — for local testing only
+5. **Run Collection:**
    - Open collection
-   - Collection Variables are pre-configured (baseUrl, tokens, IDs)
-   - Start with **"1. Authentication"** folder → Run "Login (Student)" and "Login (Teacher)"
-   - Tokens auto-capture into variables
-   - Run other folders in any order
+   - Start with **"1. Auth"** folder → Run "Register (Student)" then "Login (Student)"
+   - Tokens auto-capture into collection variables
+   - Run other folders in order
 
 ---
 
@@ -18,29 +23,42 @@
 
 | File | Purpose |
 |------|---------|
-| `Learnfyra-Complete-API.postman_collection.json` | 30+ ready-to-use endpoints organized in 10 feature groups |
-| `POSTMAN_TESTING_GUIDE.md` | Complete testing documentation with workflows, examples, and troubleshooting |
-| `Learnfyra-Dev-API.postman_collection.json` | (Older) Basic collection; use Complete API instead |
+| `Learnfyra-Complete-API.postman_collection.json` | 41 endpoints across 11 feature groups |
+| `Learnfyra-Dev-API.postman_collection.json` | Same endpoints, Dev-targeted (local/dev URL) |
+| `Learnfyra-Local.postman_environment.json` | Environment: `baseUrl = http://localhost:3000` |
+| `Learnfyra-Staging.postman_environment.json` | Environment: `baseUrl = https://api.qa.learnfyra.com` |
+| `Learnfyra-Production.postman_environment.json` | Environment: `baseUrl = https://api.learnfyra.com` |
+| `ENDPOINT_REFERENCE_CARD.md` | Quick reference for all 41 endpoints |
+| `POSTMAN_TESTING_GUIDE.md` | Full testing guide with workflows and troubleshooting |
 
 ---
 
-## What's Tested
+## 11 Feature Groups
 
-✅ **10 Feature Groups:**
-1. Authentication (Register, Login, Logout)
-2. Worksheet Generation & Delivery (Generate, Solve, Submit, Download)
-3. Student Routes (Profile, Join Class)
-4. Teacher Routes (Create Class, List Students)
-5. Progress Tracking (Save, History)
-6. Analytics (Class Performance)
-7. Rewards & Gamification (Points, Streaks, Badges)
-8. Certificates (List, Download)
-9. Question Bank (CRUD, Deduplication)
-10. Admin Control Plane (Policies)
+1. Auth (8 endpoints — Register, Login, Logout, Refresh, Forgot/Reset Password, OAuth)
+2. Worksheet (4 endpoints — Generate, Solve, Submit, Download)
+3. Student (3 endpoints — Get/Update Profile, Join Class)
+4. Dashboard (3 endpoints — Stats, Recent Worksheets, Subject Progress)
+5. Progress (4 endpoints — Save, History, Insights, Parent View)
+6. Class (2 endpoints — Create Class, List Students)
+7. Analytics (1 endpoint — Class Analytics)
+8. Rewards (2 endpoints — Student Rewards, Class Rewards)
+9. Certificates (2 endpoints — List, Download)
+10. Question Bank (4 endpoints — List, Add, Get by ID, Track Reuse)
+11. Admin (8 endpoints — Policies CRUD + Repeat Cap + Audit Events)
 
-✅ **30+ Endpoints** across all handlers  
-✅ **Happy Path Tests** pre-configured  
-✅ **Auto-Capture** of tokens and IDs into collection variables  
+**Total: 41 endpoints**
+
+---
+
+## Environment URLs
+
+| Environment | Base URL | Auth Mode |
+|-------------|----------|-----------|
+| Local Dev | http://localhost:3000 | Mock (bcrypt + JSON files) |
+| Dev (AWS) | https://api.dev.learnfyra.com | Hybrid (email/password + Google OAuth via Cognito) |
+| QA / Staging | https://api.qa.learnfyra.com | Hybrid |
+| Production | https://api.learnfyra.com | Hybrid |
 
 ---
 
@@ -49,61 +67,75 @@
 ### Workflow A: Complete Worksheet Solve
 ```
 1. POST Auth/Register (Student)
-2. POST Auth/Login (Student) → captures studentToken
-3. POST Worksheet/Generate → captures worksheetId
-4. GET Worksheet/Solve/{worksheetId}
+2. POST Auth/Login (Student)         → captures studentToken, studentId
+3. POST Worksheet/Generate           → captures worksheetId
+4. GET  Worksheet/Solve/{worksheetId}
 5. POST Worksheet/Submit (with answers)
-6. GET Worksheet/Download
+6. GET  Worksheet/Download
 ```
 
-### Workflow B: Teacher Creates Class & Reviews Students
+### Workflow B: Teacher Creates Class and Reviews Students
 ```
 1. POST Auth/Register (Teacher)
-2. POST Auth/Login (Teacher) → captures teacherToken
-3. POST Teacher/Create Class → captures classId & inviteCode
-4. GET Teacher/List Class Students
-5. GET Analytics/Get Class Analytics
+2. POST Auth/Login (Teacher)          → captures teacherToken
+3. POST Class/Create Class            → captures classId, inviteCode
+4. POST Student/Join Class (student)  → uses inviteCode
+5. GET  Class/List Class Students
+6. GET  Analytics/Get Class Analytics
 ```
 
-### Workflow C: Question Bank Adds & Reuses
+### Workflow C: Question Bank CRUD
 ```
-1. POST QB/Add Question → captures questionId
-2. GET QB/Get Question by ID
-3. POST QB/Track Question Reuse (multiple times)
-4. GET QB/List Questions (verify reuse count increased)
+1. POST Auth/Login (Admin)            → captures adminToken
+2. POST QB/Add Question               → captures questionId
+3. GET  QB/Get Question by ID
+4. POST QB/Track Question Reuse
+5. GET  QB/List Questions
+```
+
+### Workflow D: Progress and Rewards
+```
+1. POST Auth/Login (Student)
+2. POST Worksheet/Generate + Submit
+3. POST Progress/Save Progress
+4. GET  Progress/Get Progress History
+5. GET  Rewards/Get Student Rewards
+6. GET  Certificates/List Certificates
 ```
 
 ---
 
-## Pre-Configured Variables
+## Collection Variables (auto-captured)
 
-| Variable | Initial Value | Purpose |
-|----------|---------------|---------|
-| `baseUrl` | http://localhost:3000 | API base URL (local or AWS) |
-| `studentToken` | (empty) | Captured after Login (Student) |
-| `teacherToken` | (empty) | Captured after Login (Teacher) |
-| `adminToken` | (empty) | Captured after Login (Admin) |
-| `worksheetId` | (empty) | Captured after Generate Worksheet |
-| `classId` | (empty) | Captured after Create Class |
-| `studentId` | (empty) | Captured after Login (Student) |
-| `questionId` | (empty) | Captured after Add Question |
+| Variable | Populated by | Used by |
+|----------|-------------|---------|
+| `studentToken` | Login (Student) | All student-role endpoints |
+| `teacherToken` | Login (Teacher) | Teacher, class, analytics endpoints |
+| `adminToken` | Login (Admin) | Admin control plane, QB writes |
+| `worksheetId` | Generate Worksheet | Solve, Submit, Progress |
+| `classId` | Create Class | Students list, Analytics, Rewards |
+| `studentId` | Login (Student) | Rewards, Progress |
+| `childId` | Set manually | Progress/Parent view |
+| `certificateId` | List Certificates | Download Certificate |
+| `questionId` | Add Question | Get by ID, Track Reuse |
+| `inviteCode` | Create Class | Join Class |
 
 ---
 
 ## First-Time Testing (5 minutes)
 
 1. **Start server:** `npm run dev`
-2. **Open Postman** → Import collection
-3. **Collection Variables:** Verify `baseUrl = http://localhost:3000`
-4. **Run Auth Folder:**
-   - `Register (Student)` → Creates user
-   - `Login (Student)` → Auto-captures studentToken
-5. **Run Worksheet Folder:**
-   - `Generate Worksheet` → Auto-captures worksheetId
-   - `Get Solve Page` → Returns questions only
-   - `Submit Answers & Score` → Returns results
-   - `Download Worksheet File` → Shows file URL
-6. **Verify:** All 4 responses show 200 OK ✅
+2. **Open Postman** → Import collection + Local environment
+3. **Select environment:** Learnfyra — Local Development
+4. **Run Auth folder:**
+   - `Register (Student)` → creates user
+   - `Login (Student)` → auto-captures `studentToken`
+5. **Run Worksheet folder:**
+   - `Generate Worksheet` → auto-captures `worksheetId`
+   - `Get Solve Page` → returns questions only (no answers)
+   - `Submit Answers & Score` → returns score breakdown
+   - `Download Worksheet File`
+6. **Verify:** All responses show 200 OK
 
 ---
 
@@ -111,23 +143,26 @@
 
 ### Local Development
 ```
-baseUrl = http://localhost:3000
+Environment: Learnfyra — Local Development
+baseUrl: http://localhost:3000
+Auth: Mock adapter — bcrypt + data-local/users.json
 Run: npm run dev
-Auth: Mock adapter (bcrypt + JSON files)
 ```
 
-### Staging
+### QA / Staging
 ```
-baseUrl = https://d123456.cloudfront.net (or API Gateway URL)
-Auth: Cognito
-Update: Valid credentials for staging users
+Environment: Learnfyra — QA / Staging (AWS)
+baseUrl: https://api.qa.learnfyra.com
+Auth: Cognito (hybrid mode)
+Use valid staging credentials
 ```
 
 ### Production
 ```
-baseUrl = https://www.learnfyra.com (or production CloudFront)
-Auth: Cognito
-⚠️ Use test accounts only
+Environment: Learnfyra — Production (AWS)
+baseUrl: https://api.learnfyra.com
+Auth: Cognito (hybrid mode)
+Use test accounts only — never real user PII
 ```
 
 ---
@@ -136,60 +171,49 @@ Auth: Cognito
 
 | Response | Status | Meaning |
 |----------|--------|---------|
-| 200 OK | ✅ | Request successful |
-| 201 Created | ✅ | Resource created |
-| 400 Bad Request | ❌ | Invalid input (check body/params) |
-| 401 Unauthorized | ❌ | No/invalid token (re-login) |
-| 403 Forbidden | ❌ | Wrong role (use correct token) |
-| 404 Not Found | ❌ | Resource doesn't exist |
-| 409 Conflict | ❌ | Duplicate (e.g., question already in bank) |
-| 500 Internal Server Error | ❌ | Server error (check logs) |
+| 200 OK | Pass | Request successful |
+| 201 Created | Pass | Resource created |
+| 400 Bad Request | Fail | Invalid input (check body/params) |
+| 401 Unauthorized | Fail | No/invalid token — re-login |
+| 403 Forbidden | Fail | Wrong role — use correct token |
+| 404 Not Found | Fail | Resource does not exist |
+| 409 Conflict | Fail | Duplicate (e.g., question already in bank) |
+| 500 Internal Server Error | Fail | Server error — check logs |
 
 ---
 
 ## Debugging Tips
 
 **Token not auto-capturing?**
-- Check Post-request script in Login endpoint
-- Verify response contains `token` field
-- Manual: Copy token from response → Collection Variables → paste
+- Check test script on Login endpoint
+- Verify response has a `token` field
+- Manual fallback: copy token from response → Collection Variables → paste
 
 **Worksheet endpoint returns 404?**
-- Confirm `worksheetId` variable is populated after Generate
+- Confirm `worksheetId` was captured after Generate
 - Generate creates local file in `worksheets-local/{uuid}/`
-- Verify directory exists before running Solve/Submit
+- Re-run Generate if needed
 
 **403 Forbidden on teacher endpoint?**
-- Confirm you used Teacher token (not Student)
-- POST Login (Teacher) is required
-- Verify token was captured into `teacherToken` variable
+- Confirm you ran Login (Teacher) and `teacherToken` is populated
+- Teacher token is required for: Create Class, List Students, Analytics, Rewards/Class
 
-**CORS errors?**
+**Admin endpoint returns 403?**
+- Run Login (Admin) to populate `adminToken`
+- Admin role required for: all `/api/admin/*` and QB write operations
+
+**CORS error?**
 - Postman bypasses browser CORS automatically
-- If browser testing needed, check `ALLOWED_ORIGIN` env var
-- Local dev: set `ALLOWED_ORIGIN=http://localhost:3000`
+- If browser testing: check `ALLOWED_ORIGIN` env var on server
 
 ---
 
-## Collection Runners & Automation
+## Headless / CI Testing
 
-**Run All Endpoints:**
-```
-Postman → Collection → Run
-Select: "Learnfyra-Complete-API"
-Run → All tests execute with captured variables
-```
-
-**Export Results:**
-```
-After run: Export results as HTML/JSON for reports
-```
-
-**Headless Testing (CI/CD):**
 ```bash
-# (Not yet configured; requires newman package)
+# Using newman (install: npm install -g newman)
 newman run postman/Learnfyra-Complete-API.postman_collection.json \
-  --environment postman/local-environment.json \
+  --environment postman/Learnfyra-Local.postman_environment.json \
   --reporters cli,html
 ```
 
@@ -197,20 +221,20 @@ newman run postman/Learnfyra-Complete-API.postman_collection.json \
 
 ## Next: Full Testing Guide
 
-For complete endpoint documentation, examples, and troubleshooting:  
-👉 **Read:** [POSTMAN_TESTING_GUIDE.md](./POSTMAN_TESTING_GUIDE.md)
+For complete endpoint documentation, request/response examples, and troubleshooting:
+Read: [POSTMAN_TESTING_GUIDE.md](./POSTMAN_TESTING_GUIDE.md)
 
 ---
 
 **Quick Links:**
-- 📦 [Collection JSON](./Learnfyra-Complete-API.postman_collection.json)
-- 📖 [Full Guide](./POSTMAN_TESTING_GUIDE.md)
-- 🏗️ [Architecture](../architecture/)
-- 🧪 [Tests](../tests/)
-- 🚀 [Deployment Runbook](../operations/runbooks/cloud-engineering-aws-validation-runbook.md)
+- Collection JSON: `./Learnfyra-Complete-API.postman_collection.json`
+- Full Guide: `./POSTMAN_TESTING_GUIDE.md`
+- Endpoint Reference: `./ENDPOINT_REFERENCE_CARD.md`
+- Architecture: `../architecture/`
+- Tests: `../tests/`
 
 ---
 
-**Collection Version:** 1.0  
-**Last Updated:** March 27, 2026  
-**Status:** Ready for testing all implemented endpoints
+**Collection Version:** 2.0
+**Last Updated:** April 2, 2026
+**Status:** Ready for testing all 41 implemented endpoints
