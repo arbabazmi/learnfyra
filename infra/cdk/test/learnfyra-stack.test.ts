@@ -248,9 +248,70 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('sets log retention policy for Lambda log groups', () => {
-    template.resourceCountIs('Custom::LogRetention', 12);
+    template.resourceCountIs('Custom::LogRetention', 15);
     template.hasResourceProperties('Custom::LogRetention', {
       RetentionInDays: 30,
+    });
+  });
+
+  test('creates LearnfyraWorksheets DynamoDB table with worksheetId PK and expiresAt TTL', () => {
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      TableName: 'LearnfyraWorksheets-dev',
+      KeySchema: Match.arrayWith([
+        Match.objectLike({ AttributeName: 'worksheetId', KeyType: 'HASH' }),
+      ]),
+      TimeToLiveSpecification: {
+        AttributeName: 'expiresAt',
+        Enabled: true,
+      },
+    });
+  });
+
+  test('WorksheetsTable has slug-index GSI', () => {
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      TableName: 'LearnfyraWorksheets-dev',
+      GlobalSecondaryIndexes: Match.arrayWith([
+        Match.objectLike({
+          IndexName: 'slug-index',
+          KeySchema: Match.arrayWith([
+            Match.objectLike({ AttributeName: 'slug', KeyType: 'HASH' }),
+          ]),
+          Projection: Match.objectLike({ ProjectionType: 'ALL' }),
+        }),
+      ]),
+    });
+  });
+
+  test('generate Lambda has WORKSHEETS_TABLE_NAME env var', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-generate',
+      Environment: {
+        Variables: Match.objectLike({
+          WORKSHEETS_TABLE_NAME: Match.anyValue(),
+        }),
+      },
+    });
+  });
+
+  test('solve Lambda has WORKSHEETS_TABLE_NAME env var', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-solve',
+      Environment: {
+        Variables: Match.objectLike({
+          WORKSHEETS_TABLE_NAME: Match.anyValue(),
+        }),
+      },
+    });
+  });
+
+  test('submit Lambda has WORKSHEETS_TABLE_NAME env var', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'learnfyra-dev-lambda-submit',
+      Environment: {
+        Variables: Match.objectLike({
+          WORKSHEETS_TABLE_NAME: Match.anyValue(),
+        }),
+      },
     });
   });
 
@@ -512,12 +573,12 @@ describe('LearnfyraStack (dev) — Cognito Google OAuth', () => {
     });
   });
 
-  test('auth Lambda has AUTH_MODE=cognito env var', () => {
+  test('auth Lambda has AUTH_MODE=hybrid env var', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'learnfyra-dev-lambda-auth',
       Environment: Match.objectLike({
         Variables: Match.objectLike({
-          AUTH_MODE: 'cognito',
+          AUTH_MODE: 'hybrid',
         }),
       }),
     });

@@ -901,6 +901,13 @@ export const handler = async (event, context) => {
     if (err instanceof SyntaxError) {
       return errorResponse(400, 'Invalid JSON in request body.', 'ADMIN_INVALID_REQUEST');
     }
-    return errorResponse(500, 'Internal server error.', 'ADMIN_INTERNAL_ERROR');
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const adminErrResponse = errorResponse(500, isDebug ? err.message : 'Internal server error.', 'ADMIN_INTERNAL_ERROR');
+    if (isDebug) {
+      const parsedBody = JSON.parse(adminErrResponse.body);
+      parsedBody._debug = { stack: err.stack, handler: 'adminHandler', statusCode: 500, timestamp: new Date().toISOString() };
+      adminErrResponse.body = JSON.stringify(parsedBody);
+    }
+    return adminErrResponse;
   }
 };

@@ -380,6 +380,23 @@ export class LearnfyraStack extends cdk.Stack {
       'id'
     );
 
+    // ── DynamoDB: Worksheets table — stores full worksheet JSON for online solve ──
+    const worksheetsTable = createTable(
+      'WorksheetsTable',
+      `LearnfyraWorksheets-${appEnv}`,
+      'worksheetId',
+      {
+        ttlAttribute: 'expiresAt',
+        gsis: [
+          {
+            indexName: 'slug-index',
+            partitionKeyName: 'slug',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
+        ],
+      }
+    );
+
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
@@ -487,6 +504,26 @@ export class LearnfyraStack extends cdk.Stack {
       `/learnfyra/${appEnv}/jwt-secret`
     ).unsafeUnwrap();
     const allowedOrigin = isDev ? '*' : (enableCustomDomains ? `https://${webDomainName}` : '*');
+
+    // ── Gateway Responses with CORS headers ────────────────────────────────
+    // API Gateway default 4xx/5xx responses (e.g. authorizer 401, missing route 403)
+    // do not include CORS headers, so browsers block them ("Failed to fetch").
+    api.addGatewayResponse('GatewayResponseDefault4XX', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
+    api.addGatewayResponse('GatewayResponseDefault5XX', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
 
     // ── Cognito: User Pool ─────────────────────────────────────────────────────
     const userPool = new cognito.UserPool(this, 'UserPool', {
@@ -901,6 +938,7 @@ export class LearnfyraStack extends cdk.Stack {
     ].forEach((fn) => {
       fn.addEnvironment('APP_RUNTIME', 'aws');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
+      if (isDev) fn.addEnvironment('DEBUG_MODE', 'true');
     });
 
     authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
@@ -911,6 +949,9 @@ export class LearnfyraStack extends cdk.Stack {
     generateFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
     generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
     generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+    generateFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    solveFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    submitFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
     progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
@@ -1005,6 +1046,8 @@ export class LearnfyraStack extends cdk.Stack {
     [
       generateFn,
       authFn,
+      solveFn,
+      submitFn,
       progressFn,
       analyticsFn,
       classFn,

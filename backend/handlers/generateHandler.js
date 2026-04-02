@@ -16,6 +16,8 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import { validateGenerateBody } from '../middleware/validator.js';
@@ -31,6 +33,15 @@ const corsHeaders = {
 let _s3, _ssm;
 function getS3()  { if (!_s3)  _s3  = new S3Client({});  return _s3;  }
 function getSsm() { if (!_ssm) _ssm = new SSMClient({}); return _ssm; }
+
+let _dynamo, _docClient;
+function getDocClient() {
+  if (!_docClient) {
+    _dynamo = new DynamoDBClient({});
+    _docClient = DynamoDBDocumentClient.from(_dynamo);
+  }
+  return _docClient;
+}
 
 const DIAGNOSTIC_HEADERS = 'x-request-id,x-client-request-id';
 
@@ -72,6 +83,15 @@ let _buildStudentKey;
 let _resolveEffectiveRepeatCap;
 let _getSeenQuestionSignatures;
 let _recordExposureHistory;
+let _generateWorksheetSlug;
+
+async function getSlugGenerator() {
+  if (!_generateWorksheetSlug) {
+    const mod = await import('../../src/utils/slugify.js');
+    _generateWorksheetSlug = mod.generateWorksheetSlug;
+  }
+  return _generateWorksheetSlug;
+}
 
 /**
  * Returns validateToken and assertRole from authMiddleware, importing on first call.
@@ -528,31 +548,42 @@ export const handler = async (event, context) => {
       bucket: process.env.WORKSHEET_BUCKET_NAME,
     });
 
-    // 5. Upload solve-data.json to S3 — full worksheet with answers for online scoring
-    stage = 'solve-data:upload';
-    const solveData = {
-      worksheetId: uuid,
-      generatedAt: now.toISOString(),
-      teacherId,
-      studentId: studentId || null,
-      parentId: parentId || null,
-      studentKey,
-      repeatCapPolicy: {
-        effectiveCapPercent: repeatPolicy.capPercent,
-        appliedBy: repeatPolicy.appliedBy,
-        sourceId: repeatPolicy.sourceId,
-      },
-      ...worksheet,
-    };
-    const solveDataKey = `${baseKey}/solve-data.json`;
-    await uploadJsonToS3(solveDataKey, solveData);
-    logEvent('info', 'generateHandler solve-data uploaded', {
-      requestId,
-      clientRequestId,
-      stage,
-      elapsedMs: Date.now() - requestStart,
-      solveDataKey,
-    });
+    // 5. Write worksheet data to DynamoDB -- replaces S3 solve-data.json
+    stage = 'solve-data:write';
+    const generateSlug = await getSlugGenerator();
+    const slug = generateSlug(grade, subject, topic, difficulty, uuid);
+    const worksheetsTableName = process.env.WORKSHEETS_TABLE_NAME;
+    if (worksheetsTableName) {
+      const expiresAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+      await getDocClient().send(new PutCommand({
+        TableName: worksheetsTableName,
+        Item: {
+          worksheetId: uuid,
+          slug,
+          grade,
+          subject,
+          topic,
+          difficulty,
+          questions: worksheet.questions,
+          estimatedTime: worksheet.estimatedTime,
+          timerSeconds: worksheet.timerSeconds,
+          totalPoints: worksheet.totalPoints,
+          title: worksheet.title,
+          s3BaseKey: baseKey,
+          createdAt: now.toISOString(),
+          createdBy: decoded?.sub || 'anonymous',
+          expiresAt,
+        },
+      }));
+      logEvent('info', 'generateHandler worksheet written to DynamoDB', {
+        requestId,
+        clientRequestId,
+        stage,
+        elapsedMs: Date.now() - requestStart,
+        worksheetId: uuid,
+        slug,
+      });
+    }
 
     // 7. Export and upload answer key (if requested)
     let answerKeyKey = null;
@@ -611,7 +642,9 @@ export const handler = async (event, context) => {
 
     const metadata = {
       id: uuid,
-      solveUrl: `/solve/${uuid}`,
+      slug,
+      solveUrl: `/solve/${slug}`,
+      solveUrlUuid: `/solve/${uuid}`,
       generatedAt: now.toISOString(),
       teacherId,
       grade,
@@ -647,6 +680,7 @@ export const handler = async (event, context) => {
         success: true,
         worksheetKey,
         answerKeyKey,
+        slug,
         metadata,
         requestId,
         clientRequestId,
@@ -661,14 +695,21 @@ export const handler = async (event, context) => {
       error: serializeError(err),
     });
 
-    return createErrorResponse({
+    const isDebug = process.env.DEBUG_MODE === 'true';
+    const errResponse = createErrorResponse({
       requestId,
       clientRequestId,
       statusCode: 500,
-      error: 'Worksheet generation failed. Please try again.',
+      error: isDebug ? err.message : 'Worksheet generation failed. Please try again.',
       errorCode: 'GENERATION_FAILED',
       code: mapGenerationErrorCode(err),
       stage,
     });
+    if (isDebug) {
+      const parsedBody = JSON.parse(errResponse.body);
+      parsedBody._debug = { stack: err.stack, handler: 'generateHandler', statusCode: 500, timestamp: new Date().toISOString() };
+      errResponse.body = JSON.stringify(parsedBody);
+    }
+    return errResponse;
   }
 };

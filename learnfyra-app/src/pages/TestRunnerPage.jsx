@@ -76,8 +76,11 @@ function makeTests(ctx, envKey) {
         const res = await api("POST", "/api/auth/oauth/google", {});
         assert(res.status === 200, `Expected 200, got ${res.status}`);
         assert(res.body.authorizationUrl, "Missing authorizationUrl");
-        assert(res.body.authorizationUrl.includes("accounts.google.com"), "URL not Google");
-        return "Returns valid Google authorization URL";
+        const url = res.body.authorizationUrl;
+        const isGoogle = url.includes("accounts.google.com");
+        const isCognito = url.includes("amazoncognito.com") && url.includes("identity_provider=Google");
+        assert(isGoogle || isCognito, `URL is neither Google nor Cognito: ${url.slice(0, 80)}...`);
+        return isCognito ? "Returns Cognito-hosted Google OAuth URL" : "Returns direct Google authorization URL";
       },
     },
     {
@@ -289,7 +292,7 @@ function makeTests(ctx, envKey) {
       id: "generate-validation", module: "Generate", label: "POST /api/generate (empty body)",
       icon: "⚡", layer: "API",
       run: async () => {
-        const res = await api("POST", "/api/generate", {});
+        const res = await api("POST", "/api/generate", {}, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Validates input and rejects empty body";
       },
@@ -300,7 +303,7 @@ function makeTests(ctx, envKey) {
       id: "solve-invalid-id", module: "Solve", label: "GET /api/solve/:id (invalid ID)",
       icon: "📝", layer: "API",
       run: async () => {
-        const res = await api("GET", "/api/solve/not-a-uuid");
+        const res = await api("GET", "/api/solve/not-a-uuid", null, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Rejects invalid worksheet ID";
       },
@@ -309,7 +312,7 @@ function makeTests(ctx, envKey) {
       id: "submit-invalid", module: "Solve", label: "POST /api/submit (invalid body)",
       icon: "📝", layer: "API",
       run: async () => {
-        const res = await api("POST", "/api/submit", { worksheetId: "bad", answers: [] });
+        const res = await api("POST", "/api/submit", { worksheetId: "bad", answers: [] }, ctx.testToken);
         assert(res.status === 400, `Expected 400, got ${res.status}`);
         return "Validates submit request";
       },
@@ -383,7 +386,7 @@ async function rawFetch(method, path, body, opts = {}) {
   return res;
 }
 
-async function api(method, path, body, token) {
+let api = async function api(method, path, body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -391,13 +394,28 @@ async function api(method, path, body, token) {
   const opts = { method, headers };
   if (body && method !== "GET") opts.body = JSON.stringify(body);
 
-  const res = await fetch(url, opts);
-  let parsed = {};
+  let res;
   try {
-    parsed = await res.json();
-  } catch {}
+    res = await fetch(url, opts);
+  } catch (fetchErr) {
+    // Network-level failure (CORS blocked, DNS, etc.)
+    return {
+      status: 0,
+      body: { error: `Network error: ${fetchErr.message}` },
+      headers: new Headers(),
+      _fetchError: fetchErr.message,
+    };
+  }
+  let parsed = {};
+  let rawText = "";
+  try {
+    rawText = await res.text();
+    parsed = JSON.parse(rawText);
+  } catch {
+    parsed = { _rawBody: rawText || "(empty)" };
+  }
   return { status: res.status, body: parsed, headers: res.headers };
-}
+};
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -461,6 +479,43 @@ function TestRow({ test, result, idx }) {
               {result.error}
             </pre>
           )}
+          {/* API response details for failed tests */}
+          {status === "FAIL" && (result.apiError || result.fetchError || result.apiDebug) && (
+            <div style={{
+              background: "#0a0a14", border: "1px solid #1a1a3a", borderRadius: 5,
+              padding: "8px 12px", marginTop: 6,
+            }}>
+              <span style={{ color: "#6366f1", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em" }}>
+                API RESPONSE
+              </span>
+              {result.apiStatus != null && (
+                <span style={{ color: "#4b5563", fontSize: 10, marginLeft: 8 }}>
+                  HTTP {result.apiStatus}
+                </span>
+              )}
+              {result.fetchError && (
+                <p style={{ color: "#fb923c", fontSize: 11, margin: "4px 0 0", fontFamily: "monospace" }}>
+                  Fetch error: {result.fetchError}
+                </p>
+              )}
+              {result.apiError && (
+                <p style={{ color: "#f9a8d4", fontSize: 11, margin: "4px 0 0", fontFamily: "monospace" }}>
+                  {result.apiError}
+                </p>
+              )}
+              {result.apiDebug && (
+                <pre style={{
+                  color: "#94a3b8", fontSize: 10, fontFamily: "monospace",
+                  whiteSpace: "pre-wrap", margin: "6px 0 0", lineHeight: 1.5,
+                }}>
+{`handler: ${result.apiDebug.handler || "—"}
+status:  ${result.apiDebug.statusCode || "—"}
+time:    ${result.apiDebug.timestamp || "—"}
+stack:   ${result.apiDebug.stack || "—"}`}
+                </pre>
+              )}
+            </div>
+          )}
           {result.duration && (
             <span style={{ color: "#374151", fontSize: 10, marginTop: 4, display: "block" }}>
               {result.duration}ms
@@ -474,13 +529,14 @@ function TestRow({ test, result, idx }) {
 
 // ─── Report builder ─────────────────────────────────────────────────────────
 
-function buildReport(tests, results, env, counts) {
+function buildReport(tests, results, env, counts, authUser) {
   const ts = new Date().toISOString();
   const lines = [
     `LEARNFYRA INTEGRATION TEST REPORT`,
     `==================================`,
     `Environment: ${env.label} (${env.url})`,
     `Timestamp:   ${ts}`,
+    ...(authUser && !authUser.error ? [`Test User:   ${authUser.email} (${authUser.role})`] : [`Test User:   auto-registered`]),
     `Results:     ${counts.pass} pass / ${counts.fail} fail${counts.skipped ? ` / ${counts.skipped} skipped` : ""} (${counts.total} total)`,
     ``,
     `| # | Test | Status | Duration | Details |`,
@@ -506,6 +562,13 @@ function buildReport(tests, results, env, counts) {
       const r = results[t.id];
       lines.push(`  ${t.label}`);
       lines.push(`    Error: ${r.error}`);
+      if (r.apiStatus != null) lines.push(`    HTTP Status: ${r.apiStatus}`);
+      if (r.fetchError) lines.push(`    Fetch Error: ${r.fetchError}`);
+      if (r.apiError) lines.push(`    API Error: ${r.apiError}`);
+      if (r.apiDebug) {
+        lines.push(`    Debug: handler=${r.apiDebug.handler || "?"}, status=${r.apiDebug.statusCode || "?"}`);
+        if (r.apiDebug.stack) lines.push(`    Stack: ${r.apiDebug.stack.split("\n").slice(0, 3).join(" | ")}`);
+      }
       lines.push(``);
     });
   }
@@ -521,20 +584,60 @@ export default function App() {
   const [results, setResults] = useState({});
   const [counts, setCounts] = useState({ total: 0, pass: 0, fail: 0, done: 0, skipped: 0 });
   const [copied, setCopied] = useState(false);
+  const [creds, setCreds] = useState({ email: "", password: "" });
+  const [authUser, setAuthUser] = useState(null); // { email, role, userId, mode }
   const ctxRef = useRef({});
 
   const env = ENVIRONMENTS[envKey];
   const isProd = envKey === "prod";
+  const useExistingUser = creds.email.trim() && creds.password.trim();
 
   const runAll = useCallback(async () => {
     setRunning(true);
     setResults({});
+    setAuthUser(null);
     ctxRef.current = {};
     setApiBase(ENVIRONMENTS[envKey].url);
 
+    // If credentials provided, login first and pre-fill ctx with token
+    const _useExisting = creds.email.trim() && creds.password.trim();
+    if (_useExisting) {
+      try {
+        const loginRes = await api("POST", "/api/auth/login", {
+          email: creds.email.trim(), password: creds.password.trim(),
+        });
+        if (loginRes.status !== 200 || !loginRes.body.token) {
+          const errMsg = loginRes.body?.error || `Login failed with status ${loginRes.status}`;
+          setAuthUser({ error: errMsg });
+          setRunning(false);
+          return;
+        }
+        ctxRef.current.testToken = loginRes.body.token;
+        ctxRef.current.testEmail = loginRes.body.email;
+        setAuthUser({
+          email: loginRes.body.email,
+          role: loginRes.body.role,
+          userId: loginRes.body.userId,
+          displayName: loginRes.body.displayName,
+          mode: "credentials",
+        });
+      } catch (err) {
+        setAuthUser({ error: `Login error: ${err.message}` });
+        setRunning(false);
+        return;
+      }
+    }
+
     const allTests = makeTests(ctxRef.current, envKey);
     // On prod, skip mutating tests to avoid data pollution
-    const tests = allTests.filter(t => !(isProd && MUTATING_TEST_IDS.has(t.id)));
+    // If using existing user, also skip register test (already logged in)
+    const skipIds = new Set(isProd ? MUTATING_TEST_IDS : []);
+    if (_useExisting) {
+      skipIds.add("auth-register");
+      skipIds.add("auth-login");
+      skipIds.add("auth-login-bad-password");
+    }
+    const tests = allTests.filter(t => !skipIds.has(t.id));
     const skipped = allTests.length - tests.length;
 
     setCounts({ total: tests.length, pass: 0, fail: 0, done: 0, skipped });
@@ -542,16 +645,30 @@ export default function App() {
     // Mark skipped tests
     if (skipped > 0) {
       allTests.forEach(t => {
-        if (MUTATING_TEST_IDS.has(t.id) && isProd) {
-          setResults(prev => ({ ...prev, [t.id]: { status: "SKIPPED", message: "Skipped on prod (mutating test)" } }));
+        if (skipIds.has(t.id)) {
+          const reason = _useExisting ? "Skipped (using provided credentials)" : "Skipped on prod (mutating test)";
+          setResults(prev => ({ ...prev, [t.id]: { status: "SKIPPED", message: reason } }));
         }
       });
     }
 
     let pass = 0, fail = 0;
 
+    // Track last API response per-test for debug info on failure
+    let _lastApiRes = null;
+    const _origApiFn = api;
+    // Monkey-patch to capture last response (restored after loop)
+    const _patchedApi = async (...args) => {
+      const res = await _origApiFn(...args);
+      _lastApiRes = res;
+      return res;
+    };
+    // eslint-disable-next-line no-func-assign
+    api = _patchedApi;
+
     for (const test of tests) {
       setResults(prev => ({ ...prev, [test.id]: { status: "RUNNING" } }));
+      _lastApiRes = null;
 
       const start = performance.now();
       try {
@@ -562,17 +679,29 @@ export default function App() {
       } catch (err) {
         const duration = Math.round(performance.now() - start);
         fail++;
+        // Capture the last API response for debug context
+        const lastRes = _lastApiRes;
+        const apiError = lastRes?.body?.error || "";
+        const apiDebug = lastRes?.body?._debug || null;
+        const apiStatus = lastRes?.status;
+        const fetchError = lastRes?._fetchError || "";
         setResults(prev => ({
           ...prev,
-          [test.id]: { status: "FAIL", error: err.message, duration },
+          [test.id]: {
+            status: "FAIL", error: err.message, duration,
+            apiStatus, apiError, apiDebug, fetchError,
+          },
         }));
       }
 
       setCounts({ total: tests.length, pass, fail, done: pass + fail, skipped });
     }
 
+    // Restore original api function
+    // eslint-disable-next-line no-func-assign
+    api = _origApiFn;
     setRunning(false);
-  }, [envKey, isProd]);
+  }, [envKey, isProd, creds]);
 
   const allTests = makeTests(ctxRef.current, envKey);
   const pct = counts.total > 0 ? Math.round((counts.pass / counts.total) * 100) : 0;
@@ -621,6 +750,93 @@ export default function App() {
           <span style={{ color: "#fbbf24", fontSize: 10, alignSelf: "center", fontWeight: 600 }}>
             (read-only — mutating tests skipped)
           </span>
+        )}
+      </div>
+
+      {/* Credentials (optional — use existing user instead of auto-register) */}
+      <div style={{
+        marginBottom: 12, padding: "10px 14px",
+        background: "#080808", border: `1px solid ${useExistingUser ? "#166534" : "#1a1a1a"}`,
+        borderRadius: 8,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>
+            Test as existing user (optional)
+          </span>
+          {useExistingUser && (
+            <span style={{ color: "#4ade80", fontSize: 10, fontWeight: 600 }}>
+              Will login with these credentials
+            </span>
+          )}
+          {!useExistingUser && (
+            <span style={{ color: "#374151", fontSize: 10 }}>
+              Leave empty to auto-register a new test user
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={creds.email}
+            onChange={e => setCreds(c => ({ ...c, email: e.target.value }))}
+            disabled={running}
+            style={{
+              flex: 1, minWidth: 200, padding: "6px 10px",
+              background: "#111", border: "1px solid #222", borderRadius: 5,
+              color: "#e2e8f0", fontSize: 12, fontFamily: "monospace",
+              outline: "none",
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={creds.password}
+            onChange={e => setCreds(c => ({ ...c, password: e.target.value }))}
+            disabled={running}
+            style={{
+              flex: 1, minWidth: 180, padding: "6px 10px",
+              background: "#111", border: "1px solid #222", borderRadius: 5,
+              color: "#e2e8f0", fontSize: 12, fontFamily: "monospace",
+              outline: "none",
+            }}
+          />
+          {useExistingUser && (
+            <button
+              onClick={() => setCreds({ email: "", password: "" })}
+              disabled={running}
+              style={{
+                padding: "6px 12px", background: "#1a1a1a", color: "#a8a29e",
+                border: "1px solid #333", borderRadius: 5, fontSize: 11,
+                cursor: running ? "default" : "pointer",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {authUser && !authUser.error && (
+          <div style={{ marginTop: 8, display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ color: "#4ade80", fontSize: 11 }}>
+              Logged in as {authUser.email}
+            </span>
+            <span style={{
+              background: "#052e16", border: "1px solid #166534", color: "#4ade80",
+              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+            }}>
+              {authUser.role}
+            </span>
+            <span style={{ color: "#374151", fontSize: 10 }}>
+              {authUser.userId}
+            </span>
+          </div>
+        )}
+        {authUser?.error && (
+          <div style={{ marginTop: 8 }}>
+            <span style={{ color: "#f87171", fontSize: 11 }}>
+              {authUser.error}
+            </span>
+          </div>
         )}
       </div>
 
@@ -704,7 +920,7 @@ export default function App() {
 
           <button
             onClick={() => {
-              const report = buildReport(allTests, results, env, counts);
+              const report = buildReport(allTests, results, env, counts, authUser);
               navigator.clipboard.writeText(report).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
@@ -728,7 +944,7 @@ export default function App() {
             color: "#94a3b8", fontSize: 11, fontFamily: "'Fira Code', monospace",
             whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 400, overflow: "auto",
           }}>
-            {buildReport(allTests, results, env, counts)}
+            {buildReport(allTests, results, env, counts, authUser)}
           </pre>
         </>
       )}
