@@ -1,19 +1,25 @@
 # Solve & Submit API Contracts (M04)
 
-**Status: FROZEN — RC-BE-01 (2026-03-26)**
+**Status: UPDATED — April 2, 2026**
 
-Path traversal hardening applied per RC-BE-02 (2026-03-26): worksheetId validated as UUID v4 before any file system or S3 operation.
+- Path traversal hardening applied per RC-BE-02 (2026-03-26): worksheetId validated before any operation.
+- **April 2, 2026:** Solve endpoint now accepts SEO-friendly slugs in addition to UUIDs. Data source changed from S3 `solve-data.json` to DynamoDB `LearnfyraWorksheets` table.
 
 ---
 
-## GET /api/solve/:worksheetId
+## GET /api/solve/:identifier
 
 Fetch worksheet questions for online solve. Answers and explanations are stripped from the response.
 
-**Auth:** None (guest solve allowed)
+**Auth:** Bearer JWT required
 
 **Path Parameter:**
-- `worksheetId`: UUID v4
+- `identifier`: UUID v4 **or** SEO-friendly slug (e.g. `grade-3-math-multiplication-easy-a1b2c3`)
+
+**Identifier Resolution:**
+- If the identifier matches UUID v4 format → DynamoDB GetItem on `worksheetId` PK
+- If the identifier matches slug format (lowercase alphanumeric + hyphens, 10-80 chars) → DynamoDB Query on `slug-index` GSI
+- Otherwise → 400 Bad Request
 
 **Response 200:**
 ```json
@@ -232,17 +238,28 @@ This prevents path traversal attacks such as `worksheetId = "../../../etc/passwd
 ## Integration Contracts
 
 ### solveHandler reads from:
-- AWS: `S3: worksheets/{year}/{month}/{day}/{worksheetId}/solve-data.json`
-- Local: `worksheets-local/{worksheetId}/solve-data.json`
-
-The handler reconstructs the S3 prefix from the worksheetId by first reading:
-`S3: worksheets-local/{worksheetId}/metadata.json` (contains `generatedAt` → used to construct the date path)
-
-Or by looking up `worksheetId` in `LearnfyraGenerationLog` DynamoDB table (which stores the full `s3Prefix`).
+- **AWS:** DynamoDB `LearnfyraWorksheets-{env}` table — by UUID (PK) or slug (slug-index GSI)
+- **Local:** `worksheets-local/{worksheetId}/solve-data.json` (filesystem)
 
 ### submitHandler reads from:
-Same source as solveHandler, then compares submitted answers to `question.answer` fields in the stored JSON.
+- **AWS:** DynamoDB `LearnfyraWorksheets-{env}` table — by UUID (PK only, submit always receives UUID)
+- **Local:** `worksheets-local/{worksheetId}/solve-data.json` (filesystem)
+
+Compares submitted answers to `question.answer` fields in the stored record.
 
 ### submitHandler writes to (authenticated users only):
 - DynamoDB: `LearnfyraWorksheetAttempt` (PK=userId, SK=worksheetId#{timestamp})
 - DynamoDB: `LearnfyraUsers` (update precomputed progress aggregates)
+
+### generateHandler writes to:
+- DynamoDB: `LearnfyraWorksheets-{env}` — full worksheet record with questions, answers, metadata, slug
+- S3: `worksheets/{date}/{uuid}/worksheet.html` — rendered worksheet for download
+- S3: `worksheets/{date}/{uuid}/answer-key.html` — rendered answer key for download
+- ~~S3: `worksheets/{date}/{uuid}/solve-data.json`~~ — **REMOVED** (April 2, 2026, replaced by DynamoDB)
+
+### SEO URL Format
+```
+Before: /solve/88b4e517-2cd7-4c34-a889-7885014d73d0
+After:  /solve/grade-3-math-multiplication-easy-88b4e5
+```
+Both formats work. The generate endpoint returns `slug` in its response for building shareable URLs.
