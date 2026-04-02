@@ -248,7 +248,7 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('sets log retention policy for Lambda log groups', () => {
-    template.resourceCountIs('Custom::LogRetention', 12);
+    template.resourceCountIs('Custom::LogRetention', 14);
     template.hasResourceProperties('Custom::LogRetention', {
       RetentionInDays: 30,
     });
@@ -512,12 +512,12 @@ describe('LearnfyraStack (dev) — Cognito Google OAuth', () => {
     });
   });
 
-  test('auth Lambda has AUTH_MODE=cognito env var', () => {
+  test('auth Lambda has AUTH_MODE=hybrid env var', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'learnfyra-dev-lambda-auth',
       Environment: Match.objectLike({
         Variables: Match.objectLike({
-          AUTH_MODE: 'cognito',
+          AUTH_MODE: 'hybrid',
         }),
       }),
     });
