@@ -5,14 +5,57 @@
  * a full per-question result breakdown.
  *
  * Local dev:  reads worksheets-local/{worksheetId}/solve-data.json
- * Lambda/AWS: S3 integration to be wired in the CDK stack (Phase 5)
+ * Lambda/AWS: reads from S3 bucket (WORKSHEET_BUCKET_NAME env var)
  */
 
 import { promises as fs } from 'fs';
 import path, { join, resolve } from 'path';
+import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 
 // __dirname is not available in Lambda CJS bundle; use process.cwd() for root
 const __dirname = process.cwd();
+
+const isAws = process.env.APP_RUNTIME === 'aws';
+let _s3;
+function getS3() {
+  if (!_s3) _s3 = new S3Client({});
+  return _s3;
+}
+
+/**
+ * Fetches solve-data.json from S3 by searching for the UUID across date-prefixed keys.
+ * @param {string} worksheetId
+ * @returns {Promise<Object>} Parsed worksheet JSON
+ * @throws {Error} With .statusCode = 404 if not found
+ */
+async function fetchFromS3(worksheetId) {
+  const bucket = process.env.WORKSHEET_BUCKET_NAME;
+  const s3 = getS3();
+
+  const listRes = await s3.send(new ListObjectsV2Command({
+    Bucket: bucket,
+    Prefix: 'worksheets/',
+    MaxKeys: 1000,
+  }));
+
+  const solveKey = (listRes.Contents || [])
+    .map(obj => obj.Key)
+    .find(key => key.includes(worksheetId) && key.endsWith('solve-data.json'));
+
+  if (!solveKey) {
+    const err = new Error('Worksheet not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const getRes = await s3.send(new GetObjectCommand({
+    Bucket: bucket,
+    Key: solveKey,
+  }));
+
+  const body = await getRes.Body.transformToString('utf-8');
+  return JSON.parse(body);
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -153,36 +196,48 @@ export const handler = async (event, context) => {
       };
     }
 
-    // Local dev: process.cwd() is already the project root
-    const baseDir = resolve(join(__dirname, 'worksheets-local'));
-    const localDir = resolve(join(baseDir, worksheetId));
-
-    // Ensure the resolved path stays within the worksheets-local directory
-    if (!isWithinBaseDir(baseDir, localDir)) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          error: 'Invalid worksheetId format.',
-          code: 'SUBMIT_INVALID_REQUEST',
-        }),
-      };
-    }
-
-    const filePath = join(localDir, 'solve-data.json');
-
     let worksheet;
-    try {
-      worksheet = JSON.parse(await fs.readFile(filePath, 'utf8'));
-    } catch {
-      return {
-        statusCode: 404,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          error: 'Worksheet not found.',
-          code: 'SUBMIT_NOT_FOUND',
-        }),
-      };
+    if (isAws) {
+      try {
+        worksheet = await fetchFromS3(worksheetId);
+      } catch (s3Err) {
+        return {
+          statusCode: s3Err.statusCode || 404,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            error: s3Err.message || 'Worksheet not found.',
+            code: 'SUBMIT_NOT_FOUND',
+          }),
+        };
+      }
+    } else {
+      const baseDir = resolve(join(__dirname, 'worksheets-local'));
+      const localDir = resolve(join(baseDir, worksheetId));
+
+      if (!isWithinBaseDir(baseDir, localDir)) {
+        return {
+          statusCode: 400,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            error: 'Invalid worksheetId format.',
+            code: 'SUBMIT_INVALID_REQUEST',
+          }),
+        };
+      }
+
+      const filePath = join(localDir, 'solve-data.json');
+      try {
+        worksheet = JSON.parse(await fs.readFile(filePath, 'utf8'));
+      } catch {
+        return {
+          statusCode: 404,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            error: 'Worksheet not found.',
+            code: 'SUBMIT_NOT_FOUND',
+          }),
+        };
+      }
     }
 
     const buildResult = await getBuildResult();
