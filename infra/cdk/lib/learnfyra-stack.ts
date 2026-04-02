@@ -486,7 +486,7 @@ export class LearnfyraStack extends cdk.Stack {
     const jwtSecretValue = cdk.SecretValue.secretsManager(
       `/learnfyra/${appEnv}/jwt-secret`
     ).unsafeUnwrap();
-    const allowedOrigin = enableCustomDomains ? `https://${webDomainName}` : '*';
+    const allowedOrigin = isDev ? '*' : (enableCustomDomains ? `https://${webDomainName}` : '*');
 
     // ── Cognito: User Pool ─────────────────────────────────────────────────────
     const userPool = new cognito.UserPool(this, 'UserPool', {
@@ -842,9 +842,9 @@ export class LearnfyraStack extends cdk.Stack {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn].forEach((fn) => {
+    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
-      fn.addEnvironment('AUTH_MODE', 'cognito');
+      fn.addEnvironment('AUTH_MODE', 'hybrid');
     });
 
     [
