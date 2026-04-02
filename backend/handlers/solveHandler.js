@@ -142,6 +142,7 @@ export const handler = async (event, context) => {
       headers: corsHeaders,
       body: JSON.stringify({
         worksheetId: worksheet.worksheetId,
+        title: worksheet.title || `Grade ${worksheet.grade} ${worksheet.subject}: ${worksheet.topic}`,
         grade: worksheet.grade,
         subject: worksheet.subject,
         topic: worksheet.topic,

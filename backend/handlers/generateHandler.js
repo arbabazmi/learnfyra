@@ -611,7 +611,7 @@ export const handler = async (event, context) => {
 
     const metadata = {
       id: uuid,
-      solveUrl: `/solve.html?id=${uuid}`,
+      solveUrl: `/solve/${uuid}`,
       generatedAt: now.toISOString(),
       teacherId,
       grade,

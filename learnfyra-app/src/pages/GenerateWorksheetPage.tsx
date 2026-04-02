@@ -165,13 +165,22 @@ const GenerateWorksheetPage: React.FC = () => {
 
   const [genError, setGenError] = React.useState('');
 
+  const generatingRef = React.useRef(false);
+
   // Generate worksheet via real API — AI-powered generation, stored server-side
   const handleGenerate = async () => {
-    if (selectedTypes.length === 0) return;
+    if (selectedTypes.length === 0 || generatingRef.current) return;
+
+    const token = getToken();
+    if (!token) {
+      setGenError('Please sign in to generate worksheets.');
+      return;
+    }
+
+    generatingRef.current = true;
     setGenState('generating');
     setGenError('');
 
-    const token = getToken();
     try {
       const res = await fetch(`${apiUrl}/api/generate`, {
         method: 'POST',
@@ -208,6 +217,8 @@ const GenerateWorksheetPage: React.FC = () => {
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
       setGenState('idle');
+    } finally {
+      generatingRef.current = false;
     }
   };
 

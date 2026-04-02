@@ -91,7 +91,7 @@ export default function SolvePage() {
     );
   }
 
-  const pageTitle = `${worksheet.title} — ${worksheet.subject}`;
+  const pageTitle = `${worksheet.title || `Grade ${worksheet.grade} ${worksheet.topic}`} — ${worksheet.subject}`;
 
   return (
     <AppLayout pageTitle={pageTitle}>
