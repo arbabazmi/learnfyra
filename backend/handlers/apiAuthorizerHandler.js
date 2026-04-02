@@ -50,11 +50,19 @@ export const handler = async (event) => {
     throw new Error('Unauthorized');
   }
 
+  // Build a wildcard ARN so the cached policy applies to ALL API methods,
+  // not just the specific path that triggered this authorizer invocation.
+  // methodArn format: arn:aws:execute-api:region:account:apiId/stage/METHOD/path
+  const arnParts = methodArn.split('/');
+  const wildcardArn = arnParts.length >= 2
+    ? `${arnParts[0]}/${arnParts[1]}/*/*`
+    : methodArn;
+
   try {
     const authAdapter = getAuthAdapter();
     const decoded = authAdapter.verifyToken(match[1]);
     const principalId = decoded?.sub || 'unknown';
-    return buildPolicy(principalId, 'Allow', methodArn, {
+    return buildPolicy(principalId, 'Allow', wildcardArn, {
       sub: decoded?.sub,
       email: decoded?.email,
       role: decoded?.role,
