@@ -130,7 +130,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
 
           {/* ── Desktop CTAs ─────────────────────────────────── */}
           <div className="hidden md:flex items-center gap-3">
-            {auth.isAuthenticated && auth.user ? (
+            {auth.tokenState === 'authenticated' && auth.user ? (
               <>
                 <Link
                   to="/dashboard"
@@ -208,7 +208,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
               ),
             )}
             <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
-              {auth.isAuthenticated && auth.user ? (
+              {auth.tokenState === 'authenticated' && auth.user ? (
                 <>
                   <Link
                     to="/dashboard"

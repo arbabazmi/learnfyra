@@ -27,8 +27,10 @@ import { saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
 import { printWorksheet, downloadAsWord, downloadAsPDF } from '@/modules/solve/worksheetExport';
 import type { Subject } from '@/modules/solve/types';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
+import { LimitReachedModal } from '@/components/auth/LimitReachedModal';
 
 const DIFFICULTIES = [
   {
@@ -99,6 +101,11 @@ function estimateMinutes(questionCount: number, difficulty: DifficultyValue): nu
 type GenerationState = 'idle' | 'generating' | 'success';
 
 const GenerateWorksheetPage: React.FC = () => {
+  const auth = useAuth();
+  // Guest-teacher and guest-parent can view the form but cannot generate
+  const isGuestRestricted = auth.tokenState === 'guest'
+    && (auth.role === 'guest-teacher' || auth.role === 'guest-parent');
+
   // ── Form state
   const [grade,          setGrade]          = React.useState<string>('7');
   const [subject,        setSubject]        = React.useState<string>('Math');
@@ -114,6 +121,7 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
+  const [showLimitModal, setShowLimitModal] = React.useState(false);
   const navigate = useNavigate();
 
   usePageMeta({
@@ -171,7 +179,7 @@ const GenerateWorksheetPage: React.FC = () => {
   const handleGenerate = async () => {
     if (selectedTypes.length === 0 || generatingRef.current) return;
 
-    const token = getToken();
+    const token = getAuthToken();
     generatingRef.current = true;
     setGenState('generating');
     setGenError('');
@@ -199,8 +207,20 @@ const GenerateWorksheetPage: React.FC = () => {
 
       const data = await res.json();
 
+      if (res.status === 403 && data?.code === 'GUEST_LIMIT_REACHED') {
+        setShowLimitModal(true);
+        setGenState('idle');
+        return;
+      }
+
       if (!res.ok) {
         throw new Error(data.error || `Generation failed (${res.status})`);
+      }
+
+      // Update guest worksheet count from backend response
+      if (data.guestUsed !== undefined) {
+        sessionStorage.setItem(GUEST_STORAGE_KEYS.used, String(data.guestUsed));
+        sessionStorage.setItem(GUEST_STORAGE_KEYS.limit, String(data.guestLimit ?? 10));
       }
 
       // Store the worksheet ID from the API response
@@ -669,18 +689,35 @@ const GenerateWorksheetPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Generate button */}
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full gap-2"
-                  onClick={handleGenerate}
-                  loading={genState === 'generating'}
-                  disabled={selectedTypes.length === 0 || genState === 'generating'}
-                >
-                  {genState !== 'generating' && <Sparkles className="size-5" />}
-                  {genState === 'generating' ? 'Generating...' : 'Generate Worksheet'}
-                </Button>
+                {/* Generate button — or login CTA for restricted guest roles */}
+                {isGuestRestricted ? (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full gap-2"
+                    onClick={() => {
+                      sessionStorage.setItem(
+                        GUEST_STORAGE_KEYS.preLoginUrl,
+                        window.location.pathname + window.location.search,
+                      );
+                      navigate('/');
+                    }}
+                  >
+                    Login to Generate Worksheets
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full gap-2"
+                    onClick={handleGenerate}
+                    loading={genState === 'generating'}
+                    disabled={selectedTypes.length === 0 || genState === 'generating'}
+                  >
+                    {genState !== 'generating' && <Sparkles className="size-5" />}
+                    {genState === 'generating' ? 'Generating...' : 'Generate Worksheet'}
+                  </Button>
+                )}
 
                 {genError && (
                   <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive font-semibold">
@@ -790,6 +827,11 @@ const GenerateWorksheetPage: React.FC = () => {
         )}
 
       </div>
+
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+      />
     </AppLayout>
   );
 };

@@ -16,7 +16,7 @@ import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data
 import { loadWorksheet } from './worksheetStorage';
 import { mapApiToWorksheet } from './apiMapper';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth';
 import type { SolveMode, Worksheet } from './types';
 
 /** Main solve page — handles all screens (mode select, solve, results) */
@@ -46,20 +46,9 @@ export default function SolvePage() {
     }
 
     // 3. Fetch from API (real generated worksheets)
-    // Ensure we have a token (use existing auth or get a guest token)
     (async () => {
       try {
-        let token = getToken();
-        if (!token) {
-          const guestRes = await fetch(`${apiUrl}/api/auth/guest`, {
-            method: 'POST',
-            signal: controller.signal,
-          });
-          if (guestRes.ok) {
-            const guestData = await guestRes.json();
-            token = guestData.token;
-          }
-        }
+        const token = getAuthToken();
 
         const res = await fetch(`${apiUrl}/api/solve/${worksheetId}`, {
           signal: controller.signal,

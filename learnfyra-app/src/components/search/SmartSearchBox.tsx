@@ -49,7 +49,7 @@ const SmartSearchBox: React.FC<SmartSearchBoxProps> = ({ externalGrade, onExtern
   };
 
   const maybeShowNudge = (ctx: SearchContext) => {
-    if (auth.isAuthenticated || wasNudgeShown()) {
+    if (auth.tokenState === 'authenticated' || wasNudgeShown()) {
       goToWorksheet(ctx);
     } else {
       setPendingContext(ctx);

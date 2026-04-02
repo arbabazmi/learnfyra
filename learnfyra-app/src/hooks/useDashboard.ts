@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth';
 import type { DashboardStats, DashboardWorksheet, SubjectProgress } from '@/types/dashboard';
 
 // ── Dummy data for guest mode ──────────────────────────────────────────────
@@ -58,7 +58,7 @@ export interface UseDashboardReturn {
 export function useDashboard(): UseDashboardReturn {
   const auth = useAuth();
   const isGuest = auth.isGuest;
-  const token = getToken();
+  const token = getAuthToken();
 
   // Initialize with appropriate defaults — guest gets dummy data, logged-in gets empty (avoids flash of fake data)
   const EMPTY_STATS: DashboardStats = { worksheetsDone: 0, inProgress: 0, bestScore: 0, studyTime: '0m' };
@@ -69,7 +69,7 @@ export function useDashboard(): UseDashboardReturn {
   const [error, setError] = React.useState<string | null>(null);
   const greeting = getGreeting();
 
-  const userName = auth.isAuthenticated && auth.user
+  const userName = auth.tokenState === 'authenticated' && auth.user
     ? auth.user.displayName.split(' ')[0]
     : (auth.selectedRole ? auth.selectedRole.charAt(0).toUpperCase() + auth.selectedRole.slice(1) : 'Student');
 
