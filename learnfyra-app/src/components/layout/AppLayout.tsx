@@ -48,9 +48,14 @@ interface AppLayoutProps {
   pageTitle?: string;
 }
 
+function sanitizeName(name: string): string {
+  return name.replace(/<[^>]*>/g, '').trim() || 'Student';
+}
+
 function getInitials(name: string | undefined): string {
   if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
+  const safe = sanitizeName(name);
+  const parts = safe.trim().split(/\s+/);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return parts[0][0].toUpperCase();
 }
@@ -149,7 +154,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
               <GraduationCap className="size-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-foreground truncate">{auth.user.displayName}</p>
+              <p className="text-sm font-bold text-foreground truncate">{sanitizeName(auth.user.displayName)}</p>
               <p className="text-xs text-muted-foreground truncate capitalize">{auth.user.role}</p>
             </div>
             <button
@@ -250,7 +255,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
             </div>
             {/* User avatar — dynamic initials */}
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
-              {getInitials(auth.user?.displayName)}
+              {getInitials(auth.user?.displayName ? sanitizeName(auth.user.displayName) : undefined)}
             </div>
           </div>
         </header>

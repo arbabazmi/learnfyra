@@ -17,6 +17,10 @@ import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { useAuth } from '@/contexts/AuthContext';
 
+function sanitizeName(name: string): string {
+  return name.replace(/<[^>]*>/g, '').trim() || 'Student';
+}
+
 interface NavItem {
   label: string;
   href: string;
@@ -136,7 +140,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
                   )}
                 >
                   <User className="size-4" />
-                  {auth.user.displayName || 'Student'}
+                  {sanitizeName(auth.user.displayName || 'Student')}
                 </Link>
                 <Button variant="ghost" size="md" onClick={handleSignOut}>
                   <LogOut className="size-4 mr-1.5" />
@@ -212,7 +216,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
                     className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground rounded-lg hover:bg-muted transition-colors"
                   >
                     <User className="size-4" />
-                    {auth.user.displayName || 'Student'}
+                    {sanitizeName(auth.user.displayName || 'Student')}
                   </Link>
                   <Button variant="ghost" size="md" className="justify-center" onClick={() => { setIsOpen(false); handleSignOut(); }}>
                     <LogOut className="size-4 mr-1.5" />

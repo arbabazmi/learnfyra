@@ -87,11 +87,18 @@ async function exchangeCodeForTokens(code, codeVerifier) {
     code_verifier: codeVerifier,
   });
 
-  const response = await fetch(GOOGLE_TOKEN_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body.toString(),
-  });
+  let response;
+  try {
+    response = await fetch(GOOGLE_TOKEN_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    body.toString(),
+    });
+  } catch (err) {
+    const fetchErr = new Error(`Network error contacting Google token endpoint: ${err.message}`);
+    fetchErr.statusCode = 502;
+    throw fetchErr;
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -100,7 +107,15 @@ async function exchangeCodeForTokens(code, codeVerifier) {
     throw err;
   }
 
-  return response.json();
+  let tokenData;
+  try {
+    tokenData = await response.json();
+  } catch {
+    const parseErr = new Error('Invalid JSON response from provider.');
+    parseErr.statusCode = 502;
+    throw parseErr;
+  }
+  return tokenData;
 }
 
 /**
@@ -109,9 +124,16 @@ async function exchangeCodeForTokens(code, codeVerifier) {
  * @returns {Promise<{ sub: string, email: string, name: string, picture: string }>}
  */
 async function fetchGoogleUserInfo(accessToken) {
-  const response = await fetch(GOOGLE_USERINFO_URL, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let response;
+  try {
+    response = await fetch(GOOGLE_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    const fetchErr = new Error(`Network error contacting Google userinfo endpoint: ${err.message}`);
+    fetchErr.statusCode = 502;
+    throw fetchErr;
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -120,7 +142,15 @@ async function fetchGoogleUserInfo(accessToken) {
     throw err;
   }
 
-  return response.json();
+  let userInfo;
+  try {
+    userInfo = await response.json();
+  } catch {
+    const parseErr = new Error('Invalid JSON response from provider.');
+    parseErr.statusCode = 502;
+    throw parseErr;
+  }
+  return userInfo;
 }
 
 // ---------------------------------------------------------------------------

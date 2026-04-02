@@ -63,6 +63,26 @@ async function handleStudentRewards(decoded, studentId) {
   }
 
   const db = getDbAdapter();
+
+  // Teachers may only view rewards for students enrolled in one of their classes.
+  if (decoded.role === 'teacher') {
+    // Collect every class this student belongs to
+    const studentMemberships = await db.queryByField('memberships', 'studentId', studentId);
+    if (!studentMemberships || studentMemberships.length === 0) {
+      return errorResponse(403, 'Forbidden');
+    }
+
+    // Collect every class owned by this teacher
+    const teacherClasses = await db.queryByField('classes', 'teacherId', decoded.sub);
+    const teacherClassIds = new Set((teacherClasses || []).map((c) => c.classId));
+
+    // The student must belong to at least one of the teacher's classes
+    const isEnrolled = studentMemberships.some((m) => teacherClassIds.has(m.classId));
+    if (!isEnrolled) {
+      return errorResponse(403, 'Forbidden');
+    }
+  }
+
   const profile = await db.getItem('rewardProfiles', studentId);
 
   if (!profile) {

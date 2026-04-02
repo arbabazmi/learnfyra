@@ -148,15 +148,21 @@ export async function resetPassword(tokenId, newPassword) {
     throw err;
   }
 
-  // Mark the token as used FIRST (prevent race condition / reuse)
-  const marked = await db.updateItem(RESET_TABLE, tokenId, { used: true });
-  if (!marked) {
-    const err = new Error('Failed to process reset token.');
+  // Hash the new password and update the user record FIRST.
+  // If this fails, the token remains valid so the student can retry.
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  const updated = await db.updateItem(USERS_TABLE, record.userId, { passwordHash });
+  if (!updated) {
+    const err = new Error('Failed to update password. Please try again.');
     err.statusCode = 500;
     throw err;
   }
 
-  // Hash the new password and update the user record
-  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-  await db.updateItem(USERS_TABLE, record.userId, { passwordHash });
+  // Only mark the token as used AFTER the password has been successfully saved.
+  // A failure here is non-fatal from the user's perspective — their password
+  // is already updated — but we log it so the token can be cleaned up manually.
+  const marked = await db.updateItem(RESET_TABLE, tokenId, { used: true });
+  if (!marked) {
+    console.error(`passwordReset: failed to mark token ${tokenId} as used after successful password update.`);
+  }
 }

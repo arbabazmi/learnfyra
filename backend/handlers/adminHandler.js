@@ -6,6 +6,8 @@
 import { createHash, randomUUID } from 'crypto';
 import { validateToken, requireRole } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -313,6 +315,105 @@ async function writeAuditEvent(db, decoded, action, target, before, after, reaso
   });
 }
 
+// ── Conditional-write helpers for idempotency ─────────────────────────────────
+
+/**
+ * Lazy singleton DynamoDB document client for idempotency conditional writes.
+ * Mirrors the config from dynamoDbAdapter.
+ * @returns {DynamoDBDocumentClient}
+ */
+let _idempotencyDocClient = null;
+function getIdempotencyDocClient() {
+  if (!_idempotencyDocClient) {
+    const cfg = { region: process.env.AWS_REGION || 'us-east-1' };
+    const endpoint = process.env.DYNAMODB_ENDPOINT;
+    if (endpoint) {
+      cfg.endpoint = endpoint;
+      cfg.credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'local',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'local',
+      };
+    }
+    _idempotencyDocClient = DynamoDBDocumentClient.from(new DynamoDBClient(cfg), {
+      marshallOptions: { removeUndefinedValues: true },
+    });
+  }
+  return _idempotencyDocClient;
+}
+
+/**
+ * Resolves the DynamoDB table name for adminIdempotency, matching the
+ * convention in dynamoDbAdapter's TABLE_CONFIG entry.
+ * @returns {string}
+ */
+function resolveIdempotencyTable() {
+  return (
+    process.env.ADMIN_IDEMPOTENCY_TABLE_NAME ||
+    `LearnfyraAdminIdempotency-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`
+  );
+}
+
+/**
+ * Attempts a conditional PutItem that only succeeds when no item with the
+ * given id already exists (attribute_not_exists). Returns true on success,
+ * false when the item already exists (ConditionalCheckFailedException).
+ *
+ * For local JSON-file runtime (APP_RUNTIME unset) this falls back to the
+ * db adapter's putItem (no conditions needed — local dev is single-process).
+ *
+ * @param {Object} db - DB adapter instance (used for local fallback)
+ * @param {Object} record - Full idempotency record to write (must have `id`)
+ * @returns {Promise<boolean>} true = newly written, false = already existed
+ */
+async function conditionalPutIdempotency(db, record) {
+  const runtime = process.env.APP_RUNTIME;
+
+  if (runtime !== 'aws' && runtime !== 'dynamodb') {
+    // Local JSON adapter — no conditions needed; single-process, no races
+    await db.putItem('adminIdempotency', record);
+    return true;
+  }
+
+  const tableName = resolveIdempotencyTable();
+  try {
+    await getIdempotencyDocClient().send(new PutCommand({
+      TableName: tableName,
+      Item: record,
+      ConditionExpression: 'attribute_not_exists(#id)',
+      ExpressionAttributeNames: { '#id': 'id' },
+    }));
+    return true;
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetches an existing idempotency record by its composite id.
+ * Used to retrieve the cached response after a conditional write collision.
+ *
+ * @param {Object} db - DB adapter (used for local fallback)
+ * @param {string} recordId
+ * @returns {Promise<Object|null>}
+ */
+async function getIdempotencyRecord(db, recordId) {
+  const runtime = process.env.APP_RUNTIME;
+
+  if (runtime !== 'aws' && runtime !== 'dynamodb') {
+    return db.getItem('adminIdempotency', recordId);
+  }
+
+  const tableName = resolveIdempotencyTable();
+  const result = await getIdempotencyDocClient().send(new GetCommand({
+    TableName: tableName,
+    Key: { id: recordId },
+  }));
+  return result.Item ?? null;
+}
+
 async function applyIdempotentMutation(db, event, decoded, action, mutationFn) {
   const key = getIdempotencyKey(event.headers || {});
   if (!key || typeof key !== 'string' || !key.trim()) {
@@ -323,22 +424,14 @@ async function applyIdempotentMutation(db, event, decoded, action, mutationFn) {
   const recordId = `${decoded.sub}#${endpoint}#${key.trim()}`;
   const requestHash = hashRequest(event.body || {});
 
-  const existing = await db.getItem('adminIdempotency', recordId);
-  if (existing) {
-    if (existing.requestHash !== requestHash) {
-      return errorResponse(409, 'Idempotency key reuse conflict.', 'ADMIN_CONFLICT');
-    }
-    return {
-      statusCode: existing.responseStatusCode,
-      headers: corsHeaders,
-      body: existing.responseBody,
-    };
-  }
-
+  // Phase 1: Run the mutation before touching the idempotency table so we
+  // have a real response to store.
   const response = await mutationFn();
 
   if (response.statusCode < 400) {
-    await db.putItem('adminIdempotency', {
+    // Phase 2: Attempt a conditional write — only succeeds when no record
+    // with this id exists yet (attribute_not_exists).
+    const newRecord = {
       id: recordId,
       actorId: decoded.sub,
       idempotencyKey: key.trim(),
@@ -348,7 +441,41 @@ async function applyIdempotentMutation(db, event, decoded, action, mutationFn) {
       responseBody: response.body,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    });
+    };
+
+    const written = await conditionalPutIdempotency(db, newRecord);
+
+    if (!written) {
+      // Another concurrent request already stored a record for this key.
+      // Fetch it and verify the request hash matches before returning it.
+      const existing = await getIdempotencyRecord(db, recordId);
+      if (existing) {
+        if (existing.requestHash !== requestHash) {
+          return errorResponse(409, 'Idempotency key reuse conflict.', 'ADMIN_CONFLICT');
+        }
+        return {
+          statusCode: existing.responseStatusCode,
+          headers: corsHeaders,
+          body: existing.responseBody,
+        };
+      }
+      // Record vanished between the collision and the fetch (unlikely) —
+      // return the response we computed above rather than failing.
+    }
+  } else {
+    // Mutation failed — check whether a prior successful record exists for
+    // this key (idempotent replay of a previously-succeeded request).
+    const existing = await getIdempotencyRecord(db, recordId);
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        return errorResponse(409, 'Idempotency key reuse conflict.', 'ADMIN_CONFLICT');
+      }
+      return {
+        statusCode: existing.responseStatusCode,
+        headers: corsHeaders,
+        body: existing.responseBody,
+      };
+    }
   }
 
   return response;

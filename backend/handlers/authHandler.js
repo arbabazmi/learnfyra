@@ -165,6 +165,10 @@ async function handleRefresh(body) {
     return errorResponse(400, 'refreshToken is required.');
   }
 
+  if (!refreshToken || typeof refreshToken !== 'string' || refreshToken.length > 4096) {
+    return errorResponse(400, 'Invalid refresh token format.');
+  }
+
   try {
     const authAdapter = getAuthAdapter();
     const token = authAdapter.refreshAccessToken(refreshToken);

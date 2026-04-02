@@ -161,7 +161,14 @@ export const dynamoDbAdapter = {
    */
   async putItem(table, item) {
     const { tableName } = resolveTable(table);
-    await getDocClient().send(new PutCommand({ TableName: tableName, Item: item }));
+    try {
+      await getDocClient().send(new PutCommand({ TableName: tableName, Item: item }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
     return item;
   },
 
@@ -177,21 +184,37 @@ export const dynamoDbAdapter = {
 
     if (!sk) {
       // Simple single-key table — use GetItem for O(1) lookup
-      const result = await getDocClient().send(new GetCommand({
-        TableName: tableName,
-        Key: { [pk]: id },
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new GetCommand({
+          TableName: tableName,
+          Key: { [pk]: id },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       return result.Item ?? null;
     }
 
     // Composite-key table — query by PK and return the first result
-    const result = await getDocClient().send(new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: '#pk = :pkval',
-      ExpressionAttributeNames: { '#pk': pk },
-      ExpressionAttributeValues: { ':pkval': id },
-      Limit: 1,
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: '#pk = :pkval',
+        ExpressionAttributeNames: { '#pk': pk },
+        ExpressionAttributeValues: { ':pkval': id },
+        Limit: 1,
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
     return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
   },
 
@@ -209,28 +232,50 @@ export const dynamoDbAdapter = {
       // Single-key table — attempt GetItem first to check existence
       const existing = await this.getItem(table, id);
       if (!existing) return false;
-      await getDocClient().send(new DeleteCommand({
-        TableName: tableName,
-        Key: { [pk]: id },
-      }));
+      try {
+        await getDocClient().send(new DeleteCommand({
+          TableName: tableName,
+          Key: { [pk]: id },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       return true;
     }
 
     // Composite-key table — query all items for this PK, then delete each
-    const result = await getDocClient().send(new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: '#pk = :pkval',
-      ExpressionAttributeNames: { '#pk': pk },
-      ExpressionAttributeValues: { ':pkval': id },
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: '#pk = :pkval',
+        ExpressionAttributeNames: { '#pk': pk },
+        ExpressionAttributeValues: { ':pkval': id },
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
 
     if (!result.Items || result.Items.length === 0) return false;
 
     for (const item of result.Items) {
-      await getDocClient().send(new DeleteCommand({
-        TableName: tableName,
-        Key: { [pk]: item[pk], [sk]: item[sk] },
-      }));
+      try {
+        await getDocClient().send(new DeleteCommand({
+          TableName: tableName,
+          Key: { [pk]: item[pk], [sk]: item[sk] },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
     }
     return true;
   },
@@ -250,13 +295,21 @@ export const dynamoDbAdapter = {
     let lastKey;
 
     do {
-      const result = await getDocClient().send(new ScanCommand({
-        TableName: tableName,
-        FilterExpression: '#field = :val',
-        ExpressionAttributeNames: { '#field': fieldName },
-        ExpressionAttributeValues: { ':val': value },
-        ExclusiveStartKey: lastKey,
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new ScanCommand({
+          TableName: tableName,
+          FilterExpression: '#field = :val',
+          ExpressionAttributeNames: { '#field': fieldName },
+          ExpressionAttributeValues: { ':val': value },
+          ExclusiveStartKey: lastKey,
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);
@@ -275,10 +328,18 @@ export const dynamoDbAdapter = {
     let lastKey;
 
     do {
-      const result = await getDocClient().send(new ScanCommand({
-        TableName: tableName,
-        ExclusiveStartKey: lastKey,
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new ScanCommand({
+          TableName: tableName,
+          ExclusiveStartKey: lastKey,
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);
@@ -315,12 +376,20 @@ export const dynamoDbAdapter = {
       return this.getItem(table, id);
     }
 
-    const result = await getDocClient().send(new UpdateCommand({
-      TableName: tableName,
-      Key: key,
-      ...expr,
-      ReturnValues: 'ALL_NEW',
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new UpdateCommand({
+        TableName: tableName,
+        Key: key,
+        ...expr,
+        ReturnValues: 'ALL_NEW',
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
 
     return result.Attributes ?? null;
   },
@@ -360,7 +429,15 @@ export const dynamoDbAdapter = {
 
     do {
       params.ExclusiveStartKey = lastKey;
-      const result = await getDocClient().send(new QueryCommand(params));
+      let result;
+      try {
+        result = await getDocClient().send(new QueryCommand(params));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);

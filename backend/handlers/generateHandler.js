@@ -34,29 +34,31 @@ function getSsm() { if (!_ssm) _ssm = new SSMClient({}); return _ssm; }
 
 const DIAGNOSTIC_HEADERS = 'x-request-id,x-client-request-id';
 
-// Cache the API key in module scope so it is only fetched once per cold start.
-let _apiKeyLoaded = false;
+// Promise singleton — resolves once per cold start, concurrent callers share
+// the same in-flight request instead of racing to fetch the parameter.
+let _apiKeyPromise;
 
 /**
  * Fetches the Anthropic API key from SSM Parameter Store on first invocation
  * and sets it as process.env.ANTHROPIC_API_KEY so client.js can read it.
  * Skipped when the env var is already set (local dev / unit tests).
+ * Concurrent callers share the same Promise so SSM is only called once.
  */
 async function loadApiKey() {
-  if (_apiKeyLoaded || process.env.ANTHROPIC_API_KEY) {
-    _apiKeyLoaded = true;
-    return;
-  }
-  const paramName = process.env.SSM_PARAM_NAME;
-  if (!paramName) {
-    throw new Error('SSM_PARAM_NAME env var is not set.');
-  }
-  const { Parameter } = await getSsm().send(new GetParameterCommand({
-    Name: paramName,
-    WithDecryption: true,
-  }));
-  process.env.ANTHROPIC_API_KEY = Parameter.Value;
-  _apiKeyLoaded = true;
+  if (process.env.ANTHROPIC_API_KEY) return;
+  if (_apiKeyPromise) return _apiKeyPromise;
+  _apiKeyPromise = (async () => {
+    const paramName = process.env.SSM_PARAM_NAME;
+    if (!paramName) {
+      throw new Error('SSM_PARAM_NAME env var is not set.');
+    }
+    const { Parameter } = await getSsm().send(new GetParameterCommand({
+      Name: paramName,
+      WithDecryption: true,
+    }));
+    process.env.ANTHROPIC_API_KEY = Parameter.Value;
+  })();
+  return _apiKeyPromise;
 }
 
 // Lazy import helpers — only loaded on first real invocation

@@ -9,8 +9,7 @@
  */
 
 import { promises as fs } from 'fs';
-import { join, dirname, resolve, sep } from 'path';
-import { fileURLToPath } from 'url';
+import path, { join, resolve } from 'path';
 
 // __dirname is not available in Lambda CJS bundle; use process.cwd() for root
 const __dirname = process.cwd();
@@ -56,13 +55,9 @@ function toPublicQuestion(question) {
  * @param {string} childDir
  * @returns {boolean}
  */
-function isWithinBaseDir(baseDir, childDir) {
-  const normalize = process.platform === 'win32'
-    ? (value) => value.toLowerCase()
-    : (value) => value;
-  const base = normalize(baseDir);
-  const child = normalize(childDir);
-  return child.startsWith(base + sep);
+function isWithinBaseDir(baseDir, childPath) {
+  const rel = path.relative(baseDir, childPath);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 /**

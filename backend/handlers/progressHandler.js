@@ -19,6 +19,8 @@
 import { randomUUID } from 'crypto';
 import { validateToken } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
@@ -225,6 +227,124 @@ function resolveDisplayName(user) {
   return user.displayName || user.name || user.fullName || user.email || 'Student';
 }
 
+// ── Lazy DynamoDB document client for atomic aggregate updates ─────────────────
+let _aggregateDdbClient = null;
+
+/**
+ * Returns a DynamoDBDocumentClient for atomic aggregate increments.
+ * Shares the same config as dynamoDbAdapter (endpoint + region from env).
+ * @returns {DynamoDBDocumentClient}
+ */
+function getAggregateDocClient() {
+  if (!_aggregateDdbClient) {
+    const clientConfig = { region: process.env.AWS_REGION || 'us-east-1' };
+    const endpoint = process.env.DYNAMODB_ENDPOINT;
+    if (endpoint) {
+      clientConfig.endpoint = endpoint;
+      clientConfig.credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'local',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'local',
+      };
+    }
+    const base = new DynamoDBClient(clientConfig);
+    _aggregateDdbClient = DynamoDBDocumentClient.from(base, {
+      marshallOptions: { removeUndefinedValues: true },
+    });
+  }
+  return _aggregateDdbClient;
+}
+
+/**
+ * Resolves the DynamoDB table name for the aggregates table, mirroring the
+ * convention used by dynamoDbAdapter so we can issue raw UpdateCommand calls.
+ * @returns {string}
+ */
+function resolveAggregatesTable() {
+  return (
+    process.env.AGGREGATES_TABLE_NAME ||
+    `LearnfyraAggregates-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`
+  );
+}
+
+/**
+ * Atomically increments aggregate counters for a student+subject record.
+ * Uses DynamoDB ADD / if_not_exists expressions so no read is required and
+ * concurrent saves cannot lose counts.
+ *
+ * For the local JSON-file adapter (APP_RUNTIME unset) this path is not
+ * reached — the caller falls back to the adapter-based upsert.
+ *
+ * @param {string} aggregateId   - Composite key e.g. "{studentId}#{subject}"
+ * @param {string} studentId
+ * @param {string} subject
+ * @param {number} totalScore    - Score delta for this attempt
+ * @param {number} totalPoints   - Points delta for this attempt
+ * @param {string} now           - ISO timestamp
+ * @returns {Promise<void>}
+ */
+async function atomicIncrementAggregate(aggregateId, studentId, subject, totalScore, totalPoints, now) {
+  const tableName = resolveAggregatesTable();
+  const ddb = getAggregateDocClient();
+
+  // SET all default fields only when the item does not yet exist (if_not_exists),
+  // then always increment the running counters with ADD.
+  await ddb.send(new UpdateCommand({
+    TableName: tableName,
+    Key: { id: aggregateId },
+    UpdateExpression: [
+      'SET',
+      '  #studentId   = if_not_exists(#studentId, :studentId),',
+      '  #subject     = if_not_exists(#subject, :subject),',
+      '  #createdAt   = if_not_exists(#createdAt, :now),',
+      '  #lastAttemptAt = :now,',
+      '  #updatedAt   = :now',
+      'ADD',
+      '  #attemptCount :one,',
+      '  #totalScoreAcc :totalScore,',
+      '  #totalPointsAcc :totalPoints',
+    ].join(' '),
+    ExpressionAttributeNames: {
+      '#studentId':     'studentId',
+      '#subject':       'subject',
+      '#createdAt':     'createdAt',
+      '#lastAttemptAt': 'lastAttemptAt',
+      '#updatedAt':     'updatedAt',
+      '#attemptCount':  'attemptCount',
+      '#totalScoreAcc': 'totalScore',
+      '#totalPointsAcc':'totalPoints',
+    },
+    ExpressionAttributeValues: {
+      ':studentId':  studentId,
+      ':subject':    subject,
+      ':now':        now,
+      ':one':        1,
+      ':totalScore': totalScore,
+      ':totalPoints':totalPoints,
+    },
+  }));
+
+  // Re-read the updated record and write back the derived averagePercentage field.
+  // This is a best-effort denormalization; a race here only affects the cached
+  // percentage display — the raw counters (totalScore / totalPoints) remain correct.
+  const { GetCommand } = await import('@aws-sdk/lib-dynamodb');
+  const result = await ddb.send(new GetCommand({
+    TableName: tableName,
+    Key: { id: aggregateId },
+  }));
+  const item = result.Item;
+  if (item && item.totalPoints > 0) {
+    await ddb.send(new UpdateCommand({
+      TableName: tableName,
+      Key: { id: aggregateId },
+      UpdateExpression: 'SET #avg = :avg',
+      ExpressionAttributeNames: { '#avg': 'averagePercentage' },
+      ExpressionAttributeValues: {
+        ':avg': Math.round((item.totalScore / item.totalPoints) * 100),
+      },
+    }));
+  }
+}
+
 /**
  * POST /api/progress/save
  * Body: { worksheetId, grade, subject, topic, difficulty, classId?,
@@ -319,36 +439,52 @@ async function handleSave(decoded, body) {
 
   // Update / create the aggregate record for this student + subject combo.
   // The aggregate is keyed by "{studentId}#{subject}" so getItem can find it.
+  //
+  // When running against real DynamoDB (APP_RUNTIME=aws or APP_RUNTIME=dynamodb)
+  // we issue a single atomic UpdateCommand using ADD expressions — no read
+  // required, no lost updates under concurrency.
+  //
+  // For the local JSON-file adapter (APP_RUNTIME unset) we fall back to the
+  // original read-modify-write, which is safe because local dev is single-process.
   const aggregateId = `${decoded.sub}#${subject}`;
-  const existing = await db.getItem('aggregates', aggregateId);
+  const runtime = process.env.APP_RUNTIME;
 
-  if (existing) {
-    const newAttemptCount = (Number(existing.attemptCount) || 0) + 1;
-    const newTotalScore   = existing.totalScore + totalScore;
-    const newTotalPoints  = existing.totalPoints + totalPoints;
-    await db.updateItem('aggregates', aggregateId, {
-      attemptCount: newAttemptCount,
-      totalScore:   newTotalScore,
-      totalPoints:  newTotalPoints,
-      averagePercentage: newTotalPoints > 0
-        ? Math.round((newTotalScore / newTotalPoints) * 100)
-        : 0,
-      lastAttemptAt: now,
-      updatedAt: now,
-    });
+  if (runtime === 'aws' || runtime === 'dynamodb') {
+    await atomicIncrementAggregate(
+      aggregateId, decoded.sub, subject, totalScore, totalPoints, now,
+    );
   } else {
-    await db.putItem('aggregates', {
-      id: aggregateId,
-      studentId: decoded.sub,
-      subject,
-      attemptCount: 1,
-      totalScore,
-      totalPoints,
-      averagePercentage: totalPoints > 0 ? Math.round((totalScore / totalPoints) * 100) : 0,
-      lastAttemptAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Local JSON adapter — read-modify-write is safe (single process, no concurrency)
+    const existing = await db.getItem('aggregates', aggregateId);
+
+    if (existing) {
+      const newAttemptCount = (Number(existing.attemptCount) || 0) + 1;
+      const newTotalScore   = (Number(existing.totalScore) || 0) + totalScore;
+      const newTotalPoints  = (Number(existing.totalPoints) || 0) + totalPoints;
+      await db.updateItem('aggregates', aggregateId, {
+        attemptCount: newAttemptCount,
+        totalScore:   newTotalScore,
+        totalPoints:  newTotalPoints,
+        averagePercentage: newTotalPoints > 0
+          ? Math.round((newTotalScore / newTotalPoints) * 100)
+          : 0,
+        lastAttemptAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await db.putItem('aggregates', {
+        id: aggregateId,
+        studentId: decoded.sub,
+        subject,
+        attemptCount: 1,
+        totalScore,
+        totalPoints,
+        averagePercentage: totalPoints > 0 ? Math.round((totalScore / totalPoints) * 100) : 0,
+        lastAttemptAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   }
 
   // ── Certificate issuance (non-fatal) ───────────────────────────────────────
