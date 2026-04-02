@@ -433,6 +433,26 @@ export class LearnfyraStack extends cdk.Stack {
       },
     });
 
+    // ── Gateway Responses with CORS headers ────────────────────────────────
+    // API Gateway default 4xx/5xx responses (e.g. authorizer 401, missing route 403)
+    // do not include CORS headers, so browsers block them ("Failed to fetch").
+    api.addGatewayResponse('GatewayResponseDefault4XX', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
+    api.addGatewayResponse('GatewayResponseDefault5XX', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${allowedOrigin}'`,
+        'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+        'Access-Control-Allow-Methods': "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+      },
+    });
+
     // Origin Access Identity — grants CloudFront read access to the private bucket
     const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
       comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
