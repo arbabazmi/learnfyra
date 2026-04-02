@@ -332,18 +332,16 @@ describe('resetPassword — valid token (happy path)', () => {
     expect(payload).toEqual({ used: true });
   });
 
-  it('marks the token as used BEFORE updating the user password (race-condition guard)', async () => {
+  it('updates the user password BEFORE marking the token as used (so token stays valid on failure)', async () => {
     const callOrder = [];
     mockUpdateItem.mockImplementation(async (table) => {
       callOrder.push(table);
-      // Must return a truthy value — the source guards `if (!marked)` after the
-      // first updateItem call and throws 500 if the result is falsy.
       return { updated: true };
     });
 
     await resetPassword(MOCK_TOKEN, 'NewPass1!');
-    expect(callOrder[0]).toBe('passwordresets');
-    expect(callOrder[1]).toBe('users');
+    expect(callOrder[0]).toBe('users');
+    expect(callOrder[1]).toBe('passwordresets');
   });
 
   it('does not call sendMail during a password reset', async () => {

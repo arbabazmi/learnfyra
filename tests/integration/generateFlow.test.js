@@ -734,7 +734,7 @@ describe('generateFlow — backward-compatible response shape', () => {
   it('metadata contains a solveUrl pointing to the correct worksheetId', async () => {
     const result = await handler(mockEvent(validBody), mockContext);
     const { metadata } = JSON.parse(result.body);
-    expect(metadata.solveUrl).toBe(`/solve.html?id=${metadata.id}`);
+    expect(metadata.solveUrl).toBe(`/solve/${metadata.id}`);
   });
 
   it('metadata.id matches the worksheetId embedded in the worksheetKey path', async () => {
