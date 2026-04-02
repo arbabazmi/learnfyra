@@ -128,15 +128,23 @@ jobs:
           FRONTEND_BUCKET=$(jq -r '.["LearnfyraStack-dev"]["FrontendBucketName"]' infra/cdk/cdk-outputs.json)
           FRONTEND_URL=$(jq -r '.["LearnfyraStack-dev"]["FrontendUrl"]' infra/cdk/cdk-outputs.json)
           API_URL=$(jq -r '.["LearnfyraStack-dev"]["ApiGatewayUrl"]' infra/cdk/cdk-outputs.json)
+          CF_DIST_ID=$(jq -r '.["LearnfyraStack-dev"]["DistributionId"]' infra/cdk/cdk-outputs.json)
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "cf_dist_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
         run: |
           aws s3 sync learnfyra-app/dist/ s3://${{ steps.cdk-outputs.outputs.frontend_bucket }}/ \
             --delete \
             --region ${{ vars.AWS_REGION }}
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.cdk-outputs.outputs.cf_dist_id }} \
+            --paths "/*"
 
       - name: Smoke check new backend routes
         run: |
