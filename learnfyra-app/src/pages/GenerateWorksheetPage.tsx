@@ -114,6 +114,7 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
+  const [s3Keys, setS3Keys] = React.useState<{ worksheetKey: string | null; answerKeyKey: string | null }>({ worksheetKey: null, answerKeyKey: null });
   const navigate = useNavigate();
 
   usePageMeta({
@@ -206,6 +207,46 @@ const GenerateWorksheetPage: React.FC = () => {
       // Store the worksheet ID from the API response
       const wsId = data.metadata?.id || data.worksheetId;
       if (!wsId) throw new Error('No worksheet ID in response');
+
+      // Store S3 keys for download buttons
+      setS3Keys({
+        worksheetKey: data.worksheetKey || null,
+        answerKeyKey: data.answerKeyKey || null,
+      });
+
+      // Fetch the solve data (questions without answers) and save to localStorage
+      // This enables client-side PDF/Word export for the questions-only worksheet
+      try {
+        const solveRes = await fetch(`${apiUrl}/api/solve/${wsId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (solveRes.ok) {
+          const solveData = await solveRes.json();
+          saveWorksheet({
+            worksheetId: wsId,
+            title: solveData.title || `${subject}: ${topic}`,
+            grade: gradeNum,
+            subject: subject as any,
+            topic,
+            difficulty: (difficulty || 'medium').toLowerCase() as any,
+            estimatedTimeSeconds: solveData.timerSeconds || questionCount * 90,
+            totalPoints: solveData.totalPoints || questionCount,
+            questions: (solveData.questions || []).map((q: any, i: number) => ({
+              ...q,
+              id: q.id || `q-${i + 1}`,
+              number: q.number || i + 1,
+              correctAnswer: '',
+              explanation: '',
+              hint1: '',
+              hint2: '',
+              difficulty: (q.difficulty || difficulty || 'medium').toLowerCase(),
+              points: q.points || 1,
+            })),
+          });
+        }
+      } catch {
+        // Non-critical — client-side export won't work but S3 downloads still will
+      }
 
       setGeneratedId(wsId);
       setGenState('success');

@@ -15,6 +15,7 @@ import { useSolveResults } from './hooks/useSolveResults';
 import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data';
 import { loadWorksheet } from './worksheetStorage';
 import { apiUrl } from '@/lib/env';
+import { getToken } from '@/lib/auth';
 import type { SolveMode, Worksheet } from './types';
 
 /** Main solve page — handles all screens (mode select, solve, results) */
@@ -44,7 +45,10 @@ export default function SolvePage() {
     }
 
     // 3. Fetch from API (real generated worksheets)
-    fetch(`${apiUrl}/api/solve/${worksheetId}`, { signal: controller.signal })
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    fetch(`${apiUrl}/api/solve/${worksheetId}`, { signal: controller.signal, headers })
       .then((res) => {
         if (!res.ok) throw new Error(`Worksheet not found (${res.status})`);
         return res.json();
