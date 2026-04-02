@@ -15,9 +15,21 @@
  */
 
 import { randomUUID } from 'crypto';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getAuthAdapter, getOAuthAdapter } from '../../src/auth/index.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { requestPasswordReset, resetPassword as executeReset } from '../../src/auth/passwordReset.js';
+import { signToken } from '../../src/auth/tokenUtils.js';
+
+// Lazy DynamoDB client for GuestSessions writes (cold-start optimization)
+let _guestDocClient;
+function getGuestDocClient() {
+  if (!_guestDocClient) {
+    _guestDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  }
+  return _guestDocClient;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -26,6 +38,7 @@ const corsHeaders = {
 };
 
 const VALID_ROLES = ['student', 'teacher', 'parent'];
+const VALID_GUEST_ROLES = ['student', 'teacher', 'parent'];
 
 /**
  * Builds a standard error response.
@@ -349,6 +362,81 @@ async function handleResetPassword(body) {
 }
 
 /**
+ * POST /api/auth/guest
+ * Issues a 30-day guest JWT for unauthenticated users.
+ * Creates a GuestSessions DynamoDB record to track worksheet usage.
+ * Body: { role: "student" | "teacher" | "parent" }
+ * Returns: { guestToken, guestId, expiresAt } + Set-Cookie header
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleGuest(body) {
+  const { role } = body || {};
+
+  if (!role || !VALID_GUEST_ROLES.includes(role)) {
+    return errorResponse(400, `role is required and must be one of: ${VALID_GUEST_ROLES.join(', ')}.`);
+  }
+
+  const guestId = `guest_${randomUUID()}`;
+  const guestRole = `guest-${role}`;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ttlSeconds = 2592000; // 30 days
+  const expiresAtUnix = nowSeconds + ttlSeconds;
+  const expiresAt = new Date(expiresAtUnix * 1000).toISOString();
+
+  const guestJwt = signToken(
+    {
+      sub: guestId,
+      role: guestRole,
+      token_use: 'guest',
+      iss: 'learnfyra-guest-issuer',
+    },
+    '30d',
+  );
+
+  // Write GuestSessions record — worksheetIds intentionally omitted (DynamoDB
+  // does not support empty Sets; created on first ADD in generateHandler).
+  const tableName = process.env.GUEST_SESSIONS_TABLE;
+  if (tableName) {
+    await getGuestDocClient().send(new PutCommand({
+      TableName: tableName,
+      Item: {
+        PK: `GUEST#${guestId}`,
+        guestId,
+        role: guestRole,
+        createdAt: new Date().toISOString(),
+        ttl: expiresAtUnix,
+      },
+    }));
+  }
+
+  const cookieDomain = process.env.COOKIE_DOMAIN || 'localhost';
+  const cookieParts = [
+    `guestToken=${guestJwt}`,
+    'SameSite=Strict',
+    'Secure',
+    `Max-Age=${ttlSeconds}`,
+    'Path=/',
+  ];
+  // Only add Domain directive for non-localhost (avoids cookie issues in local dev)
+  if (cookieDomain !== 'localhost') {
+    cookieParts.push(`Domain=${cookieDomain}`);
+  }
+
+  return {
+    statusCode: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Set-Cookie': cookieParts.join('; '),
+    },
+    body: JSON.stringify({ guestToken: guestJwt, guestId, expiresAt }),
+  };
+}
+
+/**
  * Lambda handler — POST /api/auth/:action
  *
  * @param {Object} event - API Gateway event or Express-shaped mock event
@@ -387,6 +475,10 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/refresh')) {
       return await handleRefresh(body);
+    }
+
+    if (path.endsWith('/guest')) {
+      return await handleGuest(body);
     }
 
     if (path.endsWith('/forgot-password')) {

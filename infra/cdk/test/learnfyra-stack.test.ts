@@ -248,7 +248,7 @@ describe('LearnfyraStack (dev)', () => {
   });
 
   test('sets log retention policy for Lambda log groups', () => {
-    template.resourceCountIs('Custom::LogRetention', 15);
+    template.resourceCountIs('Custom::LogRetention', 16);
     template.hasResourceProperties('Custom::LogRetention', {
       RetentionInDays: 30,
     });

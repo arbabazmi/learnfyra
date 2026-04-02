@@ -15,6 +15,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -394,6 +395,16 @@ export class LearnfyraStack extends cdk.Stack {
             projectionType: dynamodb.ProjectionType.ALL,
           },
         ],
+      }
+    );
+
+    // ── DynamoDB: GuestSessions — tracks guest worksheet usage and limits ─────
+    const guestSessionsTable = createTable(
+      'GuestSessionsTable',
+      `LearnfyraGuestSessions-${appEnv}`,
+      'PK',
+      {
+        ttlAttribute: 'ttl',
       }
     );
 
@@ -877,6 +888,24 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-certificates — student certificate list and download`,
     });
 
+    // ── Lambda: Guest fixture handler ─────────────────────────────────────────
+    const guestFixtureFn = new NodejsFunction(this, 'GuestFixtureFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-guest-fixture`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('guestFixtureHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(5),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-guest-fixture — guest role preview fixtures`,
+    });
+
     // ── Lambda: Admin policies handler ────────────────────────────────────────
     const adminPoliciesFn = new NodejsFunction(this, 'AdminPoliciesFunction', {
       functionName: `learnfyra-${appEnv}-lambda-admin-policies`,
@@ -913,6 +942,7 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      guestFixtureFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
@@ -943,6 +973,15 @@ export class LearnfyraStack extends cdk.Stack {
 
     authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
     authFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+    authFn.addEnvironment('GUEST_SESSIONS_TABLE', guestSessionsTable.tableName);
+
+    // Cookie domain for guest token Set-Cookie header — scoped per environment
+    const cookieDomains: Record<string, string> = {
+      dev: '.dev.learnfyra.com',
+      staging: '.qa.learnfyra.com',
+      prod: '.learnfyra.com',
+    };
+    authFn.addEnvironment('COOKIE_DOMAIN', cookieDomains[appEnv] ?? 'localhost');
 
     generateFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
     generateFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
@@ -950,6 +989,7 @@ export class LearnfyraStack extends cdk.Stack {
     generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
     generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
     generateFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    generateFn.addEnvironment('GUEST_SESSIONS_TABLE', guestSessionsTable.tableName);
     solveFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
     submitFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
@@ -1122,6 +1162,11 @@ export class LearnfyraStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
+    authResource
+      .addResource('guest')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
 
     authResource
       .addResource('forgot-password')
@@ -1148,11 +1193,20 @@ export class LearnfyraStack extends cdk.Stack {
         apiKeyRequired: false,
       });
 
+    // GET /api/guest/preview?role=teacher|parent — public, no auth
+    const guestResource = apiResource.addResource('guest');
+    guestResource
+      .addResource('preview')
+      .addMethod('GET', new apigateway.LambdaIntegration(guestFixtureFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+
     apiResource
       .addResource('submit')
       .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     apiResource
@@ -1160,7 +1214,8 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('{worksheetId}')
       .addMethod('GET', new apigateway.LambdaIntegration(solveFn, { proxy: true }), {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
 
     const progressResource = apiResource.addResource('progress');
@@ -2112,6 +2167,50 @@ export class LearnfyraStack extends cdk.Stack {
     }
 
     // ── Outputs ────────────────────────────────────────────────────────────────
+    // ── WAF: Rate limit POST /auth/guest (prod only) ───────────────────────
+    if (isProd) {
+      const guestRateLimitAcl = new wafv2.CfnWebACL(this, 'GuestRateLimitACL', {
+        scope: 'REGIONAL',
+        defaultAction: { allow: {} },
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `GuestRateLimit-${appEnv}`,
+          sampledRequestsEnabled: true,
+        },
+        rules: [
+          {
+            name: 'GuestTokenIssuerRateLimit',
+            priority: 1,
+            action: { block: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `GuestTokenIssuerRateLimit-${appEnv}`,
+              sampledRequestsEnabled: true,
+            },
+            statement: {
+              rateBasedStatement: {
+                limit: 20, // 20 requests per 5-minute sliding window per IP
+                aggregateKeyType: 'IP',
+                scopeDownStatement: {
+                  byteMatchStatement: {
+                    fieldToMatch: { uriPath: {} },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: '/auth/guest',
+                    textTransformations: [{ priority: 0, type: 'NONE' }],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      });
+
+      new wafv2.CfnWebACLAssociation(this, 'GuestRateLimitACLAssociation', {
+        resourceArn: api.deploymentStage.stageArn,
+        webAclArn: guestRateLimitAcl.attrArn,
+      });
+    }
+
     new cdk.CfnOutput(this, 'FrontendUrl', {
       value: `https://${distribution.distributionDomainName}`,
       description: 'CloudFront URL (open this in your browser)',
