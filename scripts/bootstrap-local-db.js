@@ -142,6 +142,20 @@ const TABLE_DEFINITIONS = [
       { AttributeName: 'configKey', AttributeType: 'S' }
     ],
     BillingMode: 'PAY_PER_REQUEST'
+  },
+  {
+    TableName: `LearnfyraPasswordResets-${ENV}`,
+    KeySchema: [{ AttributeName: 'tokenId', KeyType: 'HASH' }],
+    AttributeDefinitions: [
+      { AttributeName: 'tokenId', AttributeType: 'S' },
+      { AttributeName: 'email', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [{
+      IndexName: 'email-index',
+      KeySchema: [{ AttributeName: 'email', KeyType: 'HASH' }],
+      Projection: { ProjectionType: 'ALL' }
+    }],
+    BillingMode: 'PAY_PER_REQUEST'
   }
 ];
 

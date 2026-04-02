@@ -1,11 +1,11 @@
 /**
  * @file server.js
- * @description Local development server. Serves the frontend as static files
- * and exposes /api/* routes backed by the real generators — no AWS/S3 needed.
+ * @description API-only backend server. Exposes /api/* routes backed by the
+ * real generators — no AWS/S3 needed. No frontend is served from this port.
  *
  * Usage:
- *   node server.js
- *   open http://localhost:3000
+ *   node server.js          # starts API on http://localhost:3000
+ *   cd learnfyra-app && npm run dev   # starts React frontend on http://localhost:5173
  *
  * Required env var:
  *   ANTHROPIC_API_KEY   your Anthropic API key (copy .env.example → .env)
@@ -28,7 +28,7 @@ const CORS_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const corsHeaders = {
   'Access-Control-Allow-Origin': CORS_ORIGIN,
   'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
 };
 
 // ── Validate required env vars ────────────────────────────────────────────────
@@ -86,8 +86,11 @@ const app = express();
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Serve the frontend
-app.use(express.static(join(__dirname, 'frontend')));
+// Global CORS — sets headers on every /api response so individual routes don't need to
+app.use('/api', (_req, res, next) => {
+  res.set(corsHeaders);
+  next();
+});
 
 // Serve locally generated worksheet files for download
 app.use('/local-files', express.static(LOCAL_FILES_DIR));
@@ -244,7 +247,7 @@ app.post('/api/generate', async (req, res) => {
       clientRequestId,
       metadata: {
         id: uuid,
-        solveUrl: `/solve.html?id=${uuid}`,
+        solveUrl: `/worksheet/${uuid}`,
         generatedAt: now.toISOString(),
         grade,
         subject,
@@ -296,7 +299,7 @@ app.get('/api/download', (req, res) => {
 app.options(/^\/api\/.*$/, (req, res) => {
   res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.set('Access-Control-Allow-Headers', 'Content-Type,X-Amz-Date,Authorization');
-  res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
   res.sendStatus(200);
 });
 
@@ -389,6 +392,7 @@ app.post('/api/submit', async (req, res) => {
 let _authHandler;
 let _studentHandler;
 let _progressHandler;
+let _dashboardHandler;
 let _classHandler;
 let _analyticsHandler;
 let _certificatesHandler;
@@ -428,6 +432,18 @@ const getProgressHandler = async () => {
     _progressHandler = mod.handler;
   }
   return _progressHandler;
+};
+
+/**
+ * Returns the dashboardHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getDashboardHandler = async () => {
+  if (!_dashboardHandler) {
+    const mod = await import('./backend/handlers/dashboardHandler.js');
+    _dashboardHandler = mod.handler;
+  }
+  return _dashboardHandler;
 };
 
 /**
@@ -523,6 +539,51 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/refresh ────────────────────────────────────────────────────
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/refresh', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth refresh route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/forgot-password ────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/forgot-password', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth forgot-password route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/reset-password ────────────────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/reset-password', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth reset-password route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── POST /api/auth/oauth/:provider ────────────────────────────────────────────
 app.post('/api/auth/oauth/:provider', async (req, res) => {
   try {
@@ -544,6 +605,7 @@ app.post('/api/auth/oauth/:provider', async (req, res) => {
 });
 
 // ── GET /api/auth/callback/:provider ──────────────────────────────────────────
+// The handler now returns a 302 redirect directly — just forward it.
 app.get('/api/auth/callback/:provider', async (req, res) => {
   try {
     const fn = await getAuthHandler();
@@ -557,10 +619,18 @@ app.get('/api/auth/callback/:provider', async (req, res) => {
       },
       {},
     );
+
+    if (result.statusCode === 302 && result.headers?.Location) {
+      return res.set(corsHeaders).redirect(result.headers.Location);
+    }
+
+    // Fallback: forward status + body as-is
     res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('auth callback route error:', err);
-    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const errorMsg = encodeURIComponent('Authentication failed. Please try again.');
+    return res.redirect(`${frontendOrigin}/?authError=${errorMsg}`);
   }
 });
 
@@ -577,6 +647,21 @@ app.get('/api/student/profile', async (req, res) => {
     console.error('student route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PATCH /api/student/profile ───────────────────────────────────────────────
+app.patch('/api/student/profile', async (req, res) => {
+  try {
+    const fn = await getStudentHandler();
+    const result = await fn(
+      { httpMethod: 'PATCH', path: '/api/student/profile', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -676,6 +761,51 @@ app.get('/api/progress/parent/:childId', async (req, res) => {
     console.error('progress route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/stats ──────────────────────────────────────────────────
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/stats', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/recent-worksheets ─────────────────────────────────────
+app.get('/api/dashboard/recent-worksheets', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/recent-worksheets', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/dashboard/subject-progress ──────────────────────────────────────
+app.get('/api/dashboard/subject-progress', async (req, res) => {
+  try {
+    const fn = await getDashboardHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/dashboard/subject-progress', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('dashboard route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -1132,14 +1262,15 @@ app.use((req, res, next) => {
   return next();
 });
 
-// Fallback for SPA (non-API paths only)
+// Non-API requests return 404 — frontend is served by Vite (port 5173), not Express.
 app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
-  res.sendFile(join(__dirname, 'frontend', 'index.html'));
+  res.status(404).json({ error: 'Frontend is served by Vite on port 5173. This server handles API routes only.' });
 });
 
 app.listen(PORT, () => {
-  console.log(`\nLearnfyra — local dev server`);
-  console.log(`  App:   http://localhost:${PORT}`);
-  console.log(`  Files: ${LOCAL_FILES_DIR}`);
-  console.log('\nReady. Open the URL above in your browser.\n');
+  console.log(`\nLearnfyra — API server (backend only)`);
+  console.log(`  API:      http://localhost:${PORT}/api`);
+  console.log(`  Files:    ${LOCAL_FILES_DIR}`);
+  console.log(`  Frontend: http://localhost:5173 (run Vite separately)`);
+  console.log('\nReady. API routes only — no frontend served from this port.\n');
 });

@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/arbab-github/edusheet-ai/.claude/hooks/syntax-check.cjs",
+            "command": "node C:/arbab-github/learnfyra/.claude/hooks/syntax-check.cjs",
             "timeout": 10,
             "statusMessage": "Checking syntax..."
           }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/arbab-github/edusheet-ai/.claude/hooks/test-handlers.cjs",
+            "command": "node C:/arbab-github/learnfyra/.claude/hooks/test-handlers.cjs",
             "timeout": 120,
             "async": true,
             "statusMessage": "Running tests..."

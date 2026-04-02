@@ -17,6 +17,7 @@
 import { randomUUID } from 'crypto';
 import { getAuthAdapter, getOAuthAdapter } from '../../src/auth/index.js';
 import { getDbAdapter } from '../../src/db/index.js';
+import { requestPasswordReset, resetPassword as executeReset } from '../../src/auth/passwordReset.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -164,6 +165,10 @@ async function handleRefresh(body) {
     return errorResponse(400, 'refreshToken is required.');
   }
 
+  if (!refreshToken || typeof refreshToken !== 'string' || refreshToken.length > 4096) {
+    return errorResponse(400, 'Invalid refresh token format.');
+  }
+
   try {
     const authAdapter = getAuthAdapter();
     const token = authAdapter.refreshAccessToken(refreshToken);
@@ -217,23 +222,129 @@ async function handleOAuthInitiate(provider) {
  * production adapter. The stub adapter skips it — see oauthStubAdapter.js.
  */
 async function handleOAuthCallback(provider, queryStringParameters) {
+  const frontendUrl = process.env.OAUTH_CALLBACK_BASE_URL || process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
+
   if (!provider) {
-    return errorResponse(400, 'OAuth provider is required.');
+    return redirectToFrontend(frontendUrl, null, 'OAuth provider is required.');
   }
 
-  const { code, state } = queryStringParameters || {};
+  const { code, state, error_description } = queryStringParameters || {};
+
+  if (error_description) {
+    return redirectToFrontend(frontendUrl, null, error_description);
+  }
 
   if (!code) {
-    return errorResponse(400, 'OAuth authorization code is required.');
+    return redirectToFrontend(frontendUrl, null, 'OAuth authorization code is required.');
   }
 
-  const oauthAdapter = getOAuthAdapter();
-  const result = await oauthAdapter.handleCallback(provider, code, state);
+  try {
+    const oauthAdapter = getOAuthAdapter();
+    const result = await oauthAdapter.handleCallback(provider, code, state);
+
+    return redirectToFrontend(frontendUrl, result, null);
+  } catch (err) {
+    return redirectToFrontend(frontendUrl, null, err.message || 'Authentication failed.');
+  }
+}
+
+/**
+ * Builds a 302 redirect response to the frontend auth callback page.
+ * On success: redirects to /auth/callback?token=...&user=...
+ * On error:   redirects to /?authError=...
+ */
+function redirectToFrontend(frontendUrl, result, errorMsg) {
+  if (result && result.token) {
+    const user = JSON.stringify({
+      userId: result.userId,
+      email: result.email,
+      role: result.role,
+      displayName: result.displayName,
+    });
+    const params = new URLSearchParams({ token: result.token, user });
+    return {
+      statusCode: 302,
+      headers: { ...corsHeaders, Location: `${frontendUrl}/auth/callback?${params.toString()}` },
+      body: '',
+    };
+  }
+
+  const msg = encodeURIComponent(errorMsg || 'Authentication failed');
+  return {
+    statusCode: 302,
+    headers: { ...corsHeaders, Location: `${frontendUrl}/?authError=${msg}` },
+    body: '',
+  };
+}
+
+/**
+ * POST /api/auth/forgot-password
+ * Body: { email }
+ * Always returns 200 — never reveals if the email exists.
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleForgotPassword(body) {
+  const { email } = body || {};
+
+  if (!email) {
+    return errorResponse(400, 'email is required.');
+  }
+
+  try {
+    await requestPasswordReset(email);
+  } catch {
+    // Swallow errors — never reveal whether the email exists
+  }
 
   return {
     statusCode: 200,
     headers: corsHeaders,
-    body: JSON.stringify(result),
+    body: JSON.stringify({
+      message: 'If an account with that email exists, a password reset link has been sent.',
+    }),
+  };
+}
+
+/**
+ * POST /api/auth/reset-password
+ * Body: { token, newPassword }
+ * Returns 200 on success, 400 on invalid/expired/used token.
+ *
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleResetPassword(body) {
+  const { token: rawToken, newPassword } = body || {};
+
+  if (!rawToken || !newPassword) {
+    return errorResponse(400, 'token and newPassword are required.');
+  }
+
+  // Validate token is a UUID v4 format (prevents NoSQL injection / oversized input)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(rawToken)) {
+    return errorResponse(400, 'Invalid token format.');
+  }
+
+  const token = rawToken.toLowerCase().trim();
+
+  if (newPassword.length < 8) {
+    return errorResponse(400, 'Password must be at least 8 characters.');
+  }
+
+  try {
+    await executeReset(token, newPassword);
+  } catch (err) {
+    const code = err.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 400;
+    return errorResponse(code, err.message || 'Password reset failed.');
+  }
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Password has been reset successfully.' }),
   };
 }
 
@@ -276,6 +387,14 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/refresh')) {
       return await handleRefresh(body);
+    }
+
+    if (path.endsWith('/forgot-password')) {
+      return await handleForgotPassword(body);
+    }
+
+    if (path.endsWith('/reset-password')) {
+      return await handleResetPassword(body);
     }
 
     // POST /api/auth/oauth/:provider — initiate OAuth flow

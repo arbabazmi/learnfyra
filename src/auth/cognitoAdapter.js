@@ -87,11 +87,18 @@ async function exchangeCodeForTokens(code, provider, codeVerifier) {
     code_verifier: codeVerifier,
   });
 
-  const response = await fetch(`${process.env.COGNITO_DOMAIN}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
+  let response;
+  try {
+    response = await fetch(`${process.env.COGNITO_DOMAIN}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+  } catch (err) {
+    const fetchErr = new Error(`Network error contacting Cognito: ${err.message}`);
+    fetchErr.statusCode = 502;
+    throw fetchErr;
+  }
 
   if (!response.ok) {
     // Log internally for debugging but do not expose Cognito error details to callers.
@@ -102,7 +109,15 @@ async function exchangeCodeForTokens(code, provider, codeVerifier) {
     throw err;
   }
 
-  return response.json();
+  let tokenData;
+  try {
+    tokenData = await response.json();
+  } catch {
+    const parseErr = new Error('Invalid JSON response from provider.');
+    parseErr.statusCode = 502;
+    throw parseErr;
+  }
+  return tokenData;
 }
 
 /**
@@ -113,9 +128,16 @@ async function exchangeCodeForTokens(code, provider, codeVerifier) {
  * @throws {Error} With .statusCode = 401 if the request fails
  */
 async function fetchCognitoUserInfo(accessToken) {
-  const response = await fetch(`${process.env.COGNITO_DOMAIN}/oauth2/userInfo`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let response;
+  try {
+    response = await fetch(`${process.env.COGNITO_DOMAIN}/oauth2/userInfo`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    const fetchErr = new Error(`Network error contacting Cognito: ${err.message}`);
+    fetchErr.statusCode = 502;
+    throw fetchErr;
+  }
 
   if (!response.ok) {
     const err = new Error(
@@ -125,7 +147,15 @@ async function fetchCognitoUserInfo(accessToken) {
     throw err;
   }
 
-  return response.json();
+  let userInfo;
+  try {
+    userInfo = await response.json();
+  } catch {
+    const parseErr = new Error('Invalid JSON response from provider.');
+    parseErr.statusCode = 502;
+    throw parseErr;
+  }
+  return userInfo;
 }
 
 /**

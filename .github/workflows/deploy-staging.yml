@@ -136,6 +136,12 @@ jobs:
       - name: Install app dependencies (needed by esbuild when bundling Lambdas)
         run: npm ci
 
+      - name: Build Vite frontend (qa)
+        run: |
+          cd learnfyra-app
+          npm ci
+          npm run build:qa
+
       - name: Install CDK dependencies
         run: cd infra/cdk && npm ci
 
@@ -179,7 +185,7 @@ jobs:
 
       - name: Sync frontend to S3
         run: |
-          aws s3 sync frontend/ s3://${{ steps.cdk-outputs.outputs.frontend_bucket }}/ \
+          aws s3 sync learnfyra-app/dist/ s3://${{ steps.cdk-outputs.outputs.frontend_bucket }}/ \
             --delete \
             --region ${{ vars.AWS_REGION }}
 

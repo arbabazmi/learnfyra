@@ -153,7 +153,7 @@ describe('listQuestions', () => {
     const result = await listQuestions({ grade: 3, subject: 'Math', topic: 'Multiplication' });
     expect(result).toHaveLength(1);
     const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.IndexName).toBe('lookupKey-typeDifficulty-index');
+    expect(call.args[0].input.IndexName).toBe('GSI-1');
     expect(call.args[0].input.ExpressionAttributeValues[':lk']).toBe('3|math|multiplication');
   });
 
@@ -170,6 +170,22 @@ describe('listQuestions', () => {
     expect(result).toHaveLength(1);
     expect(ddbMock.commandCalls(ScanCommand)).toHaveLength(1);
     expect(ddbMock.commandCalls(QueryCommand)).toHaveLength(0);
+  });
+
+  it('Scan filter preserves original casing for subject (not lowercased)', async () => {
+    ddbMock.on(ScanCommand).resolves({ Items: [SAMPLE_Q] });
+    await listQuestions({ subject: 'Math' });
+    const call = ddbMock.commandCalls(ScanCommand)[0];
+    // subject is stored with original casing; filter must match exactly
+    expect(call.args[0].input.ExpressionAttributeValues[':subject']).toBe('Math');
+  });
+
+  it('Scan filter uses grade+subject together for grade+subject-only queries', async () => {
+    ddbMock.on(ScanCommand).resolves({ Items: [SAMPLE_Q] });
+    await listQuestions({ grade: 5, subject: 'Math' });
+    const call = ddbMock.commandCalls(ScanCommand)[0];
+    expect(call.args[0].input.ExpressionAttributeValues[':grade']).toBe(5);
+    expect(call.args[0].input.ExpressionAttributeValues[':subject']).toBe('Math');
   });
 
   it('returns empty array when no filters provided', async () => {

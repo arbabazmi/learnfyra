@@ -23,7 +23,27 @@
       "Bash(2)",
       "Bash(npm install:*)",
       "Bash(git -C C:/arbab-github/edusheet-ai status --short)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(QB_ADAPTER=local node scripts/seed-question-bank.js)",
+      "Bash(find C:/arbab-github/edusheet-ai -name *.png -o -name *.jpg -o -name *.jpeg)",
+      "Bash(cp C:/arbab-github/learnfyra/frontend/images/Logos/colored-logo.png C:/arbab-github/learnfyra/learnfyra-app/public/images/Logos/)",
+      "Bash(cp C:/arbab-github/learnfyra/frontend/images/Logos/transparent-logo.png C:/arbab-github/learnfyra/learnfyra-app/public/images/Logos/)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npm run:*)",
+      "Bash(find C:/arbab-github/learnfyra/learnfyra-app/src -name *.d.ts)",
+      "Bash(npx vite:*)",
+      "Bash(find /c/arbab-github/learnfyra/scripts -type f -name *.js -o -name *.sh)",
+      "Bash(npm ls:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(find /c/arbab-github/learnfyra/.github/workflows -type f -name *.yml -o -name *.yaml)",
+      "Bash(npx cdk:*)",
+      "Bash(JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION=1 npx cdk synth --context env=dev --quiet --output cdk.out.new)",
+      "Bash(mkdir -p \"C:\\\\arbab-github\\\\learnfyra\\\\learnfyra-app\\\\src\\\\modules\\\\solve\\\\components\\\\questions\")",
+      "Bash(mkdir -p \"C:\\\\arbab-github\\\\learnfyra\\\\learnfyra-app\\\\src\\\\modules\\\\solve\\\\components\\\\ui\")",
+      "Bash(mkdir -p \"C:\\\\arbab-github\\\\learnfyra\\\\learnfyra-app\\\\src\\\\modules\\\\solve\\\\components\\\\tools\")",
+      "Bash(mkdir -p \"C:\\\\arbab-github\\\\learnfyra\\\\learnfyra-app\\\\src\\\\modules\\\\solve\\\\hooks\")"
     ]
   }
 }

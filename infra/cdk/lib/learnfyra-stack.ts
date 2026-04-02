@@ -14,6 +14,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -69,14 +70,6 @@ export class LearnfyraStack extends cdk.Stack {
       prod:    '1079696386286-edsmfmdk6j8073qnm05uii6b2c6o655o.apps.googleusercontent.com',
     };
 
-    // OAuth callback base URLs per environment
-    const callbackBaseUrls: Record<string, string> = {
-      dev:     'https://dev.learnfyra.com',
-      staging: 'https://qa.learnfyra.com',
-      prod:    'https://www.learnfyra.com',
-    };
-    const callbackBaseUrl = callbackBaseUrls[appEnv] ?? 'http://localhost:3000';
-
     const rootDomainName = props.rootDomainName;
     const hostedZoneId = props.hostedZoneId;
     const zone =
@@ -106,6 +99,46 @@ export class LearnfyraStack extends cdk.Stack {
     const authDomainName = isProd
       ? `auth.${rootDomainName}`
       : `auth.${dnsEnvLabel}.${rootDomainName}`;
+
+    // Cognito OAuth URLs by environment.
+    // Note: appEnv=staging maps to the QA domain set.
+    const cognitoOAuthUrlsByEnv: Record<'dev' | 'staging' | 'prod', { callbackUrls: string[]; logoutUrls: string[] }> = {
+      dev: {
+        callbackUrls: [
+          'https://web.dev.learnfyra.com/api/auth/callback/google',
+          'http://localhost:5173/api/auth/callback/google',
+        ],
+        logoutUrls: [
+          'https://dev.learnfyra.com',
+          'https://web.dev.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      staging: {
+        callbackUrls: [
+          'https://qa.learnfyra.com/api/auth/callback/google',
+          'https://web.qa.learnfyra.com/api/auth/callback/google',
+          'http://localhost:5173/api/auth/callback/google',
+        ],
+        logoutUrls: [
+          'https://qa.learnfyra.com',
+          'https://web.qa.learnfyra.com',
+          'http://localhost:5173',
+        ],
+      },
+      prod: {
+        callbackUrls: [
+          'https://learnfyra.com/api/auth/callback/google',
+          'https://www.learnfyra.com/api/auth/callback/google',
+        ],
+        logoutUrls: [
+          'https://learnfyra.com',
+          'https://www.learnfyra.com',
+        ],
+      },
+    };
+
+    const oauthUrls = cognitoOAuthUrlsByEnv[appEnv];
 
     let cloudFrontCertificate: acm.ICertificate | undefined;
     if (enableCustomDomains) {
@@ -154,6 +187,198 @@ export class LearnfyraStack extends cdk.Stack {
       autoDeleteObjects: !isProd,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
+
+    const createTable = (
+      id: string,
+      tableName: string,
+      partitionKeyName: string,
+      options: {
+        sortKeyName?: string;
+        ttlAttribute?: string;
+        gsis?: Array<{
+          indexName: string;
+          partitionKeyName: string;
+          sortKeyName?: string;
+          projectionType?: dynamodb.ProjectionType;
+        }>;
+      } = {}
+    ) => {
+      const table = new dynamodb.Table(this, id, {
+        tableName,
+        partitionKey: { name: partitionKeyName, type: dynamodb.AttributeType.STRING },
+        ...(options.sortKeyName && {
+          sortKey: { name: options.sortKeyName, type: dynamodb.AttributeType.STRING },
+        }),
+        ...(options.ttlAttribute && { timeToLiveAttribute: options.ttlAttribute }),
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecovery: !isDev,
+        removalPolicy,
+      });
+
+      options.gsis?.forEach((gsi) => {
+        table.addGlobalSecondaryIndex({
+          indexName: gsi.indexName,
+          partitionKey: { name: gsi.partitionKeyName, type: dynamodb.AttributeType.STRING },
+          ...(gsi.sortKeyName && {
+            sortKey: { name: gsi.sortKeyName, type: dynamodb.AttributeType.STRING },
+          }),
+          projectionType: gsi.projectionType ?? dynamodb.ProjectionType.ALL,
+        });
+      });
+
+      return table;
+    };
+
+    const usersTable = createTable('UsersTable', `LearnfyraUsers-${appEnv}`, 'userId', {
+      gsis: [
+        {
+          indexName: 'email-index',
+          partitionKeyName: 'email',
+        },
+      ],
+    });
+
+    const attemptsTable = createTable('AttemptsTable', `LearnfyraAttempts-${appEnv}`, 'attemptId', {
+      gsis: [
+        {
+          indexName: 'studentId-index',
+          partitionKeyName: 'studentId',
+        },
+      ],
+    });
+
+    const aggregatesTable = createTable(
+      'AggregatesTable',
+      `LearnfyraAggregates-${appEnv}`,
+      'id'
+    );
+
+    const certificatesTable = createTable(
+      'CertificatesTable',
+      `LearnfyraCertificates-${appEnv}`,
+      'id',
+      {
+        gsis: [
+          {
+            indexName: 'studentId-index',
+            partitionKeyName: 'studentId',
+          },
+        ],
+      }
+    );
+
+    const rewardProfilesTable = createTable(
+      'RewardProfilesTable',
+      `LearnfyraRewardProfiles-${appEnv}`,
+      'id'
+    );
+
+    const classesTable = createTable('ClassesTable', `LearnfyraClasses-${appEnv}`, 'classId', {
+      gsis: [
+        {
+          indexName: 'inviteCode-index',
+          partitionKeyName: 'inviteCode',
+          projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+        },
+      ],
+    });
+
+    const membershipsTable = createTable(
+      'MembershipsTable',
+      `LearnfyraMemberships-${appEnv}`,
+      'id',
+      {
+        gsis: [
+          {
+            indexName: 'studentId-index',
+            partitionKeyName: 'studentId',
+          },
+          {
+            indexName: 'classId-index',
+            partitionKeyName: 'classId',
+          },
+        ],
+      }
+    );
+
+    const questionBankTable = createTable(
+      'QuestionBankTable',
+      `LearnfyraQuestionBank-${appEnv}`,
+      'questionId',
+      {
+        gsis: [
+          {
+            // GSI-1: efficient lookup by grade+subject+topic, optionally narrowed by type+difficulty
+            indexName: 'GSI-1',
+            partitionKeyName: 'lookupKey',
+            sortKeyName: 'typeDifficulty',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
+          {
+            // dedupeHash-index: lightweight duplicate detection (KEYS_ONLY to minimise cost)
+            indexName: 'dedupeHash-index',
+            partitionKeyName: 'dedupeHash',
+            projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+          },
+        ],
+      }
+    );
+
+    const generationLogTable = createTable(
+      'GenerationLogTable',
+      `LearnfyraGenerationLog-${appEnv}`,
+      'worksheetId'
+    );
+
+    const modelConfigTable = createTable(
+      'ModelConfigTable',
+      `LearnfyraModelConfig-${appEnv}`,
+      'id'
+    );
+    const modelAuditLogTable = createTable(
+      'ModelAuditLogTable',
+      `LearnfyraModelAuditLog-${appEnv}`,
+      'id'
+    );
+    const questionExposureHistoryTable = createTable(
+      'QuestionExposureHistoryTable',
+      `LearnfyraQuestionExposureHistory-${appEnv}`,
+      'id'
+    );
+
+    const configTable = createTable('ConfigTable', `LearnfyraConfig-${appEnv}`, 'configKey');
+    const passwordResetsTable = createTable(
+      'PasswordResetsTable',
+      `LearnfyraPasswordResets-${appEnv}`,
+      'tokenId',
+      {
+        ttlAttribute: 'expiresAt',
+      }
+    );
+    const parentLinksTable = createTable('ParentLinksTable', `LearnfyraParentLinks-${appEnv}`, 'id');
+    const adminPoliciesTable = createTable(
+      'AdminPoliciesTable',
+      `LearnfyraAdminPolicies-${appEnv}`,
+      'id'
+    );
+    const adminAuditEventsTable = createTable(
+      'AdminAuditEventsTable',
+      `LearnfyraAdminAuditEvents-${appEnv}`,
+      'id'
+    );
+    const adminIdempotencyTable = createTable(
+      'AdminIdempotencyTable',
+      `LearnfyraAdminIdempotency-${appEnv}`,
+      'id',
+      {
+        ttlAttribute: 'expiresAt',
+      }
+    );
+    const repeatCapOverridesTable = createTable(
+      'RepeatCapOverridesTable',
+      `LearnfyraRepeatCapOverrides-${appEnv}`,
+      'id'
+    );
 
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
@@ -261,7 +486,7 @@ export class LearnfyraStack extends cdk.Stack {
     const jwtSecretValue = cdk.SecretValue.secretsManager(
       `/learnfyra/${appEnv}/jwt-secret`
     ).unsafeUnwrap();
-    const allowedOrigin = enableCustomDomains ? `https://${webDomainName}` : '*';
+    const allowedOrigin = isDev ? '*' : (enableCustomDomains ? `https://${webDomainName}` : '*');
 
     // ── Cognito: User Pool ─────────────────────────────────────────────────────
     const userPool = new cognito.UserPool(this, 'UserPool', {
@@ -305,8 +530,8 @@ export class LearnfyraStack extends cdk.Stack {
           cognito.OAuthScope.OPENID,
           cognito.OAuthScope.PROFILE,
         ],
-        callbackUrls: [`${callbackBaseUrl}/api/auth/callback/google`],
-        logoutUrls: [callbackBaseUrl],
+        callbackUrls: oauthUrls.callbackUrls,
+        logoutUrls: oauthUrls.logoutUrls,
       },
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.GOOGLE,
@@ -358,6 +583,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+        MOCK_AI: 'false',
         SSM_PARAM_NAME: `/learnfyra/${appEnv}/anthropic-api-key`,
         MAX_RETRIES: isProd ? '0' : '1',
         ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
@@ -578,6 +804,60 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-admin — admin question-bank routes`,
     });
 
+    // ── Lambda: Dashboard handler ──────────────────────────────────────────────
+    const dashboardFn = new NodejsFunction(this, 'DashboardFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-dashboard`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('dashboardHandler.js'),
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-dashboard — dashboard stats, recent worksheets, subject progress`,
+    });
+
+    // ── Lambda: Certificates handler ────────────────────────────────────────
+    const certificatesFn = new NodejsFunction(this, 'CertificatesFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-certificates`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('certificatesHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(10),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-certificates — student certificate list and download`,
+    });
+
+    // ── Lambda: Admin policies handler ────────────────────────────────────────
+    const adminPoliciesFn = new NodejsFunction(this, 'AdminPoliciesFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-admin-policies`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('adminHandler.js'),
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
+    });
+
     worksheetBucket.grantRead(solveFn);
     worksheetBucket.grantRead(submitFn);
 
@@ -593,14 +873,103 @@ export class LearnfyraStack extends cdk.Stack {
       rewardsFn,
       studentFn,
       adminFn,
+      dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn].forEach((fn) => {
+    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn, certificatesFn, adminPoliciesFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
-      fn.addEnvironment('AUTH_MODE', 'cognito');
+      fn.addEnvironment('AUTH_MODE', 'hybrid');
     });
+
+    [
+      generateFn,
+      authFn,
+      submitFn,
+      progressFn,
+      analyticsFn,
+      classFn,
+      rewardsFn,
+      studentFn,
+      adminFn,
+      dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
+    ].forEach((fn) => {
+      fn.addEnvironment('APP_RUNTIME', 'aws');
+      fn.addEnvironment('DYNAMO_ENV', appEnv);
+    });
+
+    authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    authFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+
+    generateFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    generateFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    generateFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
+    generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+
+    progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    progressFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    progressFn.addEnvironment('PARENT_LINKS_TABLE_NAME', parentLinksTable.tableName);
+    progressFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    analyticsFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    analyticsFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    analyticsFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    analyticsFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    analyticsFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    classFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    classFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    classFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    rewardsFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    rewardsFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    rewardsFn.addEnvironment('REWARD_PROFILES_TABLE_NAME', rewardProfilesTable.tableName);
+    rewardsFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    studentFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    studentFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    studentFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    dashboardFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    dashboardFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+
+    adminFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    adminFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
+    adminFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    adminFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    adminFn.addEnvironment('CLASSES_TABLE_NAME', classesTable.tableName);
+    adminFn.addEnvironment('MEMBERSHIPS_TABLE_NAME', membershipsTable.tableName);
+    adminFn.addEnvironment('GENLOG_TABLE_NAME', generationLogTable.tableName);
+    adminFn.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+    adminFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    adminFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    adminFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
+    adminFn.addEnvironment('REWARD_PROFILES_TABLE_NAME', rewardProfilesTable.tableName);
+    adminFn.addEnvironment('PARENT_LINKS_TABLE_NAME', parentLinksTable.tableName);
+    adminFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+    adminFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    adminFn.addEnvironment('ADMIN_AUDIT_EVENTS_TABLE_NAME', adminAuditEventsTable.tableName);
+    adminFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
+    adminFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+
+    certificatesFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
+    certificatesFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+
+    adminPoliciesFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_AUDIT_EVENTS_TABLE_NAME', adminAuditEventsTable.tableName);
+    adminPoliciesFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
+    adminPoliciesFn.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+    adminPoliciesFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
+    adminPoliciesFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
+    adminPoliciesFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
 
     apiAuthorizerFn.addEnvironment('JWT_SECRET', jwtSecretValue);
     apiAuthorizerFn.addEnvironment('AUTH_MODE', 'cognito');
@@ -625,8 +994,49 @@ export class LearnfyraStack extends cdk.Stack {
     authFn.addEnvironment('COGNITO_DOMAIN', cognitoDomainUrl);
 
     [generateFn, adminFn].forEach((fn) => {
-      fn.addEnvironment('QB_ADAPTER', 'local');
+      fn.addEnvironment('QB_ADAPTER', 'dynamodb');
+      fn.addEnvironment('DYNAMO_ENV', appEnv);
+      fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
     });
+
+    const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;
+    const dynamoIndexArnPattern = `${dynamoTableArnPattern}/index/*`;
+
+    [
+      generateFn,
+      authFn,
+      progressFn,
+      analyticsFn,
+      classFn,
+      rewardsFn,
+      studentFn,
+      adminFn,
+      dashboardFn,
+      certificatesFn,
+      adminPoliciesFn,
+    ].forEach((fn) => {
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'dynamodb:GetItem',
+            'dynamodb:PutItem',
+            'dynamodb:UpdateItem',
+            'dynamodb:DeleteItem',
+            'dynamodb:Query',
+            'dynamodb:Scan',
+            'dynamodb:BatchGetItem',
+            'dynamodb:BatchWriteItem',
+          ],
+          resources: [dynamoTableArnPattern, dynamoIndexArnPattern],
+        })
+      );
+    });
+
+    // In dev, bypass QuestionBank lookup and route all requests to AI generation.
+    // This populates the bank from scratch. Toggle off once bank is sufficiently populated.
+    if (appEnv === 'dev') {
+      generateFn.addEnvironment('SKIP_BANK_LOOKUP', 'true');
+    }
 
     const apiResource = api.root.addResource('api');
 
@@ -666,6 +1076,17 @@ export class LearnfyraStack extends cdk.Stack {
       });
     authResource
       .addResource('refresh')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+
+    authResource
+      .addResource('forgot-password')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+    authResource
+      .addResource('reset-password')
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
@@ -712,6 +1133,45 @@ export class LearnfyraStack extends cdk.Stack {
     progressResource
       .addResource('history')
       .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('insights')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    progressResource
+      .addResource('parent')
+      .addResource('{childId}')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Dashboard routes (JWT protected) ──────────────────────────────────────
+    const dashboardResource = apiResource.addResource('dashboard');
+    dashboardResource
+      .addResource('stats')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('recent-worksheets')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    dashboardResource
+      .addResource('subject-progress')
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -763,9 +1223,15 @@ export class LearnfyraStack extends cdk.Stack {
       });
 
     const studentResource = apiResource.addResource('student');
-    studentResource
-      .addResource('profile')
+    const studentProfileResource = studentResource.addResource('profile');
+    studentProfileResource
       .addMethod('GET', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    studentProfileResource
+      .addMethod('PATCH', new apigateway.LambdaIntegration(studentFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -808,6 +1274,82 @@ export class LearnfyraStack extends cdk.Stack {
         authorizer: tokenAuthorizer,
       });
 
+    // ── Certificates routes (JWT protected) ──────────────────────────────────
+    const certificatesResource = apiResource.addResource('certificates');
+    certificatesResource
+      .addMethod('GET', new apigateway.LambdaIntegration(certificatesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    certificatesResource
+      .addResource('{id}')
+      .addResource('download')
+      .addMethod('GET', new apigateway.LambdaIntegration(certificatesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Admin policy & audit routes (JWT protected, admin role) ──────────────
+    const adminResource = apiResource.addResource('admin');
+    const adminPoliciesResource = adminResource.addResource('policies');
+    adminPoliciesResource
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('model-routing')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('budget-usage')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminPoliciesResource
+      .addResource('validation-profile')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    const repeatCapResource = adminPoliciesResource.addResource('repeat-cap');
+    repeatCapResource
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    repeatCapResource
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    repeatCapResource
+      .addResource('overrides')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+    adminResource
+      .addResource('audit')
+      .addResource('events')
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
     const monitoredFunctions = [
       { id: 'Generate', fn: generateFn, p95MsThreshold: isDev ? 30000 : 45000 },
       { id: 'Download', fn: downloadFn, p95MsThreshold: 4000 },
@@ -820,6 +1362,9 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Rewards', fn: rewardsFn, p95MsThreshold: 3000 },
       { id: 'Student', fn: studentFn, p95MsThreshold: 3000 },
       { id: 'Admin', fn: adminFn, p95MsThreshold: 4000 },
+      { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
+      { id: 'Certificates', fn: certificatesFn, p95MsThreshold: 3000 },
+      { id: 'AdminPolicies', fn: adminPoliciesFn, p95MsThreshold: 4000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {

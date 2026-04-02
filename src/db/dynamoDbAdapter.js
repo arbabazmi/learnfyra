@@ -73,14 +73,27 @@ const getDynamoEnv = () => process.env.DYNAMO_ENV || process.env.NODE_ENV || 'lo
  *   sk      — RANGE key attribute name (undefined if no sort key)
  */
 const TABLE_CONFIG = {
-  users:             { envVar: 'USERS_TABLE_NAME',        suffix: 'Users',            pk: 'userId'                         },
-  worksheetattempts: { envVar: 'ATTEMPTS_TABLE_NAME',     suffix: 'WorksheetAttempt', pk: 'userId',     sk: 'sortKey'       },
-  certificates:      { envVar: 'CERTIFICATES_TABLE_NAME', suffix: 'Certificates',     pk: 'certificateId'                  },
-  classes:           { envVar: 'CLASSES_TABLE_NAME',      suffix: 'Classes',          pk: 'classId'                        },
-  classmemberships:  { envVar: 'MEMBERSHIPS_TABLE_NAME',  suffix: 'ClassMemberships', pk: 'classId',    sk: 'studentId'     },
-  questionbank:      { envVar: 'QB_TABLE_NAME',           suffix: 'QuestionBank',     pk: 'questionId'                     },
-  generationlog:     { envVar: 'GENLOG_TABLE_NAME',       suffix: 'GenerationLog',    pk: 'worksheetId'                    },
-  config:            { envVar: 'CONFIG_TABLE_NAME',       suffix: 'Config',           pk: 'configKey'                      },
+  users:              { envVar: 'USERS_TABLE_NAME',               suffix: 'Users',              pk: 'userId'      },
+  attempts:           { envVar: 'ATTEMPTS_TABLE_NAME',            suffix: 'Attempts',           pk: 'attemptId'   },
+  worksheetattempts:  { envVar: 'ATTEMPTS_TABLE_NAME',            suffix: 'Attempts',           pk: 'attemptId'   },
+  aggregates:         { envVar: 'AGGREGATES_TABLE_NAME',          suffix: 'Aggregates',         pk: 'id'          },
+  certificates:       { envVar: 'CERTIFICATES_TABLE_NAME',        suffix: 'Certificates',       pk: 'id'          },
+  rewardprofiles:     { envVar: 'REWARD_PROFILES_TABLE_NAME',     suffix: 'RewardProfiles',     pk: 'id'          },
+  classes:            { envVar: 'CLASSES_TABLE_NAME',             suffix: 'Classes',            pk: 'classId'     },
+  memberships:        { envVar: 'MEMBERSHIPS_TABLE_NAME',         suffix: 'Memberships',        pk: 'id'          },
+  classmemberships:   { envVar: 'MEMBERSHIPS_TABLE_NAME',         suffix: 'Memberships',        pk: 'id'          },
+  questionbank:       { envVar: 'QB_TABLE_NAME',                  suffix: 'QuestionBank',       pk: 'questionId'  },
+  generationlog:      { envVar: 'GENLOG_TABLE_NAME',              suffix: 'GenerationLog',      pk: 'worksheetId' },
+  config:             { envVar: 'CONFIG_TABLE_NAME',              suffix: 'Config',             pk: 'configKey'   },
+  modelconfig:        { envVar: 'MODEL_CONFIG_TABLE_NAME',        suffix: 'ModelConfig',        pk: 'id'          },
+  modelauditlog:      { envVar: 'MODEL_AUDIT_LOG_TABLE_NAME',     suffix: 'ModelAuditLog',      pk: 'id'          },
+  questionexposurehistory: { envVar: 'QUESTION_EXPOSURE_HISTORY_TABLE_NAME', suffix: 'QuestionExposureHistory', pk: 'id' },
+  passwordresets:     { envVar: 'PWRESET_TABLE_NAME',             suffix: 'PasswordResets',     pk: 'tokenId'     },
+  parentlinks:        { envVar: 'PARENT_LINKS_TABLE_NAME',        suffix: 'ParentLinks',        pk: 'id'          },
+  adminpolicies:      { envVar: 'ADMIN_POLICIES_TABLE_NAME',      suffix: 'AdminPolicies',      pk: 'id'          },
+  adminauditevents:   { envVar: 'ADMIN_AUDIT_EVENTS_TABLE_NAME',  suffix: 'AdminAuditEvents',   pk: 'id'          },
+  adminidempotency:   { envVar: 'ADMIN_IDEMPOTENCY_TABLE_NAME',   suffix: 'AdminIdempotency',   pk: 'id'          },
+  repeatcapoverrides: { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME', suffix: 'RepeatCapOverrides', pk: 'id'         },
 };
 
 /**
@@ -148,7 +161,14 @@ export const dynamoDbAdapter = {
    */
   async putItem(table, item) {
     const { tableName } = resolveTable(table);
-    await getDocClient().send(new PutCommand({ TableName: tableName, Item: item }));
+    try {
+      await getDocClient().send(new PutCommand({ TableName: tableName, Item: item }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
     return item;
   },
 
@@ -164,21 +184,37 @@ export const dynamoDbAdapter = {
 
     if (!sk) {
       // Simple single-key table — use GetItem for O(1) lookup
-      const result = await getDocClient().send(new GetCommand({
-        TableName: tableName,
-        Key: { [pk]: id },
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new GetCommand({
+          TableName: tableName,
+          Key: { [pk]: id },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       return result.Item ?? null;
     }
 
     // Composite-key table — query by PK and return the first result
-    const result = await getDocClient().send(new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: '#pk = :pkval',
-      ExpressionAttributeNames: { '#pk': pk },
-      ExpressionAttributeValues: { ':pkval': id },
-      Limit: 1,
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: '#pk = :pkval',
+        ExpressionAttributeNames: { '#pk': pk },
+        ExpressionAttributeValues: { ':pkval': id },
+        Limit: 1,
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
     return (result.Items && result.Items.length > 0) ? result.Items[0] : null;
   },
 
@@ -196,28 +232,50 @@ export const dynamoDbAdapter = {
       // Single-key table — attempt GetItem first to check existence
       const existing = await this.getItem(table, id);
       if (!existing) return false;
-      await getDocClient().send(new DeleteCommand({
-        TableName: tableName,
-        Key: { [pk]: id },
-      }));
+      try {
+        await getDocClient().send(new DeleteCommand({
+          TableName: tableName,
+          Key: { [pk]: id },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       return true;
     }
 
     // Composite-key table — query all items for this PK, then delete each
-    const result = await getDocClient().send(new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: '#pk = :pkval',
-      ExpressionAttributeNames: { '#pk': pk },
-      ExpressionAttributeValues: { ':pkval': id },
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: '#pk = :pkval',
+        ExpressionAttributeNames: { '#pk': pk },
+        ExpressionAttributeValues: { ':pkval': id },
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
 
     if (!result.Items || result.Items.length === 0) return false;
 
     for (const item of result.Items) {
-      await getDocClient().send(new DeleteCommand({
-        TableName: tableName,
-        Key: { [pk]: item[pk], [sk]: item[sk] },
-      }));
+      try {
+        await getDocClient().send(new DeleteCommand({
+          TableName: tableName,
+          Key: { [pk]: item[pk], [sk]: item[sk] },
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
     }
     return true;
   },
@@ -237,13 +295,21 @@ export const dynamoDbAdapter = {
     let lastKey;
 
     do {
-      const result = await getDocClient().send(new ScanCommand({
-        TableName: tableName,
-        FilterExpression: '#field = :val',
-        ExpressionAttributeNames: { '#field': fieldName },
-        ExpressionAttributeValues: { ':val': value },
-        ExclusiveStartKey: lastKey,
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new ScanCommand({
+          TableName: tableName,
+          FilterExpression: '#field = :val',
+          ExpressionAttributeNames: { '#field': fieldName },
+          ExpressionAttributeValues: { ':val': value },
+          ExclusiveStartKey: lastKey,
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);
@@ -262,10 +328,18 @@ export const dynamoDbAdapter = {
     let lastKey;
 
     do {
-      const result = await getDocClient().send(new ScanCommand({
-        TableName: tableName,
-        ExclusiveStartKey: lastKey,
-      }));
+      let result;
+      try {
+        result = await getDocClient().send(new ScanCommand({
+          TableName: tableName,
+          ExclusiveStartKey: lastKey,
+        }));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);
@@ -302,12 +376,20 @@ export const dynamoDbAdapter = {
       return this.getItem(table, id);
     }
 
-    const result = await getDocClient().send(new UpdateCommand({
-      TableName: tableName,
-      Key: key,
-      ...expr,
-      ReturnValues: 'ALL_NEW',
-    }));
+    let result;
+    try {
+      result = await getDocClient().send(new UpdateCommand({
+        TableName: tableName,
+        Key: key,
+        ...expr,
+        ReturnValues: 'ALL_NEW',
+      }));
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') {
+        console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+      }
+      throw err;
+    }
 
     return result.Attributes ?? null;
   },
@@ -347,7 +429,15 @@ export const dynamoDbAdapter = {
 
     do {
       params.ExclusiveStartKey = lastKey;
-      const result = await getDocClient().send(new QueryCommand(params));
+      let result;
+      try {
+        result = await getDocClient().send(new QueryCommand(params));
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') {
+          console.error(`[dynamoDbAdapter] Table ${tableName} not found`);
+        }
+        throw err;
+      }
       if (result.Items) items.push(...result.Items);
       lastKey = result.LastEvaluatedKey;
     } while (lastKey);

@@ -2,13 +2,13 @@
 
 Date: 2026-03-25
 Status: Implementation baseline
-Scope: Replace old edusheet-named AWS resources with learnfyra-named resources and remove old infrastructure after cutover.
+Scope: Replace old edusheet/edusheet-ai-named AWS resources with learnfyra-named resources and remove old infrastructure after cutover.
 
 ---
 
 ## Goal
 
-Move all AWS infrastructure from old edusheet naming to learnfyra naming so the final AWS account state contains only learnfyra resources.
+Move all AWS infrastructure from old edusheet/edusheet-ai naming to learnfyra naming so the final AWS account state contains only learnfyra resources.
 
 Important constraints:
 
@@ -67,7 +67,7 @@ Use this only if old worksheet data must be preserved.
 4. Remove old SSM parameter paths.
 5. Empty and delete old S3 buckets.
 6. Delete old CloudFormation stacks.
-7. Confirm no `edusheet` resources remain.
+7. Confirm no `edusheet` or `edusheet-ai` resources remain.
 
 ---
 
@@ -106,7 +106,7 @@ Why this order:
 This repository cleanup supports that migration by:
 
 1. Renaming the infra test file to learnfyra naming.
-2. Removing the old edusheet compatibility stack file.
+2. Removing the old edusheet/edusheet-ai compatibility stack file.
 3. Updating the infra lockfile package name.
 4. Keeping the AWS inventory aligned with current learnfyra naming.
 
@@ -121,4 +121,4 @@ Before touching live AWS resources, run discovery and diff checks per environmen
 3. `npx cdk diff --context env=staging`
 4. `npx cdk diff --context env=prod`
 
-If the diffs are acceptable, proceed with environment-by-environment cutover and then delete old edusheet resources.
+If the diffs are acceptable, proceed with environment-by-environment cutover and then delete old edusheet/edusheet-ai resources.

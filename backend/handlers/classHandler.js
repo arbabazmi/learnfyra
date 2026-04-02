@@ -12,7 +12,7 @@
  * Lambda/AWS: APP_RUNTIME=aws   → DynamoDB adapter (not yet implemented)
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { validateToken, requireRole } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
 
@@ -40,16 +40,15 @@ function errorResponse(statusCode, message) {
 }
 
 /**
- * Generates a 6-character alphanumeric invite code (uppercase).
+ * Generates a 6-character alphanumeric invite code (uppercase) using
+ * cryptographically secure random bytes.
+ * @param {number} [length=6]
  * @returns {string} e.g. "A3K9FZ"
  */
-function generateInviteCode() {
+function generateInviteCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
+  const bytes = randomBytes(length);
+  return Array.from(bytes).map(b => chars[b % chars.length]).join('');
 }
 
 /**

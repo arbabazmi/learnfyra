@@ -15,8 +15,10 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
-const s3 = new S3Client({});
-const BUCKET = process.env.WORKSHEET_BUCKET_NAME;
+let _s3;
+function getS3() { if (!_s3) _s3 = new S3Client({}); return _s3; }
+function getBucket() { return process.env.WORKSHEET_BUCKET_NAME; }
+
 const URL_EXPIRY_SECONDS = 3600; // 1 hour
 
 export const handler = async (event, context) => {
@@ -39,7 +41,7 @@ export const handler = async (event, context) => {
 
   try {
     // Verify the object exists before generating the presigned URL
-    await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: s3Key }));
+    await getS3().send(new HeadObjectCommand({ Bucket: getBucket(), Key: s3Key }));
   } catch (err) {
     if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
       return {
@@ -57,8 +59,8 @@ export const handler = async (event, context) => {
   }
 
   try {
-    const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
-    const downloadUrl = await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY_SECONDS });
+    const command = new GetObjectCommand({ Bucket: getBucket(), Key: s3Key });
+    const downloadUrl = await getSignedUrl(getS3(), command, { expiresIn: URL_EXPIRY_SECONDS });
 
     return {
       statusCode: 200,

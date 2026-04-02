@@ -2,7 +2,7 @@
 
 Date: 2026-03-26
 Status: Current implementation reference
-Primary infrastructure source: [infra/cdk/lib/learnfyra-stack.ts](c:\arbab-github\edusheet-ai\infra\cdk\lib\learnfyra-stack.ts)
+Primary infrastructure source: [infra/cdk/lib/learnfyra-stack.ts](c:\arbab-github\learnfyra\infra\cdk\lib\learnfyra-stack.ts)
 
 ## Scope
 
@@ -208,4 +208,4 @@ The following services are part of the platform target architecture and are now 
 
 - This document reflects the services currently used by the CDK stack, not every service mentioned in long-term roadmap documents.
 - DynamoDB, Cognito, Secrets Manager, EventBridge, WAF, SNS, GuardDuty, and CloudTrail are now captured in the table above; they remain planned and not yet provisioned by the active application CDK stack.
-- For a roadmap inventory, also see [docs/operations/inventory/aws-services-inventory.md](c:\arbab-github\edusheet-ai\docs\operations\aws-services-inventory.md).
+- For a roadmap inventory, also see [docs/operations/inventory/aws-services-inventory.md](c:\arbab-github\learnfyra\docs\operations\inventory\aws-services-inventory.md).

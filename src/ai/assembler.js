@@ -318,17 +318,26 @@ export async function assembleWorksheet(options) {
   const maxRepeatQuestions = Math.floor(questionCount * (effectiveRepeatCapPercent / 100));
 
   // ── Step 1: Query the bank ──────────────────────────────────────────────────
+  const skipBankLookup = process.env.SKIP_BANK_LOOKUP === 'true';
   const qb = await getQuestionBankAdapter();
-  const candidates = await qb.listQuestions({ grade, subject, topic, difficulty });
 
-  // ── Step 2: Randomly select up to questionCount banked questions ────────────
-  const {
-    selected: bankedSelected,
-    repeatUsed: repeatUsedFromBank,
-  } = selectWithRepeatCap(candidates, questionCount, seenSignatures, maxRepeatQuestions);
+  let bankedSelected = [];
+  let repeatUsed = 0;
+  let candidates = [];
+
+  if (skipBankLookup) {
+    logger.info('Assembler — SKIP_BANK_LOOKUP=true, bypassing bank query — all questions from AI');
+  } else {
+    candidates = await qb.listQuestions({ grade, subject, topic, difficulty });
+
+    // ── Step 2: Randomly select up to questionCount banked questions ──────────
+    const result = selectWithRepeatCap(candidates, questionCount, seenSignatures, maxRepeatQuestions);
+    bankedSelected = result.selected;
+    repeatUsed = result.repeatUsed;
+  }
+
   const fromBank       = bankedSelected.length;
   const missingCount   = questionCount - fromBank;
-  let repeatUsed       = repeatUsedFromBank;
 
   logger.info(
     `Assembler — bank has ${candidates.length} candidate(s); ` +

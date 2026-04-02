@@ -153,11 +153,15 @@ If you intentionally decide to deploy prod later:
 ## Manual Deploy Commands (Local Terminal)
 
 Use these when you want to deploy directly from your machine without going through GitHub Actions.
-Requires: AWS CLI configured with credentials for account `796929287685`, and `cd infra/cdk` first.
+Requires: AWS CLI configured with credentials for account `796929287685`, run commands from repo root (`C:/arbab-github/learnfyra`).
 
 ### Dev (deployed — run again after code changes)
 ```powershell
-cd infra/cdk
+cd learnfyra-app
+npm ci
+npm run build:dev
+
+cd ../infra/cdk
 npx cdk deploy `
   --context env=dev `
   --context enableCustomDomains=true `
@@ -169,12 +173,16 @@ npx cdk deploy `
 ```
 After deploy, sync frontend:
 ```powershell
-aws s3 sync ../../frontend/ s3://learnfyra-dev-s3-frontend/ --delete --region us-east-1
+aws s3 sync ../../learnfyra-app/dist/ s3://learnfyra-dev-s3-frontend/ --delete --region us-east-1
 ```
 
 ### QA / Staging (run when ready — creates web.qa / api.qa / admin.qa)
 ```powershell
-cd infra/cdk
+cd learnfyra-app
+npm ci
+npm run build:qa
+
+cd ../infra/cdk
 npx cdk deploy `
   --context env=staging `
   --context enableCustomDomains=true `
@@ -189,13 +197,17 @@ After deploy, sync frontend + invalidate CloudFront:
 ```powershell
 $bucket = (Get-Content cdk-outputs.json | ConvertFrom-Json).'LearnfyraStack-staging'.FrontendBucketName
 $distId = (Get-Content cdk-outputs.json | ConvertFrom-Json).'LearnfyraStack-staging'.DistributionId
-aws s3 sync ../../frontend/ s3://$bucket/ --delete --region us-east-1
+aws s3 sync ../../learnfyra-app/dist/ s3://$bucket/ --delete --region us-east-1
 aws cloudfront create-invalidation --distribution-id $distId --paths "/*"
 ```
 
 ### Production (run when ready — creates learnfyra.com / api.learnfyra.com / admin.learnfyra.com)
 ```powershell
-cd infra/cdk
+cd learnfyra-app
+npm ci
+npm run build
+
+cd ../infra/cdk
 npx cdk deploy `
   --context env=prod `
   --context enableCustomDomains=true `
@@ -210,7 +222,7 @@ After deploy, sync frontend + invalidate CloudFront:
 ```powershell
 $bucket = (Get-Content cdk-outputs.json | ConvertFrom-Json).'LearnfyraStack-prod'.FrontendBucketName
 $distId = (Get-Content cdk-outputs.json | ConvertFrom-Json).'LearnfyraStack-prod'.DistributionId
-aws s3 sync ../../frontend/ s3://$bucket/ --delete --region us-east-1
+aws s3 sync ../../learnfyra-app/dist/ s3://$bucket/ --delete --region us-east-1
 aws cloudfront create-invalidation --distribution-id $distId --paths "/*"
 ```
 

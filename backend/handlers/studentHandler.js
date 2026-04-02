@@ -20,7 +20,7 @@ import { getDbAdapter } from '../../src/db/index.js';
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
 };
 
 const INVITE_CODE_REGEX = /^[A-Z0-9]{6}$/;
@@ -67,8 +67,53 @@ async function handleGetProfile(decoded) {
       email: user.email,
       role: user.role,
       displayName: user.displayName,
+      grade: user.grade ?? null,
+      authType: user.authType ?? null,
+      picture: user.picture ?? null,
       classMemberships,
     }),
+  };
+}
+
+/**
+ * PATCH /api/student/profile
+ * Updates mutable profile fields (displayName, grade).
+ *
+ * @param {Object} decoded - Verified JWT payload { sub, email, role }
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleUpdateProfile(decoded, body) {
+  const { displayName, grade } = body || {};
+
+  const updates = {};
+  if (typeof displayName === 'string' && displayName.trim()) {
+    updates.displayName = displayName.trim();
+  }
+  if (grade !== undefined && grade !== null) {
+    const g = Number(grade);
+    if (!Number.isInteger(g) || g < 1 || g > 10) {
+      return errorResponse(400, 'grade must be an integer between 1 and 10.');
+    }
+    updates.grade = g;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return errorResponse(400, 'Nothing to update. Provide displayName or grade.');
+  }
+
+  const db = getDbAdapter();
+  const updated = await db.updateItem('users', decoded.sub, updates);
+
+  if (!updated) {
+    return errorResponse(404, 'User not found.');
+  }
+
+  const { passwordHash: _ph, ...publicUser } = updated;
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify(publicUser),
   };
 }
 
@@ -158,6 +203,16 @@ export const handler = async (event, context) => {
 
     if (path.endsWith('/profile') && method === 'GET') {
       return await handleGetProfile(decoded);
+    }
+
+    if (path.endsWith('/profile') && method === 'PATCH') {
+      let body;
+      try {
+        body = JSON.parse(event.body || '{}');
+      } catch {
+        return errorResponse(400, 'Invalid JSON in request body.');
+      }
+      return await handleUpdateProfile(decoded, body);
     }
 
     if (path.endsWith('/join-class') && method === 'POST') {

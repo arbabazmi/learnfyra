@@ -75,9 +75,9 @@ const getTableName = () =>
   process.env.QB_TABLE_NAME ||
   `LearnfyraQuestionBank-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`;
 
-// GSI names — must match the DynamoDB table definition
-const GSI_LOOKUP        = 'lookupKey-typeDifficulty-index';
-const GSI_DEDUPE        = 'dedupeHash-index';
+// GSI names — must match the DynamoDB table definition in scripts/bootstrap-local-db.js
+const GSI_LOOKUP        = 'GSI-1';               // HASH: lookupKey, RANGE: typeDifficulty
+const GSI_DEDUPE        = 'dedupeHash-index';     // HASH: dedupeHash, KEYS_ONLY
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -255,24 +255,28 @@ export async function listQuestions(filters = {}) {
     exprValues[':grade'] = Number(grade);
   }
   if (subject) {
+    // subject is stored with original casing (e.g. "Math") — do NOT lowercase
     filterParts.push('#subject = :subject');
     exprNames['#subject']  = 'subject';
-    exprValues[':subject'] = String(subject).trim().toLowerCase();
+    exprValues[':subject'] = String(subject).trim();
   }
   if (topic) {
+    // topic is stored with original casing — do NOT lowercase
     filterParts.push('#topic = :topic');
     exprNames['#topic']  = 'topic';
-    exprValues[':topic'] = String(topic).trim().toLowerCase();
+    exprValues[':topic'] = String(topic).trim();
   }
   if (difficulty) {
+    // difficulty is stored with original casing (e.g. "Medium") — do NOT lowercase
     filterParts.push('#difficulty = :difficulty');
     exprNames['#difficulty']  = 'difficulty';
-    exprValues[':difficulty'] = String(difficulty).trim().toLowerCase();
+    exprValues[':difficulty'] = String(difficulty).trim();
   }
   if (type) {
+    // type enum values are already lowercase (e.g. "multiple-choice") — trim only
     filterParts.push('#type = :type');
     exprNames['#type']  = 'type';
-    exprValues[':type'] = String(type).trim().toLowerCase();
+    exprValues[':type'] = String(type).trim();
   }
 
   const scanParams = { TableName: tableName };
