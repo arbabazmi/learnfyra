@@ -529,13 +529,14 @@ stack:   ${result.apiDebug.stack || "—"}`}
 
 // ─── Report builder ─────────────────────────────────────────────────────────
 
-function buildReport(tests, results, env, counts) {
+function buildReport(tests, results, env, counts, authUser) {
   const ts = new Date().toISOString();
   const lines = [
     `LEARNFYRA INTEGRATION TEST REPORT`,
     `==================================`,
     `Environment: ${env.label} (${env.url})`,
     `Timestamp:   ${ts}`,
+    ...(authUser && !authUser.error ? [`Test User:   ${authUser.email} (${authUser.role})`] : [`Test User:   auto-registered`]),
     `Results:     ${counts.pass} pass / ${counts.fail} fail${counts.skipped ? ` / ${counts.skipped} skipped` : ""} (${counts.total} total)`,
     ``,
     `| # | Test | Status | Duration | Details |`,
@@ -583,20 +584,60 @@ export default function App() {
   const [results, setResults] = useState({});
   const [counts, setCounts] = useState({ total: 0, pass: 0, fail: 0, done: 0, skipped: 0 });
   const [copied, setCopied] = useState(false);
+  const [creds, setCreds] = useState({ email: "", password: "" });
+  const [authUser, setAuthUser] = useState(null); // { email, role, userId, mode }
   const ctxRef = useRef({});
 
   const env = ENVIRONMENTS[envKey];
   const isProd = envKey === "prod";
+  const useExistingUser = creds.email.trim() && creds.password.trim();
 
   const runAll = useCallback(async () => {
     setRunning(true);
     setResults({});
+    setAuthUser(null);
     ctxRef.current = {};
     setApiBase(ENVIRONMENTS[envKey].url);
 
+    // If credentials provided, login first and pre-fill ctx with token
+    const _useExisting = creds.email.trim() && creds.password.trim();
+    if (_useExisting) {
+      try {
+        const loginRes = await api("POST", "/api/auth/login", {
+          email: creds.email.trim(), password: creds.password.trim(),
+        });
+        if (loginRes.status !== 200 || !loginRes.body.token) {
+          const errMsg = loginRes.body?.error || `Login failed with status ${loginRes.status}`;
+          setAuthUser({ error: errMsg });
+          setRunning(false);
+          return;
+        }
+        ctxRef.current.testToken = loginRes.body.token;
+        ctxRef.current.testEmail = loginRes.body.email;
+        setAuthUser({
+          email: loginRes.body.email,
+          role: loginRes.body.role,
+          userId: loginRes.body.userId,
+          displayName: loginRes.body.displayName,
+          mode: "credentials",
+        });
+      } catch (err) {
+        setAuthUser({ error: `Login error: ${err.message}` });
+        setRunning(false);
+        return;
+      }
+    }
+
     const allTests = makeTests(ctxRef.current, envKey);
     // On prod, skip mutating tests to avoid data pollution
-    const tests = allTests.filter(t => !(isProd && MUTATING_TEST_IDS.has(t.id)));
+    // If using existing user, also skip register test (already logged in)
+    const skipIds = new Set(isProd ? MUTATING_TEST_IDS : []);
+    if (_useExisting) {
+      skipIds.add("auth-register");
+      skipIds.add("auth-login");
+      skipIds.add("auth-login-bad-password");
+    }
+    const tests = allTests.filter(t => !skipIds.has(t.id));
     const skipped = allTests.length - tests.length;
 
     setCounts({ total: tests.length, pass: 0, fail: 0, done: 0, skipped });
@@ -604,8 +645,9 @@ export default function App() {
     // Mark skipped tests
     if (skipped > 0) {
       allTests.forEach(t => {
-        if (MUTATING_TEST_IDS.has(t.id) && isProd) {
-          setResults(prev => ({ ...prev, [t.id]: { status: "SKIPPED", message: "Skipped on prod (mutating test)" } }));
+        if (skipIds.has(t.id)) {
+          const reason = _useExisting ? "Skipped (using provided credentials)" : "Skipped on prod (mutating test)";
+          setResults(prev => ({ ...prev, [t.id]: { status: "SKIPPED", message: reason } }));
         }
       });
     }
@@ -659,7 +701,7 @@ export default function App() {
     // eslint-disable-next-line no-func-assign
     api = _origApiFn;
     setRunning(false);
-  }, [envKey, isProd]);
+  }, [envKey, isProd, creds]);
 
   const allTests = makeTests(ctxRef.current, envKey);
   const pct = counts.total > 0 ? Math.round((counts.pass / counts.total) * 100) : 0;
@@ -708,6 +750,93 @@ export default function App() {
           <span style={{ color: "#fbbf24", fontSize: 10, alignSelf: "center", fontWeight: 600 }}>
             (read-only — mutating tests skipped)
           </span>
+        )}
+      </div>
+
+      {/* Credentials (optional — use existing user instead of auto-register) */}
+      <div style={{
+        marginBottom: 12, padding: "10px 14px",
+        background: "#080808", border: `1px solid ${useExistingUser ? "#166534" : "#1a1a1a"}`,
+        borderRadius: 8,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>
+            Test as existing user (optional)
+          </span>
+          {useExistingUser && (
+            <span style={{ color: "#4ade80", fontSize: 10, fontWeight: 600 }}>
+              Will login with these credentials
+            </span>
+          )}
+          {!useExistingUser && (
+            <span style={{ color: "#374151", fontSize: 10 }}>
+              Leave empty to auto-register a new test user
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={creds.email}
+            onChange={e => setCreds(c => ({ ...c, email: e.target.value }))}
+            disabled={running}
+            style={{
+              flex: 1, minWidth: 200, padding: "6px 10px",
+              background: "#111", border: "1px solid #222", borderRadius: 5,
+              color: "#e2e8f0", fontSize: 12, fontFamily: "monospace",
+              outline: "none",
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={creds.password}
+            onChange={e => setCreds(c => ({ ...c, password: e.target.value }))}
+            disabled={running}
+            style={{
+              flex: 1, minWidth: 180, padding: "6px 10px",
+              background: "#111", border: "1px solid #222", borderRadius: 5,
+              color: "#e2e8f0", fontSize: 12, fontFamily: "monospace",
+              outline: "none",
+            }}
+          />
+          {useExistingUser && (
+            <button
+              onClick={() => setCreds({ email: "", password: "" })}
+              disabled={running}
+              style={{
+                padding: "6px 12px", background: "#1a1a1a", color: "#a8a29e",
+                border: "1px solid #333", borderRadius: 5, fontSize: 11,
+                cursor: running ? "default" : "pointer",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {authUser && !authUser.error && (
+          <div style={{ marginTop: 8, display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ color: "#4ade80", fontSize: 11 }}>
+              Logged in as {authUser.email}
+            </span>
+            <span style={{
+              background: "#052e16", border: "1px solid #166534", color: "#4ade80",
+              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+            }}>
+              {authUser.role}
+            </span>
+            <span style={{ color: "#374151", fontSize: 10 }}>
+              {authUser.userId}
+            </span>
+          </div>
+        )}
+        {authUser?.error && (
+          <div style={{ marginTop: 8 }}>
+            <span style={{ color: "#f87171", fontSize: 11 }}>
+              {authUser.error}
+            </span>
+          </div>
         )}
       </div>
 
@@ -791,7 +920,7 @@ export default function App() {
 
           <button
             onClick={() => {
-              const report = buildReport(allTests, results, env, counts);
+              const report = buildReport(allTests, results, env, counts, authUser);
               navigator.clipboard.writeText(report).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
@@ -815,7 +944,7 @@ export default function App() {
             color: "#94a3b8", fontSize: 11, fontFamily: "'Fira Code', monospace",
             whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 400, overflow: "auto",
           }}>
-            {buildReport(allTests, results, env, counts)}
+            {buildReport(allTests, results, env, counts, authUser)}
           </pre>
         </>
       )}
