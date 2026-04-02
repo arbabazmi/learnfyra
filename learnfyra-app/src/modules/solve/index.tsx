@@ -14,7 +14,9 @@ import { useSolveSession } from './hooks/useSolveSession';
 import { useSolveResults } from './hooks/useSolveResults';
 import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data';
 import { loadWorksheet } from './worksheetStorage';
+import { mapApiToWorksheet } from './apiMapper';
 import { apiUrl } from '@/lib/env';
+import { getToken } from '@/lib/auth';
 import type { SolveMode, Worksheet } from './types';
 
 /** Main solve page — handles all screens (mode select, solve, results) */
@@ -44,20 +46,37 @@ export default function SolvePage() {
     }
 
     // 3. Fetch from API (real generated worksheets)
-    fetch(`${apiUrl}/api/solve/${worksheetId}`, { signal: controller.signal })
-      .then((res) => {
+    // Ensure we have a token (use existing auth or get a guest token)
+    (async () => {
+      try {
+        let token = getToken();
+        if (!token) {
+          const guestRes = await fetch(`${apiUrl}/api/auth/guest`, {
+            method: 'POST',
+            signal: controller.signal,
+          });
+          if (guestRes.ok) {
+            const guestData = await guestRes.json();
+            token = guestData.token;
+          }
+        }
+
+        const res = await fetch(`${apiUrl}/api/solve/${worksheetId}`, {
+          signal: controller.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) throw new Error(`Worksheet not found (${res.status})`);
-        return res.json();
-      })
-      .then((data) => {
+        const data = await res.json();
         if (!isMounted) return;
-        setWorksheet(data as Worksheet);
-      })
-      .catch((err) => {
-        if (!isMounted || err.name === 'AbortError') return;
-        setError(err.message);
-      })
-      .finally(() => { if (isMounted) setLoading(false); });
+        setWorksheet(mapApiToWorksheet(data));
+      } catch (err: unknown) {
+        if (!isMounted) return;
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setError(err instanceof Error ? err.message : 'Failed to load worksheet');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    })();
 
     return () => { isMounted = false; controller.abort(); };
   }, [worksheetId]);
