@@ -16,6 +16,8 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import { validateGenerateBody } from '../middleware/validator.js';
@@ -28,9 +30,16 @@ const corsHeaders = {
 
 // Lazy AWS client getters — instantiated on first invocation, not at module
 // scope, to keep cold-start overhead minimal and match the project pattern (W4).
-let _s3, _ssm;
+let _s3, _ssm, _dynamo, _docClient;
 function getS3()  { if (!_s3)  _s3  = new S3Client({});  return _s3;  }
 function getSsm() { if (!_ssm) _ssm = new SSMClient({}); return _ssm; }
+function getDocClient() {
+  if (!_docClient) {
+    _dynamo = new DynamoDBClient({});
+    _docClient = DynamoDBDocumentClient.from(_dynamo);
+  }
+  return _docClient;
+}
 
 const DIAGNOSTIC_HEADERS = 'x-request-id,x-client-request-id';
 
@@ -72,6 +81,7 @@ let _buildStudentKey;
 let _resolveEffectiveRepeatCap;
 let _getSeenQuestionSignatures;
 let _recordExposureHistory;
+let _generateWorksheetSlug;
 
 /**
  * Returns validateToken and assertRole from authMiddleware, importing on first call.
@@ -156,6 +166,18 @@ async function getRepeatCapHelpers() {
   };
 }
 
+/**
+ * Returns generateWorksheetSlug, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+async function getSlugGenerator() {
+  if (!_generateWorksheetSlug) {
+    const mod = await import('../../src/utils/slugify.js');
+    _generateWorksheetSlug = mod.generateWorksheetSlug;
+  }
+  return _generateWorksheetSlug;
+}
+
 /** Maps user-facing format names to file extensions */
 const FORMAT_EXT = {
   'PDF': 'pdf',
@@ -181,25 +203,6 @@ async function uploadToS3(localPath, s3Key, contentType) {
     Key: s3Key,
     Body: body,
     ContentType: contentType,
-  }));
-  return s3Key;
-}
-
-/**
- * Serialises a JSON object and uploads it directly to S3 (no local temp file).
- * Used for solve-data.json which is built in memory rather than exported to /tmp.
- * @param {string} s3Key - Destination S3 key
- * @param {Object} data  - JSON-serialisable object
- * @returns {Promise<string>} The S3 key that was written
- */
-async function uploadJsonToS3(s3Key, data) {
-  const bucket = process.env.WORKSHEET_BUCKET_NAME;
-  if (!bucket) throw new Error('WORKSHEET_BUCKET_NAME environment variable is not set.');
-  await getS3().send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: s3Key,
-    Body: JSON.stringify(data),
-    ContentType: 'application/json',
   }));
   return s3Key;
 }
@@ -528,31 +531,42 @@ export const handler = async (event, context) => {
       bucket: process.env.WORKSHEET_BUCKET_NAME,
     });
 
-    // 5. Upload solve-data.json to S3 — full worksheet with answers for online scoring
-    stage = 'solve-data:upload';
-    const solveData = {
-      worksheetId: uuid,
-      generatedAt: now.toISOString(),
-      teacherId,
-      studentId: studentId || null,
-      parentId: parentId || null,
-      studentKey,
-      repeatCapPolicy: {
-        effectiveCapPercent: repeatPolicy.capPercent,
-        appliedBy: repeatPolicy.appliedBy,
-        sourceId: repeatPolicy.sourceId,
-      },
-      ...worksheet,
-    };
-    const solveDataKey = `${baseKey}/solve-data.json`;
-    await uploadJsonToS3(solveDataKey, solveData);
-    logEvent('info', 'generateHandler solve-data uploaded', {
-      requestId,
-      clientRequestId,
-      stage,
-      elapsedMs: Date.now() - requestStart,
-      solveDataKey,
-    });
+    // 5. Write worksheet data to DynamoDB for online solve/scoring
+    stage = 'solve-data:write';
+    const generateSlug = await getSlugGenerator();
+    const slug = generateSlug(grade, subject, topic, difficulty, uuid);
+    const worksheetsTableName = process.env.WORKSHEETS_TABLE_NAME;
+    if (worksheetsTableName) {
+      const expiresAt = Math.floor(now.getTime() / 1000) + (7 * 24 * 60 * 60);
+      await getDocClient().send(new PutCommand({
+        TableName: worksheetsTableName,
+        Item: {
+          worksheetId: uuid,
+          slug,
+          grade,
+          subject,
+          topic,
+          difficulty,
+          questions: worksheet.questions,
+          estimatedTime: worksheet.estimatedTime,
+          timerSeconds: worksheet.timerSeconds,
+          totalPoints: worksheet.totalPoints,
+          title: worksheet.title,
+          s3BaseKey: baseKey,
+          createdAt: now.toISOString(),
+          createdBy: decoded?.sub || 'anonymous',
+          expiresAt,
+        },
+      }));
+      logEvent('info', 'generateHandler worksheet written to DynamoDB', {
+        requestId,
+        clientRequestId,
+        stage,
+        elapsedMs: Date.now() - requestStart,
+        slug,
+        worksheetsTableName,
+      });
+    }
 
     // 7. Export and upload answer key (if requested)
     let answerKeyKey = null;
@@ -647,6 +661,7 @@ export const handler = async (event, context) => {
         success: true,
         worksheetKey,
         answerKeyKey,
+        slug,
         metadata,
         requestId,
         clientRequestId,

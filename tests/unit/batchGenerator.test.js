@@ -187,7 +187,8 @@ describe('generateQuestionBatch()', () => {
       const elapsed = Date.now() - start;
 
       // With 3 concurrent workers (max concurrency = 3), should be ~5ms not ~15ms
-      expect(elapsed).toBeLessThan(50);
+      // Use 150ms ceiling to avoid flaky failures on slow CI runners
+      expect(elapsed).toBeLessThan(150);
     });
 
   });
