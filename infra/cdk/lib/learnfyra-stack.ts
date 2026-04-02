@@ -380,6 +380,23 @@ export class LearnfyraStack extends cdk.Stack {
       'id'
     );
 
+    // ── DynamoDB: Worksheets table — stores full worksheet JSON for online solve ──
+    const worksheetsTable = createTable(
+      'WorksheetsTable',
+      `LearnfyraWorksheets-${appEnv}`,
+      'worksheetId',
+      {
+        ttlAttribute: 'expiresAt',
+        gsis: [
+          {
+            indexName: 'slug-index',
+            partitionKeyName: 'slug',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
+        ],
+      }
+    );
+
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
@@ -932,6 +949,9 @@ export class LearnfyraStack extends cdk.Stack {
     generateFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
     generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
     generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+    generateFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    solveFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    submitFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
     progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
@@ -1026,6 +1046,8 @@ export class LearnfyraStack extends cdk.Stack {
     [
       generateFn,
       authFn,
+      solveFn,
+      submitFn,
       progressFn,
       analyticsFn,
       classFn,
