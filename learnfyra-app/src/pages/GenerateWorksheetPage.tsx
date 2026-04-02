@@ -23,9 +23,11 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
-import { generateMockWorksheet, saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
+import { saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
 import { printWorksheet, downloadAsWord, downloadAsPDF } from '@/modules/solve/worksheetExport';
 import type { Subject } from '@/modules/solve/types';
+import { apiUrl } from '@/lib/env';
+import { getToken } from '@/lib/auth';
 import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
 
 const DIFFICULTIES = [
@@ -161,24 +163,52 @@ const GenerateWorksheetPage: React.FC = () => {
   const incrementQ = () => setQuestionCount((n) => Math.min(30, n + 1));
   const decrementQ = () => setQuestionCount((n) => Math.max(5,  n - 1));
 
-  // Generate worksheet with mock question bank, store in localStorage
-  const handleGenerate = () => {
+  const [genError, setGenError] = React.useState('');
+
+  // Generate worksheet via real API — AI-powered generation, stored server-side
+  const handleGenerate = async () => {
     if (selectedTypes.length === 0) return;
     setGenState('generating');
-    setTimeout(() => {
-      const worksheet = generateMockWorksheet({
-        grade: gradeNum,
-        subject: subject as Subject,
-        topic,
-        difficulty: difficulty.toLowerCase() as 'easy' | 'medium' | 'hard' | 'mixed',
-        questionCount,
-        timerMode: 'timed',
-        questionTypes: selectedTypes,
+    setGenError('');
+
+    const token = getToken();
+    try {
+      const res = await fetch(`${apiUrl}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          grade: gradeNum,
+          subject,
+          topic,
+          difficulty,
+          questionCount,
+          format: 'HTML',
+          includeAnswerKey: true,
+          generationMode: 'auto',
+          provenanceLevel: 'summary',
+          worksheetDate: new Date().toISOString().split('T')[0],
+        }),
       });
-      saveWorksheet(worksheet);
-      setGeneratedId(worksheet.worksheetId);
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || `Generation failed (${res.status})`);
+      }
+
+      // Store the worksheet ID from the API response
+      const wsId = data.metadata?.id || data.worksheetId;
+      if (!wsId) throw new Error('No worksheet ID in response');
+
+      setGeneratedId(wsId);
       setGenState('success');
-    }, 2000);
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
+      setGenState('idle');
+    }
   };
 
   // ── Shared select class
@@ -645,6 +675,12 @@ const GenerateWorksheetPage: React.FC = () => {
                   {genState !== 'generating' && <Sparkles className="size-5" />}
                   {genState === 'generating' ? 'Generating...' : 'Generate Worksheet'}
                 </Button>
+
+                {genError && (
+                  <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive font-semibold">
+                    {genError}
+                  </div>
+                )}
 
               </div>
             </section>

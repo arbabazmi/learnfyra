@@ -3,7 +3,7 @@
  * @description Module entry point and route wrapper for the Solve module.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { AppLayout } from '@/components/layout/AppLayout';
 import ModeSelector from './components/ModeSelector';
@@ -14,27 +14,63 @@ import { useSolveSession } from './hooks/useSolveSession';
 import { useSolveResults } from './hooks/useSolveResults';
 import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data';
 import { loadWorksheet } from './worksheetStorage';
+import { apiUrl } from '@/lib/env';
 import type { SolveMode, Worksheet } from './types';
-
-// Worksheet lookup: check storage first, then fall back to mock data for demos
-function getWorksheet(id: string): Worksheet | null {
-  // Check localStorage for generated worksheets
-  const stored = loadWorksheet(id);
-  if (stored) return stored;
-
-  // Fall back to built-in demo worksheets
-  if (id === 'ws-math-fractions-001' || id === 'demo-math') return mathFractionsWorksheet;
-  if (id === 'ws-science-solar-001' || id === 'demo-science') return scienceSolarSystemWorksheet;
-
-  return null;
-}
 
 /** Main solve page — handles all screens (mode select, solve, results) */
 export default function SolvePage() {
   const { worksheetId } = useParams<{ worksheetId: string }>();
   const navigate = useNavigate();
 
-  const worksheet = getWorksheet(worksheetId || '');
+  const [worksheet, setWorksheet] = useState<Worksheet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!worksheetId) { setLoading(false); return; }
+    let isMounted = true;
+    const controller = new AbortController();
+
+    // 1. Check localStorage first (for backwards compat)
+    const stored = loadWorksheet(worksheetId);
+    if (stored) { setWorksheet(stored); setLoading(false); return; }
+
+    // 2. Check demo worksheets
+    if (worksheetId === 'ws-math-fractions-001' || worksheetId === 'demo-math') {
+      setWorksheet(mathFractionsWorksheet); setLoading(false); return;
+    }
+    if (worksheetId === 'ws-science-solar-001' || worksheetId === 'demo-science') {
+      setWorksheet(scienceSolarSystemWorksheet); setLoading(false); return;
+    }
+
+    // 3. Fetch from API (real generated worksheets)
+    fetch(`${apiUrl}/api/solve/${worksheetId}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Worksheet not found (${res.status})`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!isMounted) return;
+        setWorksheet(data as Worksheet);
+      })
+      .catch((err) => {
+        if (!isMounted || err.name === 'AbortError') return;
+        setError(err.message);
+      })
+      .finally(() => { if (isMounted) setLoading(false); });
+
+    return () => { isMounted = false; controller.abort(); };
+  }, [worksheetId]);
+
+  if (loading) {
+    return (
+      <AppLayout pageTitle="Loading...">
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-10 h-10 border-4 border-surface-2 border-t-primary rounded-full animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!worksheet) {
     return (
@@ -42,7 +78,7 @@ export default function SolvePage() {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
             <h1 className="text-2xl font-extrabold text-foreground mb-2">Worksheet Not Found</h1>
-            <p className="text-muted-foreground mb-4">The worksheet you're looking for doesn't exist.</p>
+            <p className="text-muted-foreground mb-4">{error || "The worksheet you're looking for doesn't exist."}</p>
             <button
               onClick={() => navigate('/')}
               className="px-5 py-2.5 rounded-xl bg-primary text-white font-semibold hover:bg-primary-hover transition-colors"

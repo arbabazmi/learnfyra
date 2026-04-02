@@ -324,7 +324,7 @@ export const handler = async (event, context) => {
       stage = 'auth:validate-token';
       const { validateToken: doValidate, assertRole: doAssertRole } = await getAuthMiddleware();
       decoded = await doValidate(event);
-      doAssertRole(decoded, ['teacher', 'admin']);
+      doAssertRole(decoded, ['teacher', 'admin', 'student']);
     } catch (err) {
       return createErrorResponse({
         requestId,
