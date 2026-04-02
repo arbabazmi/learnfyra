@@ -17,7 +17,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import { validateGenerateBody } from '../middleware/validator.js';
@@ -344,7 +344,7 @@ export const handler = async (event, context) => {
       stage = 'auth:validate-token';
       const { validateToken: doValidate, assertRole: doAssertRole } = await getAuthMiddleware();
       decoded = await doValidate(event);
-      doAssertRole(decoded, ['teacher', 'admin', 'student']);
+      doAssertRole(decoded, ['teacher', 'admin', 'student', 'guest-student']);
     } catch (err) {
       return createErrorResponse({
         requestId,
@@ -369,7 +369,89 @@ export const handler = async (event, context) => {
       });
     }
 
-    // 0b. Ensure API key is available (fetches from SSM on first cold start)
+    // 0b. Guest worksheet limit check — before any generation work
+    const isGuestUser = decoded.role && decoded.role.startsWith('guest-');
+    if (isGuestUser) {
+      stage = 'guest:limit-check';
+      const guestSessionsTable = process.env.GUEST_SESSIONS_TABLE;
+      if (!guestSessionsTable) {
+        return createErrorResponse({
+          requestId, clientRequestId,
+          statusCode: 500,
+          error: 'Guest sessions table not configured.',
+          errorCode: 'SERVER_CONFIG_ERROR',
+          code: 'WG_SERVER_CONFIG_ERROR',
+          stage,
+        });
+      }
+
+      // Parse and validate body FIRST — 400 does not consume a slot
+      let guestBody;
+      try {
+        guestBody = JSON.parse(event.body || '{}');
+      } catch {
+        return createErrorResponse({
+          requestId, clientRequestId,
+          statusCode: 400,
+          error: 'Invalid JSON in request body.',
+          errorCode: 'INVALID_JSON',
+          code: 'WG_INVALID_REQUEST',
+          stage: 'request:parse-body',
+        });
+      }
+
+      let guestValidated;
+      try {
+        guestValidated = validateGenerateBody(guestBody);
+      } catch (err) {
+        return createErrorResponse({
+          requestId, clientRequestId,
+          statusCode: 400,
+          error: err.message,
+          errorCode: 'VALIDATION_ERROR',
+          code: 'WG_INVALID_REQUEST',
+          stage: 'request:validate-body',
+        });
+      }
+
+      // Read GuestSessions record
+      const guestId = decoded.sub;
+      const sessionResult = await getDocClient().send(new GetCommand({
+        TableName: guestSessionsTable,
+        Key: { PK: `GUEST#${guestId}` },
+      }));
+
+      const worksheetIds = sessionResult.Item?.worksheetIds;
+      const usedCount = worksheetIds ? worksheetIds.size ?? Object.keys(worksheetIds).length : 0;
+
+      if (usedCount >= 10) {
+        logEvent('info', 'generateHandler guest limit reached', {
+          requestId, clientRequestId, stage, guestId, usedCount,
+        });
+        return {
+          statusCode: 403,
+          headers: buildHeaders(requestId, clientRequestId),
+          body: JSON.stringify({
+            success: false,
+            code: 'GUEST_LIMIT_REACHED',
+            error: 'You have used your 10 free worksheets. Please log in to continue.',
+            used: usedCount,
+            limit: 10,
+            requestId,
+            clientRequestId,
+          }),
+        };
+      }
+
+      // Guest passes limit check — store validated body for later use
+      // (the main flow below will re-parse, which is fine for correctness)
+      logEvent('info', 'generateHandler guest limit check passed', {
+        requestId, clientRequestId, stage, guestId, usedCount,
+        elapsedMs: Date.now() - requestStart,
+      });
+    }
+
+    // 0c. Ensure API key is available (fetches from SSM on first cold start)
     stage = 'auth:load-api-key';
     await loadApiKey();
     logEvent('info', 'generateHandler api key ready', {
@@ -673,6 +755,42 @@ export const handler = async (event, context) => {
       expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
+    // 9. Guest: atomically add worksheetId to GuestSessions Set + return count
+    let guestUsage;
+    if (isGuestUser) {
+      const guestSessionsTable = process.env.GUEST_SESSIONS_TABLE;
+      const guestId = decoded.sub;
+      try {
+        await getDocClient().send(new UpdateCommand({
+          TableName: guestSessionsTable,
+          Key: { PK: `GUEST#${guestId}` },
+          UpdateExpression: 'ADD worksheetIds :id',
+          ExpressionAttributeValues: {
+            ':id': new Set([uuid]),
+          },
+        }));
+      } catch (addErr) {
+        // Best-effort: worksheet was already generated and stored. Log but don't fail.
+        logEvent('warn', 'generateHandler guest worksheetId ADD failed', {
+          requestId, clientRequestId, guestId,
+          error: { name: addErr.name, message: addErr.message },
+        });
+      }
+      // Re-read to get accurate count (ADD is atomic so this reflects the update)
+      try {
+        const updated = await getDocClient().send(new GetCommand({
+          TableName: guestSessionsTable,
+          Key: { PK: `GUEST#${guestId}` },
+        }));
+        const updatedIds = updated.Item?.worksheetIds;
+        const used = updatedIds ? (updatedIds.size ?? Object.keys(updatedIds).length) : 1;
+        guestUsage = { guestUsed: used, guestLimit: 10 };
+      } catch {
+        // Fallback: estimate count
+        guestUsage = { guestUsed: -1, guestLimit: 10 };
+      }
+    }
+
     return {
       statusCode: 200,
       headers: buildHeaders(requestId, clientRequestId),
@@ -684,6 +802,7 @@ export const handler = async (event, context) => {
         metadata,
         requestId,
         clientRequestId,
+        ...(guestUsage || {}),
       }),
     };
   } catch (err) {

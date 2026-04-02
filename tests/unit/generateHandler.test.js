@@ -10,6 +10,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { mockClient } from 'aws-sdk-client-mock';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
@@ -25,6 +26,7 @@ const sampleWorksheet = JSON.parse(
 
 const s3Mock  = mockClient(S3Client);
 const ssmMock = mockClient(SSMClient);
+const dynamoDocMock = mockClient(DynamoDBDocumentClient);
 
 // ─── Module mocks (must all appear before any dynamic import()) ───────────────
 
@@ -147,6 +149,7 @@ const validBody = {
 beforeEach(() => {
   s3Mock.reset();
   ssmMock.reset();
+  dynamoDocMock.reset();
   jest.clearAllMocks();
 
   // Set ANTHROPIC_API_KEY directly so loadApiKey() short-circuits without SSM
@@ -155,6 +158,7 @@ beforeEach(() => {
   // Required by uploadToS3 — W5 fix reads BUCKET lazily inside the function
   // and throws if it is missing, so the env var must be present in tests.
   process.env.WORKSHEET_BUCKET_NAME = 'test-bucket';
+  process.env.GUEST_SESSIONS_TABLE = 'LearnfyraGuestSessions-test';
 
   // Restore default auth mock — teacher passes through
   validateToken.mockResolvedValue({ sub: 'teacher-user-123', email: 'teacher@learnfyra.com', role: 'teacher' });
@@ -786,6 +790,101 @@ describe('generateHandler — teacherId and solve-data.json', () => {
     // Both should share the same worksheets/{date}/{uuid}/ prefix
     const prefix = worksheetKey.replace('/worksheet.pdf', '');
     expect(solveDataKey).toContain(prefix);
+  });
+
+});
+
+// ─── Guest worksheet limit check ────────────────────────────────────────────
+
+describe('generateHandler — guest worksheet limit', () => {
+
+  function guestEvent(body) {
+    return mockEvent(body);
+  }
+
+  function setupGuestAuth(usedCount = 0) {
+    // Make auth middleware return a guest-student token
+    validateToken.mockResolvedValue({
+      sub: 'guest_test-uuid-guest',
+      email: '',
+      role: 'guest-student',
+    });
+    assertRole.mockImplementation(() => {}); // passes
+
+    // Mock DynamoDB GetCommand for GuestSessions
+    const worksheetIds = usedCount > 0
+      ? { values: Array.from({ length: usedCount }, (_, i) => `ws-${i}`), size: usedCount }
+      : undefined;
+
+    dynamoDocMock.on(GetCommand).resolves({
+      Item: worksheetIds
+        ? { PK: 'GUEST#guest_test-uuid-guest', worksheetIds }
+        : { PK: 'GUEST#guest_test-uuid-guest' },
+    });
+
+    // Mock DynamoDB UpdateCommand (ADD worksheetIds)
+    dynamoDocMock.on(UpdateCommand).resolves({});
+  }
+
+  it('allows generation when guest has 0 worksheets used', async () => {
+    setupGuestAuth(0);
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+  });
+
+  it('allows generation when guest has 9 worksheets used', async () => {
+    setupGuestAuth(9);
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(200);
+  });
+
+  it('returns 403 GUEST_LIMIT_REACHED when guest has 10 worksheets used', async () => {
+    setupGuestAuth(10);
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(403);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('GUEST_LIMIT_REACHED');
+    expect(body.used).toBe(10);
+    expect(body.limit).toBe(10);
+  });
+
+  it('returns 403 when guest has more than 10 worksheets (safety)', async () => {
+    setupGuestAuth(15);
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(403);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('GUEST_LIMIT_REACHED');
+  });
+
+  it('returns 400 for invalid input without consuming a slot', async () => {
+    setupGuestAuth(5);
+    const result = await handler(guestEvent({ grade: 99 }), mockContext);
+    expect(result.statusCode).toBe(400);
+    // Confirm UpdateCommand was NOT called (no slot consumed)
+    const updateCalls = dynamoDocMock.commandCalls(UpdateCommand);
+    expect(updateCalls.length).toBe(0);
+  });
+
+  it('includes guestUsed and guestLimit in successful response', async () => {
+    setupGuestAuth(3);
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('guestLimit', 10);
+    expect(body).toHaveProperty('guestUsed');
+  });
+
+  it('does not add guest fields for authenticated user response', async () => {
+    // Reset to default teacher auth
+    validateToken.mockResolvedValue({ sub: 'teacher-user-123', email: 'teacher@learnfyra.com', role: 'teacher' });
+    assertRole.mockImplementation(() => {});
+    const result = await handler(guestEvent(validBody), mockContext);
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.guestUsed).toBeUndefined();
+    expect(body.guestLimit).toBeUndefined();
   });
 
 });

@@ -79,6 +79,21 @@ jest.unstable_mockModule('../../src/auth/tokenUtils.js', () => ({
   signToken: mockSignToken,
 }));
 
+// ─── Mock @aws-sdk/lib-dynamodb — PutCommand used by handleGuest (guest sessions) ──
+
+const mockDynamoSend = jest.fn().mockResolvedValue({});
+
+jest.unstable_mockModule('@aws-sdk/lib-dynamodb', () => ({
+  DynamoDBDocumentClient: {
+    from: jest.fn(() => ({ send: mockDynamoSend })),
+  },
+  PutCommand: jest.fn((input) => ({ _type: 'PutCommand', ...input })),
+}));
+
+jest.unstable_mockModule('@aws-sdk/client-dynamodb', () => ({
+  DynamoDBClient: jest.fn(() => ({})),
+}));
+
 // ─── Dynamic imports (must come after all mockModule calls) ──────────────────
 
 const { handler } = await import('../../backend/handlers/authHandler.js');
@@ -101,6 +116,8 @@ const mockContext = { callbackWaitsForEmptyEventLoop: true };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  process.env.GUEST_SESSIONS_TABLE = 'LearnfyraGuestSessions-test';
+  process.env.COOKIE_DOMAIN = 'localhost';
 });
 
 // ─── OPTIONS preflight ────────────────────────────────────────────────────────
@@ -937,35 +954,105 @@ describe('authHandler — POST /api/auth/reset-password', () => {
 
 describe('authHandler — POST /api/auth/guest', () => {
 
-  it('returns 200 with a guest token', async () => {
-    const result = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+  it('returns 200 with a guest token for role=student', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body);
-    expect(body.token).toBe('mock-guest-jwt-token');
-    expect(body.guestId).toMatch(/^guest-/);
-    expect(body.expiresIn).toBe(7200);
+    expect(body.guestToken).toBe('mock-guest-jwt-token');
+    expect(body.guestId).toMatch(/^guest_/);
+    expect(body.expiresAt).toBeDefined();
   });
 
-  it('calls signToken with role=guest and 2h expiry', async () => {
-    await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+  it('calls signToken with role=guest-student, iss, token_use, and 30d expiry', async () => {
+    await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
     expect(mockSignToken).toHaveBeenCalledTimes(1);
     const [payload, expiresIn] = mockSignToken.mock.calls[0];
-    expect(payload.role).toBe('guest');
-    expect(payload.sub).toMatch(/^guest-/);
-    expect(payload.email).toBe('');
-    expect(expiresIn).toBe('2h');
+    expect(payload.role).toBe('guest-student');
+    expect(payload.sub).toMatch(/^guest_/);
+    expect(payload.token_use).toBe('guest');
+    expect(payload.iss).toBe('learnfyra-guest-issuer');
+    expect(expiresIn).toBe('30d');
+  });
+
+  it('issues guest-teacher role for role=teacher', async () => {
+    await handler(mockPostEvent('/api/auth/guest', { role: 'teacher' }), mockContext);
+    const [payload] = mockSignToken.mock.calls[0];
+    expect(payload.role).toBe('guest-teacher');
+  });
+
+  it('issues guest-parent role for role=parent', async () => {
+    await handler(mockPostEvent('/api/auth/guest', { role: 'parent' }), mockContext);
+    const [payload] = mockSignToken.mock.calls[0];
+    expect(payload.role).toBe('guest-parent');
+  });
+
+  it('returns 400 for role=admin', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'admin' }), mockContext);
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when role is missing', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 400 when body is empty', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', null), mockContext);
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('writes a GuestSessions DynamoDB record with correct PK and role', async () => {
+    await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    expect(mockDynamoSend).toHaveBeenCalledTimes(1);
+    const putArg = mockDynamoSend.mock.calls[0][0];
+    expect(putArg.TableName).toBe('LearnfyraGuestSessions-test');
+    expect(putArg.Item.PK).toMatch(/^GUEST#guest_/);
+    expect(putArg.Item.role).toBe('guest-student');
+    expect(putArg.Item.createdAt).toBeDefined();
+    expect(putArg.Item.ttl).toBeGreaterThan(0);
+    expect(putArg.Item.worksheetIds).toBeUndefined();
+  });
+
+  it('Set-Cookie header is present with correct attributes', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    const cookie = result.headers['Set-Cookie'];
+    expect(cookie).toBeDefined();
+    expect(cookie).toContain('guestToken=');
+    expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('Max-Age=2592000');
+    expect(cookie).toContain('Path=/');
+  });
+
+  it('Set-Cookie omits Domain directive for localhost', async () => {
+    process.env.COOKIE_DOMAIN = 'localhost';
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    const cookie = result.headers['Set-Cookie'];
+    expect(cookie).not.toContain('Domain=');
+  });
+
+  it('Set-Cookie includes Domain directive for non-localhost', async () => {
+    process.env.COOKIE_DOMAIN = '.dev.learnfyra.com';
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    const cookie = result.headers['Set-Cookie'];
+    expect(cookie).toContain('Domain=.dev.learnfyra.com');
+  });
+
+  it('Cache-Control header prevents caching', async () => {
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    expect(result.headers['Cache-Control']).toBe('no-store, no-cache, must-revalidate');
   });
 
   it('issues unique guestIds on consecutive calls', async () => {
-    const r1 = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
-    const r2 = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    const r1 = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
+    const r2 = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
     const id1 = JSON.parse(r1.body).guestId;
     const id2 = JSON.parse(r2.body).guestId;
     expect(id1).not.toBe(id2);
   });
 
   it('CORS headers are present on guest response', async () => {
-    const result = await handler(mockPostEvent('/api/auth/guest', {}), mockContext);
+    const result = await handler(mockPostEvent('/api/auth/guest', { role: 'student' }), mockContext);
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
