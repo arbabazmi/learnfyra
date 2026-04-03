@@ -30,7 +30,7 @@ const appUrl: string =
 // ── API base URL ───────────────────────────────────────────────────────────
 // In dev, Vite proxies /api → localhost:3000 so we can use relative paths.
 // In production the API lives on the same origin via API Gateway.
-export const apiUrl: string = meta.VITE_API_BASE_URL ?? meta.VITE_API_URL ?? (meta.DEV ? 'http://localhost:3000' : '');
+export const apiUrl: string = meta.VITE_API_URL ?? (meta.DEV ? 'http://localhost:3000' : '');
 
 // ── Google OAuth ───────────────────────────────────────────────────────────
 // Flow: Frontend POSTs to /api/auth/oauth/google → backend returns
