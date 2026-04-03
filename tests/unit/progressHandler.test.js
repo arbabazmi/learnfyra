@@ -51,12 +51,13 @@ const { handler } = await import('../../backend/handlers/progressHandler.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function mockGetEvent(path, token = null) {
+function mockGetEvent(path, token = null, queryStringParameters = null) {
   return {
     httpMethod: 'GET',
     path,
     headers: token ? { authorization: `Bearer ${token}` } : {},
     pathParameters: null,
+    queryStringParameters,
     body: null,
   };
 }
@@ -569,6 +570,114 @@ describe('progressHandler — GET /api/progress/history missing auth', () => {
       mockContext,
     );
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+});
+
+// ─── GET /api/worksheets/mine ───────────────────────────────────────────────
+
+const MOCK_WORKSHEETS = [
+  { worksheetId: 'w1', slug: 'math-algebra-w1', title: 'Algebra', subject: 'Math', grade: 7, topic: 'Algebra', difficulty: 'Medium', totalPoints: 10, questionCount: 5, estimatedTime: '15 min', createdBy: VALID_STUDENT_ID, createdAt: '2026-04-01T10:00:00Z' },
+  { worksheetId: 'w2', slug: 'science-bio-w2', title: 'Biology', subject: 'Science', grade: 7, topic: 'Biology', difficulty: 'Easy', totalPoints: 10, questionCount: 5, estimatedTime: '10 min', createdBy: VALID_STUDENT_ID, createdAt: '2026-04-02T10:00:00Z' },
+  { worksheetId: 'w3', slug: 'math-geo-w3', title: 'Geometry', subject: 'Math', grade: 7, topic: 'Geometry', difficulty: 'Hard', totalPoints: 10, questionCount: 5, estimatedTime: '20 min', createdBy: VALID_STUDENT_ID, createdAt: '2026-03-30T10:00:00Z' },
+];
+
+const MOCK_MINE_ATTEMPTS = [
+  { attemptId: 'at1', worksheetId: 'w1', studentId: VALID_STUDENT_ID, percentage: 90, totalScore: 9, totalPoints: 10, createdAt: '2026-04-01T12:00:00Z' },
+  { attemptId: 'at2', worksheetId: 'w1', studentId: VALID_STUDENT_ID, percentage: 95, totalScore: 9, totalPoints: 10, createdAt: '2026-04-01T14:00:00Z' },
+  { attemptId: 'at3', worksheetId: 'w3', studentId: VALID_STUDENT_ID, percentage: null, totalScore: 0, totalPoints: 10, createdAt: '2026-03-30T12:00:00Z' },
+];
+
+function setupMineQueryMock(worksheets = MOCK_WORKSHEETS, attempts = MOCK_MINE_ATTEMPTS) {
+  mockQueryByField.mockImplementation((table) => {
+    if (table === 'worksheets') return Promise.resolve(worksheets);
+    if (table === 'attempts') return Promise.resolve(attempts);
+    return Promise.resolve([]);
+  });
+}
+
+describe('progressHandler — GET /api/worksheets/mine', () => {
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockVerifyToken.mockReturnValue(studentDecoded);
+    setupMineQueryMock();
+  });
+
+  it('returns 200 with worksheets array and total', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('worksheets');
+    expect(body).toHaveProperty('total', 3);
+    expect(body.worksheets).toHaveLength(3);
+  });
+
+  it('returns CORS headers', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('sets status "completed" with best score when attempt has percentage', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    const w1 = body.worksheets.find(w => w.worksheetId === 'w1');
+    expect(w1.status).toBe('completed');
+    expect(w1.score).toBe(95); // best of 90 and 95
+  });
+
+  it('sets status "in-progress" when attempt has null percentage', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    const w3 = body.worksheets.find(w => w.worksheetId === 'w3');
+    expect(w3.status).toBe('in-progress');
+    expect(w3.score).toBeNull();
+  });
+
+  it('sets status "new" when no attempt exists', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    const w2 = body.worksheets.find(w => w.worksheetId === 'w2');
+    expect(w2.status).toBe('new');
+    expect(w2.score).toBeNull();
+  });
+
+  it('sorts by createdAt descending (newest first)', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.worksheets[0].worksheetId).toBe('w2'); // Apr 2
+    expect(body.worksheets[1].worksheetId).toBe('w1'); // Apr 1
+    expect(body.worksheets[2].worksheetId).toBe('w3'); // Mar 30
+  });
+
+  it('respects limit and offset pagination', async () => {
+    const result = await handler(
+      mockGetEvent('/api/worksheets/mine', 'tok', { limit: '2', offset: '1' }),
+      mockContext,
+    );
+    const body = JSON.parse(result.body);
+    expect(body.worksheets).toHaveLength(2);
+    expect(body.total).toBe(3);
+    expect(body.worksheets[0].worksheetId).toBe('w1'); // skipped w2 (offset 1)
+  });
+
+  it('returns empty when user has no worksheets', async () => {
+    setupMineQueryMock([], []);
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.worksheets).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  it('returns 401 when token is missing', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine'), mockContext);
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('uses slug field from worksheet', async () => {
+    const result = await handler(mockGetEvent('/api/worksheets/mine', 'tok'), mockContext);
+    const body = JSON.parse(result.body);
+    expect(body.worksheets[0].slug).toBe('science-bio-w2');
   });
 
 });
