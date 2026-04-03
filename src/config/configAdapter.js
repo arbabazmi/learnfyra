@@ -45,6 +45,7 @@ function getDocClient() {
 // ---------------------------------------------------------------------------
 
 const getConfigTable = () =>
+  process.env.CONFIG_TABLE_NAME ||
   process.env.LEARNFYRA_CONFIG_TABLE ||
   `LearnfyraConfig-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`;
 
