@@ -1219,6 +1219,37 @@ app.get('/api/rewards/class/:id', async (req, res) => {
   }
 });
 
+// ── Lazy-load feedbackHandler ────────────────────────────────────────────────
+let _feedbackHandler;
+
+const getFeedbackHandler = async () => {
+  if (!_feedbackHandler) {
+    const mod = await import('./backend/handlers/feedbackHandler.js');
+    _feedbackHandler = mod.handler;
+  }
+  return _feedbackHandler;
+};
+
+// ── POST /api/feedback ──────────────────────────────────────────────────────
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const fn = await getFeedbackHandler();
+    const result = await fn(
+      {
+        httpMethod: 'POST',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('feedback route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── Lazy-load questionBankHandler ────────────────────────────────────────────
 let _questionBankHandler;
 

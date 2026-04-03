@@ -5,20 +5,119 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, XCircle, SkipForward, Clock, Trophy, Target, RotateCcw, Home, Eye, Lightbulb, ChevronDown } from 'lucide-react';
+import { CheckCircle, XCircle, SkipForward, Clock, Trophy, Target, RotateCcw, Home, Eye, Lightbulb, ChevronDown, FlaskConical, Send, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import ConfettiEffect from './ui/ConfettiEffect';
 import { useGradeTheme } from '../hooks/useGradeTheme';
+import { apiUrl } from '@/lib/env';
+import { getAuthToken } from '@/lib/auth';
 import type { SolveResults, SolveMode, GradeTheme } from '../types';
 
 interface ResultsScreenProps {
   results: SolveResults;
   grade: number;
+  worksheetId?: string;
   onRetake: () => void;
   onSwitchMode: () => void;
   onHome: () => void;
+}
+
+/** Beta feedback banner with textarea — shown on the results screen. */
+function BetaFeedbackBanner({ worksheetId, results }: { worksheetId?: string; results: SolveResults }) {
+  const [feedback, setFeedback] = useState('');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const handleSubmit = async () => {
+    if (!feedback.trim() || status === 'sending' || status === 'sent') return;
+    setStatus('sending');
+    try {
+      const token = getAuthToken();
+      await fetch(`${apiUrl}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          worksheetId: worksheetId || results.worksheetId,
+          feedback: feedback.trim(),
+          page: 'solve-results',
+          userAgent: navigator.userAgent,
+          score: results.totalScore,
+          percentage: results.percentage,
+          questionCount: results.results.length,
+        }),
+      });
+      setStatus('sent');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <motion.div
+      className="rounded-xl border border-primary/20 bg-primary/5 p-5 mb-6"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.55 }}
+    >
+      <div className="flex items-start gap-3 mb-3">
+        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <FlaskConical className="size-4 text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-foreground">
+            Answer review is in beta
+          </p>
+          <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+            Our AI is reviewing your answers, so some results may not be accurate.
+            If you notice anything off, please let us know — your feedback helps us improve!
+          </p>
+        </div>
+      </div>
+
+      {status === 'sent' ? (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-success-light border border-success/20">
+          <CheckCircle2 className="size-4 text-success" />
+          <p className="text-sm font-semibold text-success">Thanks for your feedback!</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            placeholder="e.g. Question 3 was marked wrong but my answer was correct…"
+            maxLength={2000}
+            rows={3}
+            className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {feedback.length}/2000
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSubmit}
+              disabled={!feedback.trim() || status === 'sending'}
+              loading={status === 'sending'}
+              className="gap-1.5"
+            >
+              {status !== 'sending' && <Send className="size-3.5" />}
+              Send Feedback
+            </Button>
+          </div>
+          {status === 'error' && (
+            <p className="text-xs text-destructive font-semibold">
+              Something went wrong. Please try again.
+            </p>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
 }
 
 function formatTime(seconds: number): string {
@@ -79,7 +178,7 @@ function ScoreRing({ percentage, color }: { percentage: number; color: string })
   );
 }
 
-export default function ResultsScreen({ results, grade, onRetake, onSwitchMode, onHome }: ResultsScreenProps) {
+export default function ResultsScreen({ results, grade, worksheetId, onRetake, onSwitchMode, onHome }: ResultsScreenProps) {
   const theme = useGradeTheme(grade);
   const [showReview, setShowReview] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'correct' | 'incorrect'>('all');
@@ -200,6 +299,9 @@ export default function ResultsScreen({ results, grade, onRetake, onSwitchMode, 
             {results.totalScore} / {results.totalPoints}
           </p>
         </motion.div>
+
+        {/* Beta feedback banner */}
+        <BetaFeedbackBanner worksheetId={worksheetId} results={results} />
 
         {/* Review answers section */}
         <motion.div
