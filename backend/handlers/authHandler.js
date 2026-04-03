@@ -255,6 +255,34 @@ async function handleOAuthCallback(provider, queryStringParameters) {
     const oauthAdapter = getOAuthAdapter();
     const result = await oauthAdapter.handleCallback(provider, code, state);
 
+    // Best-effort: upsert user record in DynamoDB so LearnfyraUsers is populated.
+    // OAuth (Cognito) adapter is stateless — it never writes user records.
+    // We do it here so dashboards, analytics, and progress tracking can look up users.
+    try {
+      const db = getDbAdapter();
+      const now = new Date().toISOString();
+      const existing = await db.queryByField('users', 'email', result.email);
+
+      if (existing.length > 0) {
+        // Returning user — update lastActiveAt
+        await db.updateItem('users', existing[0].userId, { lastActiveAt: now });
+      } else {
+        // New OAuth user — create full record
+        await db.putItem('users', {
+          userId: result.userId,
+          email: result.email,
+          role: result.role,
+          displayName: result.displayName,
+          authType: `oauth:${provider}`,
+          createdAt: now,
+          lastActiveAt: now,
+        });
+      }
+    } catch (dbErr) {
+      // Non-fatal: login still succeeds even if the user record write fails
+      console.error('authHandler OAuth user upsert failed (non-fatal):', dbErr.message || dbErr);
+    }
+
     return redirectToFrontend(frontendUrl, result, null);
   } catch (err) {
     return redirectToFrontend(frontendUrl, null, err.message || 'Authentication failed.');
