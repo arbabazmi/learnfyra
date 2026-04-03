@@ -90,9 +90,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Ensure we're on a clean working tree (ignore untracked)
-$dirtyFiles = git diff --name-only HEAD 2>$null
-if ($dirtyFiles) {
-    Write-Warn "Working tree has uncommitted changes. Proceeding anyway..."
+try {
+    $dirtyFiles = git diff --name-only HEAD 2>&1
+    if ($dirtyFiles -and ($dirtyFiles | Where-Object { $_ -notmatch '^warning:' })) {
+        Write-Warn "Working tree has uncommitted changes. Proceeding anyway..."
+    }
+} catch {
+    # Ignore git warnings about CRLF etc.
 }
 
 Write-Ok "Pre-flight passed."
