@@ -15,12 +15,15 @@
     "test:integration": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js tests/integration",
     "test:coverage": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --coverage",
     "dev": "node server.js",
+    "dev:aws": "LEARNFYRA_ENV=dev node server.js",
+    "dev:staging": "LEARNFYRA_ENV=staging node server.js",
     "db:bootstrap": "node scripts/bootstrap-local-db.js",
     "db:reset": "node scripts/bootstrap-local-db.js --delete"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
     "@aws-sdk/client-dynamodb": "^3.1019.0",
+    "@aws-sdk/client-lambda": "^3.1023.0",
     "@aws-sdk/client-s3": "^3.1014.0",
     "@aws-sdk/client-ssm": "^3.1015.0",
     "@aws-sdk/lib-dynamodb": "^3.1019.0",

@@ -4,13 +4,17 @@
  * real generators — no AWS/S3 needed. No frontend is served from this port.
  *
  * Usage:
- *   node server.js          # starts API on http://localhost:3000
- *   cd learnfyra-app && npm run dev   # starts React frontend on http://localhost:5173
- *
- * Required env var:
- *   ANTHROPIC_API_KEY   your Anthropic API key (copy .env.example → .env)
+ *   LEARNFYRA_ENV=dev node server.js   # fetches config from AWS dev (recommended)
+ *   node server.js                      # falls back to .env if AWS unavailable
+ *   cd learnfyra-app && npm run dev     # starts React frontend on http://localhost:5173
  */
 
+// 1. Try loading config from AWS (SSM + Lambda env vars) — sets process.env.*
+//    before dotenv runs, so AWS values take priority over .env
+import { loadAwsConfig } from './scripts/load-aws-config.js';
+await loadAwsConfig();
+
+// 2. dotenv fills in any remaining vars from .env (won't override AWS values)
 import 'dotenv/config';
 import express from 'express';
 import morgan from 'morgan';
