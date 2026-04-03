@@ -13,10 +13,11 @@ import {
   Users,
   ArrowRight,
   LogIn,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import { GUEST_STORAGE_KEYS, setSelectedRole, type UserRole } from '@/lib/auth';
+import { GUEST_STORAGE_KEYS, setSelectedRole, setGuestCookie, type UserRole } from '@/lib/auth';
 import { apiUrl, googleOAuth } from '@/lib/env';
 
 interface RoleDef {
@@ -92,7 +93,10 @@ const RolePickerModal: React.FC = () => {
 
       if (!response.ok) throw new Error('Failed to get guest token');
 
-      // Backend sets cookie via Set-Cookie header
+      // Set cookie client-side from response body (cross-origin Set-Cookie headers are blocked)
+      const data = await response.json();
+      if (data.guestToken) setGuestCookie(data.guestToken);
+
       sessionStorage.setItem(GUEST_STORAGE_KEYS.modalShown, '1');
       auth.closeRoleModal();
       auth.refresh();
@@ -128,14 +132,20 @@ const RolePickerModal: React.FC = () => {
     window.location.href = '/';
   };
 
+  const handleDismiss = () => {
+    sessionStorage.setItem(GUEST_STORAGE_KEYS.modalShown, '1');
+    auth.closeRoleModal();
+  };
+
   if (!visible) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Backdrop with blur */}
+      {/* Backdrop with blur — click to dismiss */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-[4px] animate-[fadeIn_200ms_ease-out]"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[4px] animate-[fadeIn_200ms_ease-out] cursor-pointer"
         aria-hidden="true"
+        onClick={handleDismiss}
       />
 
       {/* Card — full-screen on mobile, centered on desktop */}
@@ -145,6 +155,15 @@ const RolePickerModal: React.FC = () => {
         aria-modal="true"
         aria-label="Choose your role"
       >
+        {/* Close button */}
+        <button
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
+          aria-label="Close"
+        >
+          <X className="size-4" />
+        </button>
+
         {/* Handle bar on mobile */}
         <div className="sm:hidden w-10 h-1 rounded-full bg-border mx-auto mb-4" />
 

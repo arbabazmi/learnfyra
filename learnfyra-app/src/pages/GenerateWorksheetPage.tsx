@@ -14,7 +14,6 @@ import {
   ChevronDown,
   Minus,
   Plus,
-  FileText,
   FileDown,
   Printer,
   KeyRound,
@@ -24,7 +23,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
 import { saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
-import { printWorksheet, downloadAsWord, downloadAsPDF } from '@/modules/solve/worksheetExport';
+import { printWorksheet, downloadAsPDF } from '@/modules/solve/worksheetExport';
+import { mapSolveDataToWorksheet } from '@/modules/solve/apiMapper';
 import type { Subject } from '@/modules/solve/types';
 import { apiUrl } from '@/lib/env';
 import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
@@ -230,6 +230,24 @@ const GenerateWorksheetPage: React.FC = () => {
 
       setGeneratedId(wsId);
       setGeneratedSlug(data.metadata?.slug || null);
+
+      // Fetch worksheet data via API and save to localStorage for solve page
+      try {
+        const slug = data.metadata?.slug;
+        const solveId = slug || wsId;
+        const solveRes = await fetch(`${apiUrl}/api/solve/${solveId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (solveRes.ok) {
+          const contentType = solveRes.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const solveData = await solveRes.json();
+            const ws = mapSolveDataToWorksheet(solveData);
+            saveWorksheet(ws);
+          }
+        }
+      } catch { /* solve page will fetch from API directly if localStorage is empty */ }
+
       setGenState('success');
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
@@ -332,7 +350,7 @@ const GenerateWorksheetPage: React.FC = () => {
             </div>
 
             {/* Download & Print grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid sm:grid-cols-3 gap-3">
               {/* PDF */}
               <button
                 type="button"
@@ -340,29 +358,13 @@ const GenerateWorksheetPage: React.FC = () => {
                   const ws = loadWorksheet(generatedId);
                   if (ws) downloadAsPDF(ws);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center group-hover:bg-destructive/15 transition-colors">
                   <FileDown className="size-5 text-destructive" />
                 </div>
                 <span className="text-sm font-bold text-foreground">Save as PDF</span>
                 <span className="text-[11px] text-muted-foreground">Print dialog → Save as PDF</span>
-              </button>
-
-              {/* Word */}
-              <button
-                type="button"
-                onClick={() => {
-                  const ws = loadWorksheet(generatedId);
-                  if (ws) downloadAsWord(ws);
-                }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center group-hover:bg-primary/15 transition-colors">
-                  <FileText className="size-5 text-primary" />
-                </div>
-                <span className="text-sm font-bold text-foreground">Download Word</span>
-                <span className="text-[11px] text-muted-foreground">.doc format</span>
               </button>
 
               {/* Print */}
@@ -372,7 +374,7 @@ const GenerateWorksheetPage: React.FC = () => {
                   const ws = loadWorksheet(generatedId);
                   if (ws) printWorksheet(ws);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center group-hover:bg-accent/20 transition-colors">
                   <Printer className="size-5 text-amber-600" />
@@ -386,15 +388,15 @@ const GenerateWorksheetPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   const ws = loadWorksheet(generatedId);
-                  if (ws) downloadAsWord(ws, true);
+                  if (ws) downloadAsPDF(ws, true);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-secondary-light hover:border-secondary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-secondary-light hover:border-secondary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-secondary-light flex items-center justify-center group-hover:bg-secondary/15 transition-colors">
                   <KeyRound className="size-5 text-secondary" />
                 </div>
                 <span className="text-sm font-bold text-foreground">Answer Key</span>
-                <span className="text-[11px] text-muted-foreground">.doc with answers</span>
+                <span className="text-[11px] text-muted-foreground">PDF with answers</span>
               </button>
             </div>
 

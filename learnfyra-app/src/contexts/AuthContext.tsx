@@ -23,6 +23,7 @@ import {
   isTokenValid,
   clearCookie,
   getCookieDomain,
+  setGuestCookie,
   clearGuestSessionKeys,
   GUEST_STORAGE_KEYS,
   type AuthUser,
@@ -112,8 +113,12 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role }),
-        }).then(() => {
-          // Backend sets new cookie via Set-Cookie header
+        }).then(async (res) => {
+          // Set cookie client-side from response body (cross-origin Set-Cookie headers are blocked)
+          if (res.ok) {
+            const data = await res.json();
+            if (data.guestToken) setGuestCookie(data.guestToken);
+          }
           const refreshed = deriveState();
           setTokenState(refreshed.tokenState);
           setGuestClaims(refreshed.guestClaims);

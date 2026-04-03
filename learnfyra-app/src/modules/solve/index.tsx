@@ -16,13 +16,37 @@ import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data
 import { loadWorksheet } from './worksheetStorage';
 import { mapApiToWorksheet } from './apiMapper';
 import { apiUrl } from '@/lib/env';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken, setGuestCookie, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import type { SolveMode, SolveSession, SolveResults, QuestionResult, Worksheet } from './types';
+
+/**
+ * Auto-provisions a guest session so shared solve links work for anyone.
+ * Calls POST /api/auth/guest with role=student (default for anonymous visitors).
+ * Returns the new guest token, or null on failure.
+ */
+async function ensureGuestSession(): Promise<string | null> {
+  try {
+    const res = await fetch(`${apiUrl}/api/auth/guest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'student' }),
+    });
+    if (!res.ok) return null;
+    // Set cookie client-side from response body (cross-origin Set-Cookie headers are blocked)
+    const data = await res.json();
+    if (data.guestToken) setGuestCookie(data.guestToken);
+    return getAuthToken();
+  } catch {
+    return null;
+  }
+}
 
 /** Main solve page — handles all screens (mode select, solve, results) */
 export default function SolvePage() {
   const { worksheetId } = useParams<{ worksheetId: string }>();
   const navigate = useNavigate();
+  const auth = useAuth();
 
   const [worksheet, setWorksheet] = useState<Worksheet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,13 +72,22 @@ export default function SolvePage() {
     // 3. Fetch from API (real generated worksheets)
     (async () => {
       try {
-        const token = getAuthToken();
+        // Auto-create guest session for anonymous visitors (shared links)
+        let token = getAuthToken();
+        if (!token && auth.tokenState === 'none') {
+          token = await ensureGuestSession();
+          if (token) auth.refresh(); // update auth context with new guest state
+        }
 
         const res = await fetch(`${apiUrl}/api/solve/${worksheetId}`, {
           signal: controller.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) throw new Error(`Worksheet not found (${res.status})`);
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('Worksheet not found');
+        }
         const data = await res.json();
         if (!isMounted) return;
         setWorksheet(mapApiToWorksheet(data));
@@ -68,7 +101,7 @@ export default function SolvePage() {
     })();
 
     return () => { isMounted = false; controller.abort(); };
-  }, [worksheetId]);
+  }, [worksheetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -219,6 +252,7 @@ async function saveProgress(
 }
 
 function SolveController({ worksheet }: { worksheet: Worksheet }) {
+  const { worksheetId } = useParams<{ worksheetId: string }>();
   const navigate = useNavigate();
   const {
     session,
@@ -364,6 +398,7 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
       <ResultsScreen
         results={results}
         grade={worksheet.grade}
+        worksheetId={worksheetId}
         onRetake={handleRetake}
         onSwitchMode={handleSwitchMode}
         onHome={handleHome}

@@ -150,6 +150,9 @@ export function coerceTypes(data) {
 function normalizeAnswer(question) {
   const { type, answer } = question;
 
+  // Skip normalization if answer is missing — let validation catch it
+  if (answer === undefined || answer === null) return;
+
   switch (type) {
     case 'multiple-choice': {
       // Extract just the letter from answers like "B. 42" or "B"

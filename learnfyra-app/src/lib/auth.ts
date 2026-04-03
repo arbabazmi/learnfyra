@@ -38,6 +38,13 @@ export function getCookieDomain(): string {
   return '.' + parts.slice(1).join('.');
 }
 
+/** Set the guest token as a first-party cookie (avoids cross-origin Set-Cookie issues). */
+export function setGuestCookie(token: string, maxAge = 2592000): void {
+  const domain = getCookieDomain();
+  const domainPart = domain !== 'localhost' ? `; Domain=${domain}` : '';
+  document.cookie = `guestToken=${token}; Path=/; SameSite=Strict; Secure; Max-Age=${maxAge}${domainPart}`;
+}
+
 // ── JWT utilities (decode only — frontend never verifies signatures) ──────
 
 export function parseJwt(token: string): Record<string, unknown> | null {

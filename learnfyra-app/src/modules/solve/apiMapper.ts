@@ -30,6 +30,8 @@ interface ApiQuestion {
   pairs?: Array<{ left: string; right: string }>;
   leftItems?: string[];
   rightItems?: string[];
+  answer?: string;
+  explanation?: string;
 }
 
 /** Shape of the full API response from GET /api/solve/{id} */
@@ -137,5 +139,31 @@ export function mapApiToWorksheet(data: ApiSolveResponse): Worksheet {
     estimatedTimeSeconds: data.timerSeconds || 0,
     totalPoints: data.totalPoints,
     questions: data.questions.map(mapQuestion),
+  };
+}
+
+/**
+ * Maps a question preserving the answer and explanation fields.
+ * Used for full solve-data (e.g. after generation) where answers are available.
+ */
+function mapQuestionWithAnswers(api: ApiQuestion): Question {
+  const mapped = mapQuestion(api);
+  mapped.correctAnswer = api.answer ?? '';
+  mapped.explanation = api.explanation ?? '';
+  return mapped;
+}
+
+/** Maps full solve-data.json (with answers) to the frontend Worksheet type. */
+export function mapSolveDataToWorksheet(data: ApiSolveResponse): Worksheet {
+  return {
+    worksheetId: data.worksheetId,
+    title: data.title || `Grade ${data.grade} ${data.subject}: ${data.topic}`,
+    grade: data.grade,
+    subject: data.subject as Worksheet['subject'],
+    topic: data.topic,
+    difficulty: (data.difficulty?.toLowerCase() || 'medium') as Difficulty,
+    estimatedTimeSeconds: data.timerSeconds || 0,
+    totalPoints: data.totalPoints,
+    questions: data.questions.map(mapQuestionWithAnswers),
   };
 }

@@ -254,12 +254,12 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Wo
           </p>
 
           {/* ── Smart Search Box ──────────────────────────── */}
-          <div className="mt-8 animate-fade-up delay-300">
+          <div className="mt-8 animate-fade-up delay-300 relative z-30">
             <SmartSearchBox externalGrade={externalGrade} onExternalGradeHandled={onExternalGradeHandled} />
           </div>
 
           {/* CTA buttons */}
-          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400">
+          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400 relative z-10">
             <Button
               variant="primary"
               size="lg"
@@ -277,22 +277,6 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Wo
             </Button>
           </div>
 
-          {/* Stats */}
-          <div className="mt-10 flex items-stretch gap-8 animate-fade-up delay-400">
-            {[
-              { number: '50K+', label: 'Students' },
-              { number: '2K+', label: 'Teachers' },
-              { number: '500K+', label: 'Worksheets Generated' },
-            ].map((stat, i, arr) => (
-              <React.Fragment key={stat.label}>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[26px] font-extrabold leading-none text-foreground">{stat.number}</span>
-                  <span className="text-[13px] text-muted-foreground">{stat.label}</span>
-                </div>
-                {i < arr.length - 1 && <div className="w-px bg-border self-stretch" />}
-              </React.Fragment>
-            ))}
-          </div>
         </div>
 
         {/* Right — mockup */}
@@ -331,17 +315,6 @@ const TrustStrip: React.FC<{ onGradeClick?: (grade: string) => void }> = ({ onGr
               {g}
             </button>
           ))}
-        </div>
-        {/* Rating strip */}
-        <div className="flex justify-center items-center gap-2 mt-5">
-          <div className="flex gap-0.5">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="size-3.5 text-accent fill-accent" />
-            ))}
-          </div>
-          <span className="text-[13px] font-semibold text-muted-foreground">
-            4.9 / 5 average · 2,000+ teacher reviews
-          </span>
         </div>
       </div>
     </section>
@@ -876,14 +849,6 @@ const TestimonialsSection: React.FC = () => (
         <h2 className="text-3xl lg:text-4xl font-extrabold text-foreground mt-2">
           Real Results for Real Students
         </h2>
-        <div className="flex justify-center items-center gap-1.5 pt-1">
-          {[...Array(5)].map((_, i) => (
-            <Star key={i} className="size-4 text-accent fill-accent" />
-          ))}
-          <span className="text-[13px] font-semibold text-muted-foreground ml-1">
-            4.9 / 5 from 2,000+ reviews
-          </span>
-        </div>
       </FadeIn>
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -965,13 +930,6 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void; ctaLabel?: string }> =
     />
 
     <FadeIn className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-      {/* Stars */}
-      <div className="flex items-center justify-center gap-1 mb-5">
-        {[...Array(5)].map((_, i) => (
-          <Star key={i} className="size-5 text-accent fill-accent" />
-        ))}
-        <span className="text-white/70 text-[13px] font-semibold ml-2">4.9 / 5 · 2,000+ reviews</span>
-      </div>
 
       <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-5 leading-tight">
         Ready to Transform Learning?
@@ -979,7 +937,7 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void; ctaLabel?: string }> =
 
       {/* Single clean subtext — no Handlee here, not the right context */}
       <p className="text-[17px] text-white/75 mb-10 max-w-lg mx-auto">
-        Join 50,000+ students already using Learnfyra. Free to start — no credit card required.
+        Free to start — no credit card required.
       </p>
 
       <div className="flex flex-wrap justify-center gap-4">

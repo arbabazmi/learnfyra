@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -72,7 +72,62 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        id: tests
+        run: |
+          set +e
+          npx cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --ci --json --outputFile=test-results.json 2>&1 | tee test-output.txt
+          TEST_EXIT=$?
+          set -e
+
+          # Parse results
+          if [ -f test-results.json ]; then
+            TOTAL=$(jq '.numTotalTests' test-results.json)
+            PASSED=$(jq '.numPassedTests' test-results.json)
+            FAILED=$(jq '.numFailedTests' test-results.json)
+            SUITES=$(jq '.numTotalTestSuites' test-results.json)
+            SUITE_FAIL=$(jq '.numFailedTestSuites' test-results.json)
+          else
+            TOTAL=0; PASSED=0; FAILED=0; SUITES=0; SUITE_FAIL=0
+          fi
+
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "suites=$SUITES" >> $GITHUB_OUTPUT
+          echo "suite_fail=$SUITE_FAIL" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "╔══════════════════════════════════════════╗"
+          echo "║         TEST RESULTS SUMMARY             ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  Total:   $TOTAL tests in $SUITES suites"
+          echo "║  Passed:  $PASSED ✓"
+          echo "║  Failed:  $FAILED ✗"
+          echo "║  Suites:  $SUITE_FAIL failed / $SUITES total"
+          echo "╚══════════════════════════════════════════╝"
+          echo ""
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED test(s) failed out of $TOTAL"
+            # Show failed test names
+            jq -r '.testResults[] | select(.status == "failed") | .testResults[] | select(.status == "failed") | "  ✗ " + .fullName' test-results.json 2>/dev/null || true
+          fi
+
+          exit $TEST_EXIT
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Tests | ${{ steps.tests.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Passed | ${{ steps.tests.outputs.passed }} ✓ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Failed | ${{ steps.tests.outputs.failed }} ✗ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suites | ${{ steps.tests.outputs.suites }} (${{ steps.tests.outputs.suite_fail }} failed) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
 
   deploy:
     name: Deploy to Staging
@@ -83,10 +138,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
+
+      - name: Set deploy version
+        id: version
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          git fetch --tags --quiet
+          LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            RELEASE_VERSION="0.0.1"
+          else
+            MAJOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f1)
+            MINOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f2)
+            PATCH=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f3)
+            RELEASE_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          VERSION="${RELEASE_VERSION}-rc.${{ github.run_number }}+${SHORT_SHA}"
+
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          echo "latest_tag=${LATEST_TAG:-none}" >> $GITHUB_OUTPUT
+          echo ""
+          echo "╔══════════════════════════════════════════╗"
+          echo "║         DEPLOY VERSION                   ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  Version:   $VERSION"
+          echo "║  Release:   $RELEASE_VERSION"
+          echo "║  Tag:       ${LATEST_TAG:-none}"
+          echo "║  Commit:    $SHORT_SHA"
+          echo "║  Branch:    ${{ github.ref_name }}"
+          echo "║  Timestamp: $TIMESTAMP"
+          echo "║  Actor:     ${{ github.actor }}"
+          echo "╚══════════════════════════════════════════╝"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -137,6 +230,8 @@ jobs:
         run: npm ci
 
       - name: Build Vite frontend (qa)
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd learnfyra-app
           npm ci
@@ -195,55 +290,106 @@ jobs:
             --distribution-id ${{ steps.cdk-outputs.outputs.dist_id }} \
             --paths "/*"
 
-      - name: Smoke check new backend routes
+      - name: Tag Lambda functions with deploy version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHORT_SHA="${{ steps.version.outputs.short_sha }}"
+          TIMESTAMP="${{ steps.version.outputs.timestamp }}"
+          RELEASE_VERSION="${{ steps.version.outputs.release_version }}"
+
+          LAMBDAS=$(aws lambda list-functions \
+            --query "Functions[?starts_with(FunctionName, 'learnfyra-staging-')].FunctionName" \
+            --output text)
+
+          echo "Tagging Lambda functions with version: $VERSION"
+          for FN in $LAMBDAS; do
+            aws lambda tag-resource \
+              --resource $(aws lambda get-function --function-name "$FN" --query 'Configuration.FunctionArn' --output text) \
+              --tags "DeployVersion=$VERSION,DeployCommit=$SHORT_SHA,DeployTimestamp=$TIMESTAMP,DeployedBy=${{ github.actor }},ReleaseVersion=$RELEASE_VERSION"
+            echo "  ✓ $FN"
+          done
+
+      - name: Smoke check backend routes
+        id: smoke
         run: |
           set -euo pipefail
           BASE_API="${{ steps.cdk-outputs.outputs.api_url }}api"
-          FAILURES=0
+          PASS=0
+          FAIL=0
+          RESULTS=""
 
-          check_get() {
-            NAME="$1"
-            URL="$2"
-            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
-            echo "$NAME -> $CODE"
+          check() {
+            METHOD="$1"; NAME="$2"; URL="$3"; BODY="${4:-}"
+            if [ "$METHOD" = "GET" ]; then
+              CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+            else
+              CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X "$METHOD" "$URL" -H "Content-Type: application/json" -d "$BODY")
+            fi
+
             if [[ "$CODE" =~ ^5 ]]; then
-              FAILURES=$((FAILURES + 1))
+              FAIL=$((FAIL + 1))
+              RESULTS="$RESULTS\n  ✗ $NAME → $CODE"
+            else
+              PASS=$((PASS + 1))
+              RESULTS="$RESULTS\n  ✓ $NAME → $CODE"
             fi
           }
 
-          check_post() {
-            NAME="$1"
-            URL="$2"
-            BODY="$3"
-            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL" -H "Content-Type: application/json" -d "$BODY")
-            echo "$NAME -> $CODE"
-            if [[ "$CODE" =~ ^5 ]]; then
-              FAILURES=$((FAILURES + 1))
-            fi
-          }
+          check POST "auth/register" "$BASE_API/auth/register" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
+          check POST "auth/login" "$BASE_API/auth/login" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
+          check POST "auth/logout" "$BASE_API/auth/logout" '{}'
+          check POST "auth/guest" "$BASE_API/auth/guest" '{"role":"student"}'
+          check GET  "guest/preview?role=teacher" "$BASE_API/guest/preview?role=teacher"
+          check GET  "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
+          check POST "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
+          check POST "progress/save" "$BASE_API/progress/save" '{"studentId":"smoke-student","worksheetId":"smoke-worksheet-id","score":0}'
+          check GET  "progress/history" "$BASE_API/progress/history"
+          check POST "class/create" "$BASE_API/class/create" '{"name":"Smoke Class"}'
+          check GET  "analytics/class/{id}" "$BASE_API/analytics/class/smoke-class-id"
+          check GET  "rewards/student/{id}" "$BASE_API/rewards/student/smoke-student"
+          check GET  "student/profile" "$BASE_API/student/profile"
+          check POST "student/join-class" "$BASE_API/student/join-class" '{"classCode":"SMOKE123"}'
+          check GET  "qb/questions" "$BASE_API/qb/questions"
 
-          check_post "auth/register" "$BASE_API/auth/register" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
-          check_post "auth/login" "$BASE_API/auth/login" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
-          check_post "auth/logout" "$BASE_API/auth/logout" '{}'
-          check_post "auth/guest" "$BASE_API/auth/guest" '{"role":"student"}'
-          check_get "guest/preview?role=teacher" "$BASE_API/guest/preview?role=teacher"
-          check_get "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
-          check_post "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
-          check_post "progress/save" "$BASE_API/progress/save" '{"studentId":"smoke-student","worksheetId":"smoke-worksheet-id","score":0}'
-          check_get "progress/history" "$BASE_API/progress/history"
-          check_post "class/create" "$BASE_API/class/create" '{"name":"Smoke Class"}'
-          check_get "analytics/class/{id}" "$BASE_API/analytics/class/smoke-class-id"
-          check_get "rewards/student/{id}" "$BASE_API/rewards/student/smoke-student"
-          check_get "student/profile" "$BASE_API/student/profile"
-          check_post "student/join-class" "$BASE_API/student/join-class" '{"classCode":"SMOKE123"}'
-          check_get "qb/questions" "$BASE_API/qb/questions"
+          TOTAL=$((PASS + FAIL))
+          echo ""
+          echo "╔══════════════════════════════════════════╗"
+          echo "║         SMOKE TEST RESULTS               ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  Total:   $TOTAL endpoints"
+          echo "║  Passed:  $PASS ✓ (no 5xx)"
+          echo "║  Failed:  $FAIL ✗ (5xx errors)"
+          echo "╚══════════════════════════════════════════╝"
+          echo -e "$RESULTS"
 
-          if [ "$FAILURES" -gt 0 ]; then
-            echo "Smoke checks failed: $FAILURES endpoint(s) returned 5xx."
+          echo "smoke_pass=$PASS" >> $GITHUB_OUTPUT
+          echo "smoke_fail=$FAIL" >> $GITHUB_OUTPUT
+          echo "smoke_total=$TOTAL" >> $GITHUB_OUTPUT
+
+          if [ "$FAIL" -gt 0 ]; then
+            echo "::error::$FAIL endpoint(s) returned 5xx errors"
             exit 1
           fi
 
-          echo "Smoke checks passed for new backend routes."
-
-      - name: Print staging URL
-        run: echo "Staging deployed at ${{ steps.cdk-outputs.outputs.frontend_url }}"
+      - name: Deploy Summary
+        if: always()
+        run: |
+          echo "### Deploy Summary — Staging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ steps.version.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed By | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | ${{ steps.version.outputs.timestamp }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ steps.cdk-outputs.outputs.frontend_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API | ${{ steps.cdk-outputs.outputs.api_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Smoke Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Endpoints Tested | ${{ steps.smoke.outputs.smoke_total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Passed | ${{ steps.smoke.outputs.smoke_pass }} ✓ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Failed | ${{ steps.smoke.outputs.smoke_fail }} ✗ |" >> $GITHUB_STEP_SUMMARY
