@@ -16,7 +16,7 @@ import { mathFractionsWorksheet, scienceSolarSystemWorksheet } from './mock-data
 import { loadWorksheet } from './worksheetStorage';
 import { mapApiToWorksheet } from './apiMapper';
 import { apiUrl } from '@/lib/env';
-import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { getAuthToken, setGuestCookie, GUEST_STORAGE_KEYS } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import type { SolveMode, SolveSession, SolveResults, QuestionResult, Worksheet } from './types';
 
@@ -33,8 +33,9 @@ async function ensureGuestSession(): Promise<string | null> {
       body: JSON.stringify({ role: 'student' }),
     });
     if (!res.ok) return null;
-    // Backend sets guestToken cookie via Set-Cookie header.
-    // Re-read the token from the cookie the backend just set.
+    // Set cookie client-side from response body (cross-origin Set-Cookie headers are blocked)
+    const data = await res.json();
+    if (data.guestToken) setGuestCookie(data.guestToken);
     return getAuthToken();
   } catch {
     return null;

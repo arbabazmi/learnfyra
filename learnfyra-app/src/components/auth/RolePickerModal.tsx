@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import { GUEST_STORAGE_KEYS, setSelectedRole, type UserRole } from '@/lib/auth';
+import { GUEST_STORAGE_KEYS, setSelectedRole, setGuestCookie, type UserRole } from '@/lib/auth';
 import { apiUrl, googleOAuth } from '@/lib/env';
 
 interface RoleDef {
@@ -93,7 +93,10 @@ const RolePickerModal: React.FC = () => {
 
       if (!response.ok) throw new Error('Failed to get guest token');
 
-      // Backend sets cookie via Set-Cookie header
+      // Set cookie client-side from response body (cross-origin Set-Cookie headers are blocked)
+      const data = await response.json();
+      if (data.guestToken) setGuestCookie(data.guestToken);
+
       sessionStorage.setItem(GUEST_STORAGE_KEYS.modalShown, '1');
       auth.closeRoleModal();
       auth.refresh();
