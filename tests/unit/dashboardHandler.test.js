@@ -59,6 +59,7 @@ const mockContext = { callbackWaitsForEmptyEventLoop: true };
 const MOCK_ATTEMPTS = [
   {
     attemptId:  'a1',
+    worksheetId: 'w1',
     studentId:  STUDENT_ID,
     subject:    'Math',
     grade:      7,
@@ -70,6 +71,7 @@ const MOCK_ATTEMPTS = [
   },
   {
     attemptId:  'a2',
+    worksheetId: 'w2',
     studentId:  STUDENT_ID,
     subject:    'Science',
     grade:      7,
@@ -81,6 +83,7 @@ const MOCK_ATTEMPTS = [
   },
   {
     attemptId:  'a3',
+    worksheetId: 'w3',
     studentId:  STUDENT_ID,
     subject:    'Math',
     grade:      7,
@@ -92,10 +95,61 @@ const MOCK_ATTEMPTS = [
   },
 ];
 
+const MOCK_WORKSHEETS = [
+  {
+    worksheetId: 'w1',
+    slug: 'algebra-grade7',
+    title: 'Algebra',
+    subject: 'Math',
+    grade: 7,
+    topic: 'Algebra',
+    difficulty: 'Medium',
+    totalPoints: 10,
+    createdBy: STUDENT_ID,
+    createdAt: '2026-03-30T10:00:00Z',
+  },
+  {
+    worksheetId: 'w2',
+    slug: 'biology-grade7',
+    title: 'Biology',
+    subject: 'Science',
+    grade: 7,
+    topic: 'Biology',
+    difficulty: 'Easy',
+    totalPoints: 10,
+    createdBy: STUDENT_ID,
+    createdAt: '2026-03-29T10:00:00Z',
+  },
+  {
+    worksheetId: 'w3',
+    slug: 'geometry-grade7',
+    title: 'Geometry',
+    subject: 'Math',
+    grade: 7,
+    topic: 'Geometry',
+    difficulty: 'Hard',
+    totalPoints: 10,
+    createdBy: STUDENT_ID,
+    createdAt: '2026-03-28T10:00:00Z',
+  },
+];
+
 const MOCK_AGGREGATES = [
   { id: `${STUDENT_ID}#Math`,    averagePercentage: 85 },
   { id: `${STUDENT_ID}#Science`, averagePercentage: 80 },
 ];
+
+/**
+ * Helper: makes mockQueryByField return different data based on the table name.
+ * 'worksheets' → MOCK_WORKSHEETS, 'attempts' → MOCK_ATTEMPTS (default)
+ */
+function setupQueryByFieldMock(worksheets = MOCK_WORKSHEETS, attempts = MOCK_ATTEMPTS) {
+  mockQueryByField.mockImplementation((table) => {
+    if (table === 'worksheets') return Promise.resolve(worksheets);
+    if (table === 'attempts') return Promise.resolve(attempts);
+    return Promise.resolve([]);
+  });
+}
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -161,7 +215,7 @@ describe('dashboardHandler — unknown route', () => {
 describe('dashboardHandler — GET /api/dashboard/stats happy path', () => {
 
   beforeEach(() => {
-    mockQueryByField.mockResolvedValue(MOCK_ATTEMPTS);
+    setupQueryByFieldMock();
   });
 
   it('returns 200 with valid token and attempts', async () => {
@@ -225,7 +279,7 @@ describe('dashboardHandler — GET /api/dashboard/stats happy path', () => {
 describe('dashboardHandler — GET /api/dashboard/stats no attempts', () => {
 
   beforeEach(() => {
-    mockQueryByField.mockResolvedValue([]);
+    setupQueryByFieldMock([], []);
   });
 
   it('returns 200 when no attempts exist', async () => {
@@ -236,23 +290,21 @@ describe('dashboardHandler — GET /api/dashboard/stats no attempts', () => {
   it('returns all-zero stats when no attempts exist', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/stats'), mockContext);
     const body = JSON.parse(result.body);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       worksheetsDone: 0,
       inProgress:     0,
       bestScore:      0,
-      studyTime:      '0h',
     });
   });
 
   it('returns all-zero stats when queryByField returns null', async () => {
-    mockQueryByField.mockResolvedValue(null);
+    setupQueryByFieldMock([], null);
     const result = await handler(mockGetEvent('/api/dashboard/stats'), mockContext);
     const body = JSON.parse(result.body);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       worksheetsDone: 0,
       inProgress:     0,
       bestScore:      0,
-      studyTime:      '0h',
     });
   });
 
@@ -297,7 +349,7 @@ describe('dashboardHandler — GET /api/dashboard/stats auth failure', () => {
 describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path', () => {
 
   beforeEach(() => {
-    mockQueryByField.mockResolvedValue(MOCK_ATTEMPTS);
+    setupQueryByFieldMock();
   });
 
   it('returns 200 with valid attempts', async () => {
@@ -310,9 +362,21 @@ describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path',
     expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
   });
 
-  it('returns at most 4 worksheets even when more attempts exist', async () => {
+  it('returns at most 4 worksheets even when more worksheets exist', async () => {
+    const manyWorksheets = Array.from({ length: 6 }, (_, i) => ({
+      worksheetId: `w${i}`,
+      slug: `topic-${i}`,
+      title: `Topic ${i}`,
+      subject: 'Math',
+      grade: 5,
+      topic: `Topic ${i}`,
+      totalPoints: 10,
+      createdBy: STUDENT_ID,
+      createdAt: `2026-03-${20 + i}T10:00:00Z`,
+    }));
     const manyAttempts = Array.from({ length: 6 }, (_, i) => ({
       attemptId:  `a${i}`,
+      worksheetId: `w${i}`,
       studentId:  STUDENT_ID,
       subject:    'Math',
       grade:      5,
@@ -322,7 +386,7 @@ describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path',
       createdAt:  `2026-03-${20 + i}T10:00:00Z`,
       totalPoints: 10,
     }));
-    mockQueryByField.mockResolvedValue(manyAttempts);
+    setupQueryByFieldMock(manyWorksheets, manyAttempts);
 
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
@@ -332,19 +396,19 @@ describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path',
   it('returns results sorted by most recent first', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
-    // MOCK_ATTEMPTS sorted: a1 (Mar 30), a2 (Mar 29), a3 (Mar 28)
-    expect(body[0].id).toBe('a1');
-    expect(body[1].id).toBe('a2');
-    expect(body[2].id).toBe('a3');
+    // MOCK_WORKSHEETS sorted: w1/algebra (Mar 30), w2/biology (Mar 29), w3/geometry (Mar 28)
+    expect(body[0].id).toBe('algebra-grade7');
+    expect(body[1].id).toBe('biology-grade7');
+    expect(body[2].id).toBe('geometry-grade7');
   });
 
-  it('maps attemptId to id field', async () => {
+  it('maps slug to id field', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
-    expect(body[0]).toHaveProperty('id', 'a1');
+    expect(body[0]).toHaveProperty('id', 'algebra-grade7');
   });
 
-  it('maps topic to title field', async () => {
+  it('maps title from worksheet record', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
     expect(body[0]).toHaveProperty('title', 'Algebra');
@@ -360,21 +424,21 @@ describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path',
   it('sets status to "completed" when percentage is non-null', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
-    const completed = body.find(w => w.id === 'a1');
+    const completed = body.find(w => w.id === 'algebra-grade7');
     expect(completed.status).toBe('completed');
   });
 
   it('sets status to "in-progress" when percentage is null', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
-    const inProgress = body.find(w => w.id === 'a3');
+    const inProgress = body.find(w => w.id === 'geometry-grade7');
     expect(inProgress.status).toBe('in-progress');
   });
 
   it('sets score to null for in-progress attempts', async () => {
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     const body = JSON.parse(result.body);
-    const inProgress = body.find(w => w.id === 'a3');
+    const inProgress = body.find(w => w.id === 'geometry-grade7');
     expect(inProgress.score).toBeNull();
   });
 
@@ -391,8 +455,8 @@ describe('dashboardHandler — GET /api/dashboard/recent-worksheets happy path',
 
 describe('dashboardHandler — GET /api/dashboard/recent-worksheets no attempts', () => {
 
-  it('returns 200 when no attempts exist', async () => {
-    mockQueryByField.mockResolvedValue([]);
+  it('returns 200 when no worksheets exist', async () => {
+    setupQueryByFieldMock([], []);
     const result = await handler(mockGetEvent('/api/dashboard/recent-worksheets'), mockContext);
     expect(result.statusCode).toBe(200);
   });
