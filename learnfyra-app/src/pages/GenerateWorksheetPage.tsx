@@ -17,6 +17,7 @@ import {
   FileDown,
   Printer,
   KeyRound,
+  AlertTriangle,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -96,6 +97,16 @@ function estimateMinutes(questionCount: number, difficulty: DifficultyValue): nu
   return Math.round(questionCount * MINUTES_PER_Q[difficulty]);
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface FallbackState {
+  mode: 'partial' | 'none';
+  reason: string;
+  requestedCount?: number;
+  servedCount?: number;
+  suggestedTopics: string[];
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type GenerationState = 'idle' | 'generating' | 'success';
@@ -123,6 +134,7 @@ const GenerateWorksheetPage: React.FC = () => {
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
   const [generatedSlug, setGeneratedSlug] = React.useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
+  const [fallbackState, setFallbackState] = React.useState<FallbackState | null>(null);
   const navigate = useNavigate();
 
   usePageMeta({
@@ -184,6 +196,7 @@ const GenerateWorksheetPage: React.FC = () => {
     generatingRef.current = true;
     setGenState('generating');
     setGenError('');
+    setFallbackState(null);
 
     try {
       const res = await fetch(`${apiUrl}/api/generate`, {
@@ -214,6 +227,17 @@ const GenerateWorksheetPage: React.FC = () => {
         return;
       }
 
+      if (res.status === 400 && data?.code === 'WG_NO_QUESTIONS_AVAILABLE') {
+        // Tier 3: Total fallback — no questions available
+        setFallbackState({
+          mode: 'none',
+          reason: data.metadata?.fallbackReason || data.error,
+          suggestedTopics: data.metadata?.similarTopics || [],
+        });
+        setGenState('idle');
+        return;
+      }
+
       if (!res.ok) {
         throw new Error(data.error || `Generation failed (${res.status})`);
       }
@@ -230,6 +254,17 @@ const GenerateWorksheetPage: React.FC = () => {
 
       setGeneratedId(wsId);
       setGeneratedSlug(data.metadata?.slug || null);
+
+      // Tier 2: Partial worksheet — store fallback state before marking success
+      if (data.metadata?.fallbackMode === 'partial') {
+        setFallbackState({
+          mode: 'partial',
+          reason: data.metadata?.fallbackReason || 'Some questions were served from our question bank.',
+          requestedCount: data.metadata?.requestedCount || questionCount,
+          servedCount: data.metadata?.questionCount || 0,
+          suggestedTopics: data.metadata?.similarTopics || [],
+        });
+      }
 
       // Fetch worksheet data via API and save to localStorage for solve page
       try {
@@ -324,11 +359,26 @@ const GenerateWorksheetPage: React.FC = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Your worksheet has been generated with{' '}
                 <span className="font-bold text-foreground">
-                  {questionCount} questions
+                  {fallbackState?.servedCount ?? questionCount} questions
                 </span>{' '}
                 — {subject}, {topic}, Grade {grade}.
               </p>
             </div>
+
+            {/* Tier 2: Partial worksheet warning banner */}
+            {fallbackState?.mode === 'partial' && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">
+                    Partial Worksheet — {fallbackState.servedCount} of {fallbackState.requestedCount} questions
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    Our AI service was temporarily unavailable. We've included all available pre-made questions for this topic. You can still solve and download this worksheet.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Primary CTA — solve online */}
             <div className="flex flex-wrap justify-center gap-3">
@@ -403,7 +453,7 @@ const GenerateWorksheetPage: React.FC = () => {
             {/* Secondary links */}
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Button variant="ghost" size="md" asChild>
-                <Link to="/worksheet/new" onClick={() => { setGenState('idle'); setGeneratedId(null); }}>
+                <Link to="/worksheet/new" onClick={() => { setGenState('idle'); setGeneratedId(null); setFallbackState(null); }}>
                   Generate Another
                 </Link>
               </Button>
@@ -726,6 +776,53 @@ const GenerateWorksheetPage: React.FC = () => {
                 {genError && (
                   <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive font-semibold">
                     {genError}
+                  </div>
+                )}
+
+                {/* Tier 3: No questions available — friendly fallback card */}
+                {fallbackState?.mode === 'none' && (
+                  <div className="mt-4 p-5 rounded-2xl bg-amber-50 border border-amber-200 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="size-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-900">
+                          No Questions Available
+                        </h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          We couldn&apos;t generate questions for this topic right now. Our AI service is temporarily unavailable and we don&apos;t have pre-made questions for this specific topic yet.
+                        </p>
+                      </div>
+                    </div>
+
+                    {fallbackState.suggestedTopics.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-widest">
+                          Try these similar topics instead
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {fallbackState.suggestedTopics.map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                setTopic(t);
+                                setFallbackState(null);
+                                setGenError('');
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-sm font-semibold text-amber-800 hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer"
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-amber-600">
+                      Our team has been notified and is working on it.
+                    </p>
                   </div>
                 )}
 

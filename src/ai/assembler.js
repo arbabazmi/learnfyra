@@ -377,73 +377,95 @@ export async function assembleWorksheet(options) {
   let totalStored = 0;
   let generationModel = null;
 
+  // ── Fallback state — tracks whether AI generation was attempted and failed
+  let aiGenerationError = null;
+
   if (missingCount > 0) {
     // ── Step 4: Generate only the missing questions via AI ───────────────────
     generationModel = pickModel(missingCount, questionCount, difficulty);
     logger.info(`Assembler — generating ${missingCount} question(s) using model: ${generationModel}`);
 
-    generatedQuestions = await generateMissingQuestions(options, missingCount, generationModel);
-
-    const filteredGenerated = [];
-    for (const q of generatedQuestions) {
-      const sig = buildQuestionSignature(q);
-      const isSeen = seenSignatures.has(sig);
-      if (!isSeen) {
-        filteredGenerated.push(q);
-        continue;
-      }
-      if (repeatUsed < maxRepeatQuestions) {
-        filteredGenerated.push(q);
-        repeatUsed += 1;
-      }
-    }
-    generatedQuestions = filteredGenerated;
-
-    if (generatedQuestions.length < missingCount) {
-      throw new Error(
-        `Unable to satisfy repeat cap (${effectiveRepeatCapPercent}%). ` +
-        `Needed ${missingCount} generated questions, got ${generatedQuestions.length}.`
-      );
+    try {
+      generatedQuestions = await generateMissingQuestions(options, missingCount, generationModel);
+    } catch (err) {
+      aiGenerationError = err;
+      logger.warn(`Assembler — AI generation failed, entering fallback: ${err.message}`);
     }
 
-    // ── Step 5–6: Validate and store each new question ────────────────────────
-    for (let i = 0; i < generatedQuestions.length; i++) {
-      const q = generatedQuestions[i];
+    // ── Fallback handling ────────────────────────────────────────────────────
+    if (aiGenerationError) {
+      generatedQuestions = [];
+      if (fromBank > 0) {
+        // Tier 2: Partial — serve whatever bank questions we already selected
+        logger.info(
+          `Assembler — Tier 2 fallback: serving ${fromBank} banked question(s) (AI failed)`
+        );
+      } else {
+        // Tier 3: Total — no bank questions AND AI failed
+        logger.error(
+          'Assembler — Tier 3 fallback: no bank questions AND AI generation failed'
+        );
+      }
+    }
 
-      // validateQuestion was already called inside generateMissingQuestions;
-      // calling here is a defence-in-depth check before storing.
-      // If it fails here a second time, Claude returned bad data that slipped
-      // through the first pass — throw to trigger retry rather than silently
-      // truncating the worksheet below the requested questionCount (C1).
-      try {
-        validateQuestion(q, i);
-      } catch (err) {
+    // ── Steps 4b–6 only run when AI succeeded ───────────────────────────────
+    if (!aiGenerationError) {
+      const filteredGenerated = [];
+      for (const q of generatedQuestions) {
+        const sig = buildQuestionSignature(q);
+        const isSeen = seenSignatures.has(sig);
+        if (!isSeen) {
+          filteredGenerated.push(q);
+          continue;
+        }
+        if (repeatUsed < maxRepeatQuestions) {
+          filteredGenerated.push(q);
+          repeatUsed += 1;
+        }
+      }
+      generatedQuestions = filteredGenerated;
+
+      if (generatedQuestions.length < missingCount) {
         throw new Error(
-          `Generated question at index ${i} failed second-pass validation: ${err.message}`
+          `Unable to satisfy repeat cap (${effectiveRepeatCapPercent}%). ` +
+          `Needed ${missingCount} generated questions, got ${generatedQuestions.length}.`
         );
       }
 
-      const candidate = { grade, subject, topic, type: q.type, question: q.question };
-      const newEntry = {
-        ...q,
-        grade,
-        subject,
-        topic,
-        difficulty,
-        modelUsed: generationModel,
-      };
+      // ── Step 5–6: Validate and store each new question ──────────────────────
+      for (let i = 0; i < generatedQuestions.length; i++) {
+        const q = generatedQuestions[i];
 
-      const { stored } = await qb.addIfNotExists(candidate, newEntry);
-      if (shouldAttachQuestionProvenance(provenanceLevel)) {
-        generatedQuestions[i] = {
+        try {
+          validateQuestion(q, i);
+        } catch (err) {
+          throw new Error(
+            `Generated question at index ${i} failed second-pass validation: ${err.message}`
+          );
+        }
+
+        const candidate = { grade, subject, topic, type: q.type, question: q.question };
+        const newEntry = {
           ...q,
-          provenance: buildGeneratedQuestionProvenance(generationModel, stored),
+          grade,
+          subject,
+          topic,
+          difficulty,
+          modelUsed: generationModel,
         };
-      }
 
-      if (stored) {
-        totalStored++;
-        logger.debug(`Assembler — stored new question to bank (questionId: ${stored.questionId})`);
+        const { stored } = await qb.addIfNotExists(candidate, newEntry);
+        if (shouldAttachQuestionProvenance(provenanceLevel)) {
+          generatedQuestions[i] = {
+            ...q,
+            provenance: buildGeneratedQuestionProvenance(generationModel, stored),
+          };
+        }
+
+        if (stored) {
+          totalStored++;
+          logger.debug(`Assembler — stored new question to bank (questionId: ${stored.questionId})`);
+        }
       }
     }
   }
@@ -491,15 +513,23 @@ export async function assembleWorksheet(options) {
     instructions: `Answer each question carefully. Show your work where asked.`,
     totalPoints,
     questions:    renumbered,
+    // Fallback metadata — null when AI succeeds normally
+    fallbackMode: aiGenerationError
+      ? (fromBank > 0 ? 'partial' : 'none')
+      : null,
+    fallbackReason: aiGenerationError ? aiGenerationError.message : null,
+    requestedCount: questionCount,
+    actualCount: renumbered.length,
   };
 
   const bankStats = {
     fromBank,
-    generated: missingCount,
+    generated: aiGenerationError ? 0 : missingCount,
     totalStored,
     repeatCapPercent: effectiveRepeatCapPercent,
     maxRepeatQuestions,
     repeatUsed,
+    fallbackUsed: Boolean(aiGenerationError),
   };
 
   if (provenanceLevel === 'none') {

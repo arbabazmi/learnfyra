@@ -84,6 +84,24 @@ let _resolveEffectiveRepeatCap;
 let _getSeenQuestionSignatures;
 let _recordExposureHistory;
 let _generateWorksheetSlug;
+let _suggestAlternativeTopics;
+let _sendFallbackAlert;
+
+async function getTopicSuggester() {
+  if (!_suggestAlternativeTopics) {
+    const mod = await import('../../src/questionBank/topicSuggester.js');
+    _suggestAlternativeTopics = mod.suggestAlternativeTopics;
+  }
+  return _suggestAlternativeTopics;
+}
+
+async function getAlertService() {
+  if (!_sendFallbackAlert) {
+    const mod = await import('../../src/notifications/alertService.js');
+    _sendFallbackAlert = mod.sendFallbackAlert;
+  }
+  return _sendFallbackAlert;
+}
 
 async function getSlugGenerator() {
   if (!_generateWorksheetSlug) {
@@ -587,6 +605,7 @@ export const handler = async (event, context) => {
       userId: isGuestUser ? undefined : decoded.sub,
       guestId: isGuestUser ? decoded.sub : undefined,
         });
+    const fallbackMode = worksheet.fallbackMode || null;
     logEvent('info', 'generateHandler worksheet generated', {
       requestId,
       clientRequestId,
@@ -594,7 +613,123 @@ export const handler = async (event, context) => {
       elapsedMs: Date.now() - requestStart,
       totalPoints: worksheet.totalPoints,
       questionCount: Array.isArray(worksheet.questions) ? worksheet.questions.length : null,
+      fallbackMode: fallbackMode || 'normal',
     });
+
+    // 2b. Handle Tier 3 — no questions available (AI failed + bank empty)
+    let similarTopics = [];
+    let adminNotified = false;
+
+    if (fallbackMode === 'none') {
+      stage = 'fallback:suggest-topics';
+      try {
+        const suggestTopics = await getTopicSuggester();
+        similarTopics = await suggestTopics(grade, subject, topic);
+      } catch (err) {
+        logEvent('warn', 'generateHandler topic suggestion failed', {
+          requestId, clientRequestId, stage,
+          error: { name: err.name, message: err.message },
+        });
+      }
+
+      // Fire admin alert via SNS — fire-and-forget pattern.
+      // sendFallbackAlert() returns void and swallows all errors internally.
+      // The try/catch here guards only the lazy import, not the SNS publish.
+      stage = 'fallback:send-alert';
+      try {
+        const sendAlert = await getAlertService();
+        sendAlert({
+          worksheetId: uuid,
+          grade,
+          subject,
+          topic,
+          difficulty,
+          fallbackMode: 'none',
+          aiError: worksheet.fallbackReason || 'Unknown AI error',
+          requestId,
+        });
+        adminNotified = true;
+      } catch (importErr) {
+        // Only fires if the lazy import itself fails (e.g. missing module)
+        logEvent('warn', 'generateHandler alert service import failed', {
+          requestId, clientRequestId, stage,
+          error: { name: importErr.name, message: importErr.message },
+        });
+      }
+
+      logEvent('warn', 'generateHandler Tier 3 fallback — no questions available', {
+        requestId, clientRequestId, stage,
+        elapsedMs: Date.now() - requestStart,
+        grade, subject, topic, difficulty,
+        similarTopics,
+      });
+
+      return {
+        statusCode: 400,
+        headers: buildHeaders(requestId, clientRequestId),
+        body: JSON.stringify({
+          success: false,
+          error: 'Unable to generate worksheet. No questions available for this topic.',
+          code: 'WG_NO_QUESTIONS_AVAILABLE',
+          fallbackMode: 'none',
+          fallbackReason: worksheet.fallbackReason || 'Bank empty and AI generation failed',
+          metadata: {
+            id: uuid,
+            grade,
+            subject,
+            topic,
+            difficulty,
+            questionCount: 0,
+            requestedCount: questionCount,
+            fallbackMode: 'none',
+            fallbackReason: worksheet.fallbackReason,
+            similarTopics,
+            adminNotified,
+          },
+          requestId,
+          clientRequestId,
+        }),
+      };
+    }
+
+    // 2c. Handle Tier 2 partial fallback — fetch suggestions for metadata
+    if (fallbackMode === 'partial') {
+      stage = 'fallback:suggest-topics';
+      try {
+        const suggestTopics = await getTopicSuggester();
+        similarTopics = await suggestTopics(grade, subject, topic);
+      } catch (err) {
+        logEvent('warn', 'generateHandler topic suggestion failed (partial)', {
+          requestId, clientRequestId, stage,
+          error: { name: err.name, message: err.message },
+        });
+      }
+
+      // Fire admin alert for partial fallback too — fire-and-forget (see Tier 3 comment)
+      try {
+        const sendAlert = await getAlertService();
+        sendAlert({
+          worksheetId: uuid,
+          grade,
+          subject,
+          topic,
+          difficulty,
+          fallbackMode: 'partial',
+          aiError: worksheet.fallbackReason || 'Unknown AI error',
+          requestId,
+        });
+        adminNotified = true;
+      } catch (importErr) {
+        // Only fires if the lazy import itself fails
+      }
+
+      logEvent('info', 'generateHandler Tier 2 fallback — partial worksheet', {
+        requestId, clientRequestId, stage,
+        elapsedMs: Date.now() - requestStart,
+        servedCount: worksheet.actualCount,
+        requestedCount: questionCount,
+      });
+    }
 
     // 3. Export worksheet file to /tmp
     stage = 'worksheet:export';
@@ -745,6 +880,13 @@ export const handler = async (event, context) => {
         studentTracked: Boolean(studentKey),
       },
       ...(provenance ? { provenanceSummary: provenance } : {}),
+      // Fallback metadata — only present when AI generation failed
+      ...(fallbackMode ? {
+        fallbackMode,
+        fallbackReason: worksheet.fallbackReason,
+        requestedCount: questionCount,
+        similarTopics,
+      } : {}),
       studentDetails: {
         studentName,
         studentId,
