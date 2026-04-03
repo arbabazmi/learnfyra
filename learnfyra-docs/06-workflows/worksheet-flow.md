@@ -1,5 +1,9 @@
 # Worksheet Generation Flow
 
+**Updated: feat/my-worksheets-tracking (2026-04-03)**
+- Step 10 now writes `createdBy = userId` to `LearnfyraGenerationLog` for authenticated users
+- This populates `GET /api/worksheets/mine` and dashboard feeds
+
 ## ASCII Sequence Diagram
 
 ```
@@ -7,7 +11,7 @@ Teacher/Browser          Express/API GW         generateHandler         Claude A
       │                       │                       │                    │                  │
       │── POST /api/generate ─►│                       │                    │                  │
       │   {grade,subject,...}  │── invoke handler ─────►│                    │                  │
-      │                       │                       │── validate input   │                  │
+      │   Authorization:Bearer │                       │── validate input   │                  │
       │                       │                       │   (grade,subject, ─►                  │
       │                       │                       │    topic,count)    │                  │
       │                       │                       │                    │                  │
@@ -37,6 +41,12 @@ Teacher/Browser          Express/API GW         generateHandler         Claude A
       │                       │                       │   + metadata.json  │   S3 / local     │
       │                       │                       │   + solve-data.json│                  │
       │                       │                       │                    │                  │
+      │                       │                       │── GenerationLog ───────────────────►  │
+      │                       │                       │   PutItem          │  DynamoDB        │
+      │                       │                       │   {worksheetId,    │  (AWS only)      │
+      │                       │                       │    createdBy:userId│                  │
+      │                       │                       │    ...}            │                  │
+      │                       │                       │                    │                  │
       │◄─ {worksheetId,        │◄──────────────────────│                    │                  │
       │   downloadUrls,solveUrl│                       │                    │                  │
 ```
@@ -49,7 +59,8 @@ Teacher/Browser          Express/API GW         generateHandler         Claude A
 | QB adapter | JSON files in worksheets-local/ | DynamoDB GSI-1 query |
 | File storage | Write to worksheets-local/{uuid}/ | S3 PutObject to bucket |
 | Download URLs | Local server paths (/worksheets-local/...) | S3 presigned URLs (15min) |
-| Generation log | Not written | DynamoDB GenerationLog PutItem |
+| Generation log | Written to worksheets-local/generation-log.json | DynamoDB GenerationLog PutItem |
+| createdBy tracking | Stored in local generation-log.json | DynamoDB createdBy-index GSI |
 
 ## Request Schema
 
@@ -124,6 +135,62 @@ worksheets/{year}/{month}/{day}/{uuid}/
   metadata.json         ← no answers, no PII
   solve-data.json       ← full JSON with answers (authoritative)
 ```
+
+## Generation Log Schema (LearnfyraGenerationLog)
+
+Written to DynamoDB on every authenticated generation (AWS only). Guest generations write null for `createdBy`.
+
+```json
+{
+  "worksheetId": "uuid-v4",
+  "generatedAt": "2026-03-28T12:00:00Z",
+  "grade": 3,
+  "subject": "Math",
+  "topic": "Multiplication",
+  "difficulty": "Medium",
+  "questionCount": 10,
+  "generationMode": "mixed",
+  "provenanceLevel": "partial-bank",
+  "modelUsed": "claude-sonnet-4-20250514",
+  "durationMs": 4200,
+  "createdBy": "user-uuid-v4",
+  "formats": ["pdf", "docx", "html"],
+  "s3Prefix": "worksheets/2026/03/28/uuid-v4/",
+  "ttl": 1743811200
+}
+```
+
+The `createdBy` field is the userId extracted from the JWT in the `Authorization` header. It is null for guest (unauthenticated) requests.
+
+The `createdBy-index` GSI (PK=createdBy, SK=createdAt) on this table is how `GET /api/worksheets/mine` and `GET /api/dashboard/recent-worksheets` retrieve all worksheets belonging to a specific user in one query.
+
+## My Worksheets Status Flow
+
+After generation, a worksheet transitions through statuses as the user interacts with it:
+
+```
+POST /api/generate (authenticated)
+  → GenerationLog written with createdBy = userId
+  → Worksheet appears in GET /api/worksheets/mine with status = "new"
+
+Student clicks "Solve Online"
+  → GET /api/solve/:id called
+  → Status remains "new" (no attempt written until submit)
+
+Student submits answers
+  → POST /api/submit called
+  → WorksheetAttempt record written to DynamoDB (PK=userId, SK=worksheetId#{timestamp})
+  → Status transitions to "completed"
+
+Student retakes worksheet
+  → Another WorksheetAttempt record written
+  → Status remains "completed" (most recent attempt determines status)
+  → worksheetsDone still counts this worksheet once (de-duplicated by worksheetId)
+```
+
+## Dashboard Integration
+
+`GET /api/dashboard/stats` and `GET /api/dashboard/recent-worksheets` both use the `createdBy-index` GSI on `LearnfyraGenerationLog` as their primary data source for worksheet counts and the recent list. Attempt data from `LearnfyraWorksheetAttempt` is joined to derive per-worksheet status.
 
 ## PDF Generation Details
 

@@ -4,13 +4,17 @@
  * real generators — no AWS/S3 needed. No frontend is served from this port.
  *
  * Usage:
- *   node server.js          # starts API on http://localhost:3000
- *   cd learnfyra-app && npm run dev   # starts React frontend on http://localhost:5173
- *
- * Required env var:
- *   ANTHROPIC_API_KEY   your Anthropic API key (copy .env.example → .env)
+ *   LEARNFYRA_ENV=dev node server.js   # fetches config from AWS dev (recommended)
+ *   node server.js                      # falls back to .env if AWS unavailable
+ *   cd learnfyra-app && npm run dev     # starts React frontend on http://localhost:5173
  */
 
+// 1. Try loading config from AWS (SSM + Lambda env vars) — sets process.env.*
+//    before dotenv runs, so AWS values take priority over .env
+import { loadAwsConfig } from './scripts/load-aws-config.js';
+await loadAwsConfig();
+
+// 2. dotenv fills in any remaining vars from .env (won't override AWS values)
 import 'dotenv/config';
 import express from 'express';
 import morgan from 'morgan';
@@ -45,6 +49,8 @@ const { generateWorksheet } = await import('./src/ai/generator.js');
 const { exportWorksheet }   = await import('./src/exporters/index.js');
 const { exportAnswerKey }   = await import('./src/exporters/answerKey.js');
 const { validateGenerateBody } = await import('./backend/middleware/validator.js');
+const { getDbAdapter }      = await import('./src/db/index.js');
+const { validateToken: extractToken } = await import('./backend/middleware/authMiddleware.js');
 
 const FORMAT_EXT = {
   'PDF':        'pdf',
@@ -234,6 +240,35 @@ app.post('/api/generate', async (req, res) => {
       solveDataPath: join(outputDir, 'solve-data.json'),
     });
 
+    // Save worksheet record to DB so it appears in "My Worksheets" immediately
+    stage = 'worksheet:save-record';
+    let createdBy = 'anonymous';
+    try {
+      const decoded = await extractToken({ headers: { authorization: req.get('authorization') || '' } });
+      if (decoded?.sub) createdBy = decoded.sub;
+    } catch { /* unauthenticated — use anonymous */ }
+
+    try {
+      const db = getDbAdapter();
+      await db.putItem('worksheets', {
+        worksheetId: uuid,
+        slug,
+        grade,
+        subject,
+        topic,
+        difficulty,
+        title: worksheet.title || `${topic} — Grade ${grade}`,
+        questionCount,
+        estimatedTime: worksheet.estimatedTime || '20 minutes',
+        totalPoints: worksheet.totalPoints,
+        createdBy,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (dbErr) {
+      // Non-fatal: worksheet files are already written
+      console.error('server worksheet record save failed (non-fatal):', dbErr.message || dbErr);
+    }
+
     // Export answer key if requested
     let answerKeyKey = null;
     if (includeAnswerKey) {
@@ -380,7 +415,7 @@ app.get('/api/solve/:worksheetId', async (req, res) => {
   try {
     const fn = await getSolveHandler();
     const result = await fn(
-      { httpMethod: 'GET', pathParameters: { worksheetId: req.params.worksheetId } },
+      { httpMethod: 'GET', pathParameters: { worksheetId: req.params.worksheetId }, queryStringParameters: req.query },
       {},
     );
     res.status(result.statusCode).json(JSON.parse(result.body));
@@ -761,6 +796,28 @@ app.post('/api/progress/save', async (req, res) => {
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('progress route error:', err);
+    res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/worksheets/mine ──────────────────────────────────────────────────
+app.get('/api/worksheets/mine', async (req, res) => {
+  try {
+    const fn = await getProgressHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/worksheets/mine',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+      },
+      {},
+    );
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('worksheets/mine route error:', err);
     res.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
     res.status(500).json({ error: 'Internal server error.' });
   }

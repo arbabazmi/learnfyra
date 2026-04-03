@@ -47,40 +47,38 @@ interface Worksheet {
   date: string;
 }
 
-// ── API attempt shape returned by GET /api/progress/history ───────────────
-interface AttemptRecord {
-  attemptId: string;
+// ── API worksheet shape returned by GET /api/worksheets/mine ─────────────
+interface WorksheetRecord {
   worksheetId: string;
-  grade: number;
+  title: string;
   subject: string;
+  grade: number;
   topic: string;
   difficulty: string;
-  totalScore: number;
+  questionCount: number;
+  estimatedTime: string;
   totalPoints: number;
-  percentage: number | null;
-  timeTaken: number;
-  timed: boolean;
+  status: 'new' | 'in-progress' | 'completed';
+  score: number | null;
   createdAt: string;
+  slug: string;
 }
 
-/** Maps a raw attempt record to the internal Worksheet display shape. */
-function attemptToWorksheet(a: AttemptRecord): Worksheet {
+/** Maps a backend worksheet record to the internal Worksheet display shape. */
+function worksheetRecordToWorksheet(r: WorksheetRecord): Worksheet {
   const validSubjects: Subject[] = ['Math', 'Science', 'ELA', 'Social Studies', 'Health'];
   const validDifficulties: Difficulty[] = ['Easy', 'Medium', 'Hard', 'Mixed'];
 
-  const subject = validSubjects.includes(a.subject as Subject)
-    ? (a.subject as Subject)
+  const subject = validSubjects.includes(r.subject as Subject)
+    ? (r.subject as Subject)
     : 'Math';
 
-  const difficulty = validDifficulties.includes(a.difficulty as Difficulty)
-    ? (a.difficulty as Difficulty)
+  const difficulty = validDifficulties.includes(r.difficulty as Difficulty)
+    ? (r.difficulty as Difficulty)
     : 'Medium';
 
-  const score = a.percentage != null ? Math.round(a.percentage) : null;
-  const status: WorksheetStatus = score != null ? 'completed' : 'in-progress';
-
-  const date = a.createdAt
-    ? new Date(a.createdAt).toLocaleDateString('en-US', {
+  const date = r.createdAt
+    ? new Date(r.createdAt).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -88,26 +86,33 @@ function attemptToWorksheet(a: AttemptRecord): Worksheet {
     : '';
 
   return {
-    id: a.attemptId || a.worksheetId,
-    title: `${a.topic} — Grade ${a.grade}`,
+    id: r.slug || r.worksheetId,
+    title: r.title || `${r.topic} — Grade ${r.grade}`,
     subject,
-    grade: a.grade,
-    topic: a.topic,
+    grade: r.grade,
+    topic: r.topic,
     difficulty,
-    score,
-    totalPoints: a.totalPoints || 10,
-    questionCount: 0,
-    estimatedTime: '',
-    status,
+    score: r.score,
+    totalPoints: r.totalPoints || 10,
+    questionCount: r.questionCount || 0,
+    estimatedTime: r.estimatedTime || '',
+    status: r.status as WorksheetStatus,
     date,
   };
 }
 
 // ── Config maps ────────────────────────────────────────────────────────────
-const statusConfig: Record<WorksheetStatus, { label: string; variant: 'success' | 'primary' | 'warning' }> = {
-  completed:    { label: 'Done',        variant: 'success' },
-  new:          { label: 'New',         variant: 'primary' },
-  'in-progress': { label: 'In Progress', variant: 'warning' },
+const statusConfig: Record<WorksheetStatus, { label: string; variant: 'success' | 'primary' | 'warning'; className: string }> = {
+  completed:     { label: 'Done',        variant: 'success', className: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  new:           { label: 'New',         variant: 'primary', className: 'bg-blue-50 text-blue-600 border-blue-200' },
+  'in-progress': { label: 'In Progress', variant: 'warning', className: 'bg-amber-50 text-amber-700 border-amber-300' },
+};
+
+/** Returns a colored left-border class for each status to make cards visually distinct */
+const statusBorderColor: Record<WorksheetStatus, string> = {
+  completed:     'border-l-emerald-500',
+  new:           'border-l-blue-400',
+  'in-progress': 'border-l-amber-400',
 };
 
 const difficultyConfig: Record<Difficulty, { variant: 'success' | 'warning' | 'destructive' | 'primary' }> = {
@@ -151,14 +156,15 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
 
 // ── WorksheetCard (grid view) ───────────────────────────────────────────────
 const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
-  const { label: statusLabel, variant: statusVariant } = statusConfig[ws.status];
+  const { label: statusLabel, className: statusClassName } = statusConfig[ws.status];
   const { variant: diffVariant } = difficultyConfig[ws.difficulty];
   const subjectColor = subjectColorMap[ws.subject] ?? '#3D9AE8';
+  const borderClass = statusBorderColor[ws.status];
 
   return (
     <Link
-      to={`/worksheet/${ws.id}`}
-      className="group block bg-white rounded-2xl border border-border shadow-card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      to={`/solve/${ws.id}`}
+      className={`group block bg-white rounded-2xl border border-border shadow-card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 border-l-4 ${borderClass}`}
       aria-label={`Open ${ws.title}`}
     >
       {/* Colored top strip */}
@@ -181,7 +187,11 @@ const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
           >
             {ws.subject}
           </Badge>
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusClassName}`}>
+            {ws.status === 'completed' && '✓ '}
+            {ws.status === 'in-progress' && '◔ '}
+            {statusLabel}
+          </span>
         </div>
 
         {/* Title */}
@@ -233,7 +243,7 @@ const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
 
 // ── WorksheetRow (list view) ────────────────────────────────────────────────
 const WorksheetRow: React.FC<{ ws: Worksheet; isLast: boolean }> = ({ ws, isLast }) => {
-  const { label: statusLabel, variant: statusVariant } = statusConfig[ws.status];
+  const { label: statusLabel, className: statusClassName } = statusConfig[ws.status];
   const { variant: diffVariant } = difficultyConfig[ws.difficulty];
   const subjectColor = subjectColorMap[ws.subject] ?? '#3D9AE8';
 
@@ -251,7 +261,7 @@ const WorksheetRow: React.FC<{ ws: Worksheet; isLast: boolean }> = ({ ws, isLast
           </div>
           <div className="min-w-0">
             <Link
-              to={`/worksheet/${ws.id}`}
+              to={`/solve/${ws.id}`}
               className="text-sm font-bold text-foreground hover:text-primary hover:underline transition-colors truncate block"
             >
               {ws.title}
@@ -299,14 +309,18 @@ const WorksheetRow: React.FC<{ ws: Worksheet; isLast: boolean }> = ({ ws, isLast
             {ws.score}%
           </Badge>
         ) : (
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusClassName}`}>
+            {ws.status === 'completed' && '✓ '}
+            {ws.status === 'in-progress' && '◔ '}
+            {statusLabel}
+          </span>
         )}
       </td>
 
       {/* Action */}
       <td className="px-5 py-3.5 text-right">
         <Link
-          to={`/worksheet/${ws.id}`}
+          to={`/solve/${ws.id}`}
           className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
         >
           {ws.status === 'completed' ? 'Review' : 'Start'}
@@ -404,7 +418,7 @@ const WorksheetsListPage: React.FC = () => {
     setIsLoading(true);
     setFetchError(null);
 
-    fetch(`${apiUrl}/api/progress/history?limit=100`, {
+    fetch(`${apiUrl}/api/worksheets/mine?limit=100`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -412,10 +426,10 @@ const WorksheetsListPage: React.FC = () => {
       signal: controller.signal,
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data: { attempts: AttemptRecord[] }) => {
+      .then((data: { worksheets: WorksheetRecord[] }) => {
         if (!isMounted) return;
-        const mapped = Array.isArray(data.attempts)
-          ? data.attempts.map(attemptToWorksheet)
+        const mapped = Array.isArray(data.worksheets)
+          ? data.worksheets.map(worksheetRecordToWorksheet)
           : [];
         setWorksheets(mapped);
       })

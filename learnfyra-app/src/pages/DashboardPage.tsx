@@ -67,7 +67,7 @@ const DashboardPage: React.FC = () => {
         <WelcomeBanner
           greeting={dashboard.greeting}
           userName={dashboard.userName}
-          worksheetCount={dashboard.stats.inProgress}
+          worksheetCount={(dashboard.stats.newWorksheets || 0) + dashboard.stats.inProgress}
           isGuest={dashboard.isGuest}
           role={auth.role}
         />

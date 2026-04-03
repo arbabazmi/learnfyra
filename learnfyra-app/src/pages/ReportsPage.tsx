@@ -48,7 +48,8 @@ interface AttemptItem {
   totalPoints: number;
   percentage: number;
   timeTaken: number;
-  completedAt?: string;
+  createdAt?: string;
+  completedAt?: string;  // alias — API returns createdAt
 }
 
 interface ReportsData {
@@ -120,8 +121,9 @@ function buildWeeklyBars(attempts: AttemptItem[]): { scores: number[]; labels: s
   const scores = days.map((day) => {
     const dayStr = day.toISOString().slice(0, 10); // YYYY-MM-DD
     const dayAttempts = attempts.filter((a) => {
-      if (!a.completedAt) return false;
-      return new Date(a.completedAt).toISOString().slice(0, 10) === dayStr;
+      const ts = a.completedAt || a.createdAt;
+      if (!ts) return false;
+      return new Date(ts).toISOString().slice(0, 10) === dayStr;
     });
     if (dayAttempts.length === 0) return 0;
     const avg = dayAttempts.reduce((sum, a) => sum + a.percentage, 0) / dayAttempts.length;
@@ -459,7 +461,7 @@ const ReportsPage: React.FC = () => {
                         <span className="block text-[11px] font-normal text-muted-foreground">Grade {row.grade} · {row.difficulty}</span>
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground hidden sm:table-cell">{row.subject}</td>
-                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{formatDate(row.completedAt)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{formatDate(row.completedAt || row.createdAt)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{formatTimeTaken(row.timeTaken)}</td>
                       <td className="px-5 py-3.5 text-right">
                         <Badge variant={row.percentage >= 80 ? 'success' : row.percentage >= 60 ? 'warning' : 'destructive'}>
@@ -468,7 +470,7 @@ const ReportsPage: React.FC = () => {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <Link
-                          to={`/worksheet/${row.worksheetId}`}
+                          to={`/solve/${row.worksheetId}`}
                           className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                         >
                           Review <ArrowRight className="size-3" />

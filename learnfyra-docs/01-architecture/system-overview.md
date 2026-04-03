@@ -1,5 +1,10 @@
 # System Architecture Overview
 
+**Updated: feat/my-worksheets-tracking (2026-04-03)**
+- Added `GET /api/worksheets/mine` route to progressFn Lambda
+- Added `GET /api/dashboard/stats` and `GET /api/dashboard/recent-worksheets` clarifications
+- Added `scripts/load-aws-config.js` to local development section
+
 ## Platform Architecture
 
 ```
@@ -19,7 +24,7 @@
 ## Detailed Data Flow
 
 ```
-Browser (Angular 17+ / plain HTML Phase 1)
+Browser (React + TypeScript — learnfyra-app/)
   │
   ▼
 CloudFront Distribution
@@ -28,17 +33,20 @@ CloudFront Distribution
                  │
                  ├── Lambda Authorizer (JWT validation — all protected routes)
                  │
-                 ├── POST /api/generate    → learnfyra-generate Lambda (1024MB, 60s)
-                 ├── GET  /api/download    → learnfyra-download Lambda (256MB, 30s)
-                 ├── GET  /api/worksheets  → learnfyra-list Lambda (128MB, 10s)
-                 ├── GET  /api/solve/:id   → learnfyra-solve Lambda (128MB, 10s)
-                 ├── POST /api/submit      → learnfyra-submit Lambda (256MB, 15s)
-                 ├── POST /api/auth/*      → learnfyra-auth Lambda (256MB, 15s)
-                 ├── GET  /api/progress/*  → learnfyra-progress Lambda (256MB, 15s)
-                 ├── GET  /api/classes/*   → learnfyra-classes Lambda (128MB, 10s)
-                 ├── GET  /api/dashboard   → learnfyra-dashboard Lambda (256MB, 15s)
-                 ├── GET  /api/admin/*     → learnfyra-admin Lambda (512MB, 30s)
-                 └── GET  /api/health      → learnfyra-health Lambda (128MB, 5s)
+                 ├── POST /api/generate           → learnfyra-generate Lambda (1024MB, 60s)
+                 ├── GET  /api/download           → learnfyra-download Lambda (256MB, 30s)
+                 ├── GET  /api/worksheets         → learnfyra-list Lambda (128MB, 10s)
+                 ├── GET  /api/worksheets/mine    → learnfyra-progress Lambda (256MB, 15s)
+                 ├── GET  /api/solve/:id          → learnfyra-solve Lambda (128MB, 10s)
+                 ├── POST /api/submit             → learnfyra-submit Lambda (256MB, 15s)
+                 ├── POST /api/auth/*             → learnfyra-auth Lambda (256MB, 15s)
+                 ├── GET  /api/progress/*         → learnfyra-progress Lambda (256MB, 15s)
+                 ├── GET  /api/classes/*          → learnfyra-classes Lambda (128MB, 10s)
+                 ├── GET  /api/dashboard/stats           → learnfyra-dashboard Lambda (256MB, 15s)
+                 ├── GET  /api/dashboard/recent-worksheets → learnfyra-dashboard Lambda (256MB, 15s)
+                 ├── GET  /api/dashboard/class/:id        → learnfyra-dashboard Lambda (256MB, 15s)
+                 ├── GET  /api/admin/*            → learnfyra-admin Lambda (512MB, 30s)
+                 └── GET  /api/health             → learnfyra-health Lambda (128MB, 5s)
 ```
 
 ## Lambda Function Inventory
@@ -52,9 +60,9 @@ CloudFront Distribution
 | learnfyra-submit | POST /api/submit | 256MB | 15s | Medium (scoring + DynamoDB write) |
 | learnfyra-auth | POST /api/auth/* | 256MB | 15s | Medium (Cognito calls) |
 | learnfyra-authorizer | (Lambda Authorizer) | 128MB | 5s | Low (JWT verify) |
-| learnfyra-progress | GET /api/progress/* | 256MB | 15s | Medium (DynamoDB reads) |
+| learnfyra-progress | GET /api/progress/*, GET /api/worksheets/mine | 256MB | 15s | Medium (DynamoDB reads) |
 | learnfyra-classes | GET/POST /api/classes/* | 128MB | 10s | Low |
-| learnfyra-dashboard | GET /api/dashboard | 256MB | 15s | Medium (aggregate queries) |
+| learnfyra-dashboard | GET /api/dashboard/* | 256MB | 15s | Medium (aggregate queries) |
 | learnfyra-admin | GET/POST /api/admin/* | 512MB | 30s | High (multi-table ops) |
 | learnfyra-health | GET /api/health | 128MB | 5s | Minimal |
 
@@ -92,7 +100,7 @@ Additional cold start strategies:
 | DynamoDB QuestionBank | Reusable questions with dedupe | PK=questionId, GSI-1 by topic/type |
 | DynamoDB Users | User accounts, roles, preferences | PK=userId |
 | DynamoDB WorksheetAttempt | Student solve attempts and scores | PK=studentId, SK=worksheetId#{timestamp} |
-| DynamoDB GenerationLog | AI generation audit trail | PK=worksheetId |
+| DynamoDB GenerationLog | AI generation audit trail, worksheet ownership | PK=worksheetId, GSI createdBy-index |
 | DynamoDB Config | Platform config, model routing | PK=configKey |
 
 ## Environment Strategy
@@ -108,12 +116,15 @@ Additional cold start strategies:
 
 ```
 localhost:3000 (Express server.js)
-  ├── GET  /              → serve frontend/index.html
-  ├── GET  /solve.html    → serve frontend/solve.html
-  ├── POST /api/generate  → calls generateHandler.handler(mockEvent, mockContext)
-  ├── GET  /api/download  → calls downloadHandler.handler(mockEvent, mockContext)
-  ├── GET  /api/solve/:id → calls solveHandler.handler(mockEvent, mockContext)
-  └── POST /api/submit    → calls submitHandler.handler(mockEvent, mockContext)
+  ├── GET  /                        → serve frontend/index.html (or learnfyra-app/ build)
+  ├── GET  /solve.html              → serve frontend/solve.html
+  ├── POST /api/generate            → calls generateHandler.handler(mockEvent, mockContext)
+  ├── GET  /api/download            → calls downloadHandler.handler(mockEvent, mockContext)
+  ├── GET  /api/solve/:id           → calls solveHandler.handler(mockEvent, mockContext)
+  ├── POST /api/submit              → calls submitHandler.handler(mockEvent, mockContext)
+  ├── GET  /api/worksheets/mine     → calls progressHandler.handler(mockEvent, mockContext)
+  ├── GET  /api/dashboard/stats     → calls dashboardHandler.handler(mockEvent, mockContext)
+  └── GET  /api/dashboard/recent-worksheets → calls dashboardHandler.handler(mockEvent, mockContext)
 
 APP_RUNTIME=local:
   - File system replaces S3 (worksheets written to worksheets-local/{uuid}/)
@@ -121,6 +132,24 @@ APP_RUNTIME=local:
   - No Cognito — JWT verified locally with LOCAL_JWT_SECRET
   - All handlers testable without AWS credentials
 ```
+
+### AWS Config Loader for Local Dev (feat/my-worksheets-tracking)
+
+`scripts/load-aws-config.js` — fetches secrets from AWS SSM Parameter Store and environment variables from deployed Lambda functions, writing them to a local `.env` file. This eliminates manual copy-paste of secrets for developers who have AWS access.
+
+**npm scripts added:**
+```
+npm run dev:aws      — loads config from the dev environment Lambda + SSM, then starts server
+npm run dev:staging  — loads config from the staging environment Lambda + SSM, then starts server
+```
+
+**What it loads:**
+- Secrets from SSM Parameter Store (ANTHROPIC_API_KEY, LOCAL_JWT_SECRET, etc.)
+- Environment variables from both the `learnfyra-generate` and `learnfyra-auth` Lambda functions (WORKSHEET_BUCKET_NAME, ALLOWED_ORIGIN, CLAUDE_MODEL, etc.)
+
+**File:** `scripts/load-aws-config.js`
+**Requires:** AWS credentials configured locally (via `aws configure` or environment variables)
+**Does NOT commit:** The populated `.env` file is in `.gitignore`
 
 ## Security Model
 
@@ -130,3 +159,5 @@ APP_RUNTIME=local:
 - S3 worksheet bucket: block all public access, access via presigned URLs only (15-minute expiry)
 - Secrets Manager: ANTHROPIC_API_KEY, LOCAL_JWT_SECRET, GOOGLE_CLIENT_SECRET per environment
 - No PII stored in worksheet content (metadata.json contains only grade/subject/topic/difficulty)
+- `GET /api/worksheets/mine` enforces ownership — users can only see their own worksheets
+- `GET /api/solve/:id?mode=practice` is unauthenticated by design — practice mode exposes answers but worksheetId is a UUID v4 with no enumerable pattern

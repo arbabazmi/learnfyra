@@ -1,6 +1,7 @@
 # Solve & Submit API Contracts (M04)
 
-**Status: FROZEN — RC-BE-01 (2026-03-26)**
+**Status: UPDATED — feat/my-worksheets-tracking (2026-04-03)**
+**Previous freeze: RC-BE-01 (2026-03-26)**
 
 Path traversal hardening applied per RC-BE-02 (2026-03-26): worksheetId validated as UUID v4 before any file system or S3 operation.
 
@@ -8,14 +9,21 @@ Path traversal hardening applied per RC-BE-02 (2026-03-26): worksheetId validate
 
 ## GET /api/solve/:worksheetId
 
-Fetch worksheet questions for online solve. Answers and explanations are stripped from the response.
+Fetch worksheet questions for online solve.
+
+**Behavior varies by `mode` query parameter:**
+- Default (no `mode` param): answers and explanations are stripped — used for exam/test mode
+- `mode=practice`: answers and explanations are **included** — used for self-study and review
 
 **Auth:** None (guest solve allowed)
 
 **Path Parameter:**
 - `worksheetId`: UUID v4
 
-**Response 200:**
+**Query Parameters:**
+- `mode` (optional): `practice` — when present, includes `answer` and `explanation` fields on each question
+
+**Response 200 (default — exam mode, no `mode` param):**
 ```json
 {
   "worksheetId": "uuid-v4",
@@ -52,19 +60,54 @@ Fetch worksheet questions for online solve. Answers and explanations are strippe
 }
 ```
 
+**Response 200 (`mode=practice` — includes answers and explanations):**
+```json
+{
+  "worksheetId": "uuid-v4",
+  "title": "Grade 3 Math — Multiplication",
+  "grade": 3,
+  "subject": "Math",
+  "topic": "Multiplication",
+  "difficulty": "Medium",
+  "estimatedTime": "20 minutes",
+  "timerSeconds": 1200,
+  "totalPoints": 10,
+  "instructions": "Solve each problem. Show your work where indicated.",
+  "questions": [
+    {
+      "number": 1,
+      "type": "multiple-choice",
+      "question": "What is 6 × 7?",
+      "options": ["A. 36", "B. 42", "C. 48", "D. 54"],
+      "points": 1,
+      "answer": "B",
+      "explanation": "6 × 7 = 42"
+    },
+    {
+      "number": 2,
+      "type": "fill-in-the-blank",
+      "question": "8 × 9 = ___",
+      "points": 1,
+      "answer": "72",
+      "explanation": "8 × 9 = 72"
+    }
+  ]
+}
+```
+
 **Question type field reference:**
 
-| Type | Fields present in response | Fields absent |
+| Type | Fields in exam mode | Additional fields in practice mode |
 |---|---|---|
-| multiple-choice | `number`, `type`, `question`, `options`, `points` | `answer`, `explanation`, `pairs` |
-| true-false | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
-| fill-in-the-blank | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
-| short-answer | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
-| matching | `number`, `type`, `question`, `leftItems`, `rightItems`, `points` | `answer`, `explanation`, `pairs` (server-side only) |
-| show-your-work | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
-| word-problem | `number`, `type`, `question`, `points` | `answer`, `explanation`, `options`, `pairs` |
+| multiple-choice | `number`, `type`, `question`, `options`, `points` | `answer`, `explanation` |
+| true-false | `number`, `type`, `question`, `points` | `answer`, `explanation` |
+| fill-in-the-blank | `number`, `type`, `question`, `points` | `answer`, `explanation` |
+| short-answer | `number`, `type`, `question`, `points` | `answer`, `explanation` |
+| matching | `number`, `type`, `question`, `leftItems`, `rightItems`, `points` | `answer`, `explanation` |
+| show-your-work | `number`, `type`, `question`, `points` | `answer`, `explanation` |
+| word-problem | `number`, `type`, `question`, `points` | `answer`, `explanation` |
 
-For `matching`, the response exposes the left and right items as separate shuffled arrays so the student can draw connections — the correct pairings (`pairs`) are **never** sent to the client:
+For `matching`, the response exposes the left and right items as separate shuffled arrays so the student can draw connections — the correct pairings (`pairs`) are **never** sent to the client in either mode:
 ```json
 {
   "number": 4,
@@ -77,10 +120,9 @@ For `matching`, the response exposes the left and right items as separate shuffl
 ```
 The `rightItems` array is shuffled server-side on every request. The student's submit answer for matching is an array of `{ left, right }` pairs.
 
-**Invariants:**
-- `answer` field is NEVER included in any question in this response
-- `explanation` field is NEVER included in any question in this response
-- `pairs` (the correct pairings) are NEVER sent to the client — only `leftItems` and `rightItems`
+**Security invariants:**
+- `answer` and `explanation` are NEVER included when `mode` is absent or any value other than `practice`
+- `pairs` (the correct pairings for matching) are NEVER sent to the client in any mode — only `leftItems` and `rightItems`
 - `options` is ONLY present for `type: "multiple-choice"`
 - `worksheetId` is validated as UUID v4 format (rejects path traversal attempts)
 
@@ -196,6 +238,107 @@ Note: `attemptId` is only present in the response when the student is authentica
 
 ---
 
+## GET /api/dashboard/stats
+
+Get aggregate stats for the authenticated user's dashboard.
+
+**Auth:** Bearer token required
+
+**Lambda:** `learnfyra-dashboard`
+**Expected latency:** p50 < 300ms, p99 < 1s
+
+**Response 200:**
+```json
+{
+  "totalWorksheets": 12,
+  "newWorksheets": 4,
+  "inProgress": 3,
+  "worksheetsDone": 5,
+  "avgScore": 78.5,
+  "streak": 3,
+  "lastActive": "2026-04-02T14:00:00Z"
+}
+```
+
+**Field definitions:**
+- `totalWorksheets`: total count of worksheets generated by this user (from `LearnfyraGenerationLog` via `createdBy-index`)
+- `newWorksheets`: count of worksheets the user has generated but never attempted (status = `new`)
+- `inProgress`: count of unique worksheets where the user's most recent attempt is in-progress (not yet fully scored)
+- `worksheetsDone`: count of unique worksheets where the user has at least one completed (scored) attempt. Counts each worksheet once regardless of retake attempts.
+- `avgScore`: mean percentage across all completed attempts
+- `streak`: consecutive days with at least one completed attempt
+- `lastActive`: ISO-8601 timestamp of the most recent attempt
+
+**Counting rules:**
+- `worksheetsDone` de-duplicates by worksheetId. If a user completes the same worksheet 3 times, it counts as 1 done.
+- `inProgress` de-duplicates by worksheetId. Uses the most recent attempt per worksheetId.
+- `newWorksheets` = `totalWorksheets` minus worksheets that have any attempt record.
+
+**Error 401 — No token:**
+```json
+{ "error": "Unauthorized", "code": "MISSING_TOKEN" }
+```
+
+---
+
+## GET /api/dashboard/recent-worksheets
+
+Get recently generated worksheets for the authenticated user's dashboard feed.
+
+**Auth:** Bearer token required
+
+**Lambda:** `learnfyra-dashboard`
+**Expected latency:** p50 < 300ms, p99 < 1s
+
+**Response 200:**
+```json
+{
+  "worksheets": [
+    {
+      "id": "uuid-v4",
+      "title": "Grade 3 Math — Multiplication",
+      "subject": "Math",
+      "grade": 3,
+      "topic": "Multiplication",
+      "difficulty": "Medium",
+      "questionCount": 10,
+      "status": "completed",
+      "score": 85,
+      "createdAt": "2026-03-28T12:00:00Z"
+    },
+    {
+      "id": "uuid-v4",
+      "title": "Grade 5 Science — Ecosystems",
+      "subject": "Science",
+      "grade": 5,
+      "topic": "Ecosystems",
+      "difficulty": "Hard",
+      "questionCount": 15,
+      "status": "new",
+      "score": null,
+      "createdAt": "2026-04-01T09:00:00Z"
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Returns generated worksheets (from `LearnfyraGenerationLog` queried via `createdBy-index`), sorted by `createdAt` descending
+- `id` is the `worksheetId` (slug) — used as the URL identifier in the frontend
+- `status` is derived from attempt data: `new` / `in-progress` / `completed` (same derivation rules as `GET /api/worksheets/mine`)
+- `score` is the percentage from the most recent completed attempt, or null if status is `new`
+- `createdAt` is the `generatedAt` timestamp from `LearnfyraGenerationLog`
+- Returns up to 10 most recent worksheets (not paginated — for dashboard display only)
+
+**Previous behavior (deprecated):** This endpoint previously returned attempt records only (worksheets that had been solved). It now returns all generated worksheets regardless of attempt status.
+
+**Error 401 — No token:**
+```json
+{ "error": "Unauthorized", "code": "MISSING_TOKEN" }
+```
+
+---
+
 ## Scoring Rules by Question Type
 
 | Type | Rule | Notes |
@@ -246,3 +389,8 @@ Same source as solveHandler, then compares submitted answers to `question.answer
 ### submitHandler writes to (authenticated users only):
 - DynamoDB: `LearnfyraWorksheetAttempt` (PK=userId, SK=worksheetId#{timestamp})
 - DynamoDB: `LearnfyraUsers` (update precomputed progress aggregates)
+
+### dashboardHandler reads from:
+- DynamoDB: `LearnfyraGenerationLog` via `createdBy-index` GSI (PK=createdBy, SK=createdAt) — for `totalWorksheets`, `newWorksheets`, and `recent-worksheets`
+- DynamoDB: `LearnfyraWorksheetAttempt` (Query by userId) — for `inProgress`, `worksheetsDone`, `avgScore`, `streak`
+- DynamoDB: `LearnfyraUsers` — for precomputed aggregates (fallback / cross-check)

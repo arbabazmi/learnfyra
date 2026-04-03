@@ -71,6 +71,12 @@ export default function FeedbackCard({ correct, correctAnswer, explanation, poin
               </p>
             </div>
           )}
+
+          {/* AI compliance note */}
+          <p className="text-[10px] text-muted-foreground/60 mt-3 italic">
+            AI-generated content — scoring may occasionally be inaccurate.{' '}
+            <a href="mailto:support@learnfyra.com" className="underline hover:text-muted-foreground">Report an issue</a>
+          </p>
         </div>
       </div>
     </motion.div>

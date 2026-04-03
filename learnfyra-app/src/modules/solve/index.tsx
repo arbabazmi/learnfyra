@@ -79,6 +79,8 @@ export default function SolvePage() {
           if (token) auth.refresh(); // update auth context with new guest state
         }
 
+        // Initial load: no answers/explanations (prevents cheating in exam mode).
+        // Practice mode re-fetches with ?mode=practice after mode selection.
         const res = await fetch(`${apiUrl}/api/solve/${worksheetId}`, {
           signal: controller.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -236,7 +238,9 @@ async function saveProgress(
         grade: worksheet.grade,
         subject: worksheet.subject,
         topic: worksheet.topic,
-        difficulty: worksheet.difficulty,
+        // Backend expects capitalized difficulty ('Easy', 'Medium', 'Hard', 'Mixed')
+        // but the solve module uses lowercase ('easy', 'medium', 'hard')
+        difficulty: worksheet.difficulty.charAt(0).toUpperCase() + worksheet.difficulty.slice(1),
         totalScore: solveResults.totalScore,
         totalPoints: solveResults.totalPoints,
         percentage: solveResults.percentage,
@@ -251,12 +255,16 @@ async function saveProgress(
   }
 }
 
-function SolveController({ worksheet }: { worksheet: Worksheet }) {
+function SolveController({ worksheet: initialWorksheet }: { worksheet: Worksheet }) {
   const { worksheetId } = useParams<{ worksheetId: string }>();
   const navigate = useNavigate();
+
+  // Worksheet with answers hydrated for practice mode
+  const [worksheet, setWorksheet] = useState<Worksheet>(initialWorksheet);
+
   const {
     session,
-    startSession,
+    startSession: rawStartSession,
     answerQuestion,
     flagQuestion,
     useHint,
@@ -264,6 +272,25 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
     submitExam,
     completeQuestion,
   } = useSolveSession(worksheet);
+
+  // When practice mode is selected, re-fetch with ?mode=practice to get answers/explanations
+  const startSession = useCallback(async (mode: SolveMode) => {
+    if (mode === 'practice' && worksheetId) {
+      try {
+        const token = getAuthToken();
+        const res = await fetch(`${apiUrl}/api/solve/${worksheetId}?mode=practice`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setWorksheet(mapApiToWorksheet(data));
+        }
+      } catch {
+        // Non-fatal: practice mode will work with client-side scoring as fallback
+      }
+    }
+    rawStartSession(mode);
+  }, [worksheetId, rawStartSession]);
 
   // Server-scored results (for exam mode)
   const [serverResults, setServerResults] = useState<SolveResults | null>(null);

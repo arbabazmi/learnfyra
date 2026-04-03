@@ -394,6 +394,12 @@ export class LearnfyraStack extends cdk.Stack {
             partitionKeyName: 'slug',
             projectionType: dynamodb.ProjectionType.ALL,
           },
+          {
+            indexName: 'createdBy-index',
+            partitionKeyName: 'createdBy',
+            sortKeyName: 'createdAt',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
         ],
       }
     );
@@ -1071,6 +1077,7 @@ export class LearnfyraStack extends cdk.Stack {
 
     dashboardFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     dashboardFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    dashboardFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
     adminFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
     adminFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
@@ -1303,6 +1310,16 @@ export class LearnfyraStack extends cdk.Stack {
     progressResource
       .addResource('parent')
       .addResource('{childId}')
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Worksheets routes (JWT protected) ─────────────────────────────────────
+    const worksheetsApiResource = apiResource.addResource('worksheets');
+    worksheetsApiResource
+      .addResource('mine')
       .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,

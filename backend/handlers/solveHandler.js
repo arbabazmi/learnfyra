@@ -53,6 +53,13 @@ const PUBLIC_QUESTION_FIELDS = [
   'rightItems',
 ];
 
+// Practice mode includes answers and explanations for instant feedback
+const PRACTICE_QUESTION_FIELDS = [
+  ...PUBLIC_QUESTION_FIELDS,
+  'answer',
+  'explanation',
+];
+
 /**
  * Fetches a worksheet item from DynamoDB by UUID (primary key) or slug (GSI).
  * @param {string} identifier - v4 UUID or SEO slug
@@ -220,7 +227,20 @@ export const handler = async (event, context) => {
       }
     }
 
-    const publicQuestions = (worksheet.questions || []).map(toPublicQuestion);
+    // Practice mode includes answers + explanations for instant feedback
+    const queryParams = event.queryStringParameters || {};
+    const isPractice = queryParams.mode === 'practice';
+    const allowedFields = isPractice ? PRACTICE_QUESTION_FIELDS : PUBLIC_QUESTION_FIELDS;
+
+    const filteredQuestions = (worksheet.questions || []).map((q) => {
+      const out = {};
+      for (const field of allowedFields) {
+        if (Object.prototype.hasOwnProperty.call(q, field)) {
+          out[field] = q[field];
+        }
+      }
+      return out;
+    });
 
     return {
       statusCode: 200,
@@ -235,7 +255,7 @@ export const handler = async (event, context) => {
         estimatedTime: worksheet.estimatedTime,
         timerSeconds: worksheet.timerSeconds,
         totalPoints: worksheet.totalPoints,
-        questions: publicQuestions,
+        questions: filteredQuestions,
       }),
     };
   } catch (err) {
