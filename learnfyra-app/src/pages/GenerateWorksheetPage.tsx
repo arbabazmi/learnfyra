@@ -231,15 +231,22 @@ const GenerateWorksheetPage: React.FC = () => {
       setGeneratedId(wsId);
       setGeneratedSlug(data.metadata?.slug || null);
 
-      // Fetch full worksheet data (with answers) and save to localStorage for downloads
+      // Fetch worksheet data via API and save to localStorage for solve page
       try {
-        const solveRes = await fetch(`${apiUrl}/local-files/${wsId}/solve-data.json`);
+        const slug = data.metadata?.slug;
+        const solveId = slug || wsId;
+        const solveRes = await fetch(`${apiUrl}/api/solve/${solveId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (solveRes.ok) {
-          const solveData = await solveRes.json();
-          const ws = mapSolveDataToWorksheet(solveData);
-          saveWorksheet(ws);
+          const contentType = solveRes.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const solveData = await solveRes.json();
+            const ws = mapSolveDataToWorksheet(solveData);
+            saveWorksheet(ws);
+          }
         }
-      } catch { /* download buttons will be non-functional but generation still succeeds */ }
+      } catch { /* solve page will fetch from API directly if localStorage is empty */ }
 
       setGenState('success');
     } catch (err) {

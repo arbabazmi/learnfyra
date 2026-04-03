@@ -69,6 +69,7 @@ const DashboardPage: React.FC = () => {
           userName={dashboard.userName}
           worksheetCount={dashboard.stats.inProgress}
           isGuest={dashboard.isGuest}
+          role={auth.role}
         />
 
         {/* Stats row */}
