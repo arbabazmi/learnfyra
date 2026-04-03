@@ -207,6 +207,7 @@ function mapSubmitResponse(
 }
 
 function SolveController({ worksheet }: { worksheet: Worksheet }) {
+  const { worksheetId } = useParams<{ worksheetId: string }>();
   const navigate = useNavigate();
   const {
     session,
@@ -330,6 +331,7 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
       <ResultsScreen
         results={results}
         grade={worksheet.grade}
+        worksheetId={worksheetId}
         onRetake={handleRetake}
         onSwitchMode={handleSwitchMode}
         onHome={handleHome}

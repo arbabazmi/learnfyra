@@ -419,6 +419,21 @@ export class LearnfyraStack extends cdk.Stack {
       }
     );
 
+    // ── DynamoDB: Feedback — user feedback from solve results page ─────────────
+    const feedbackTable = createTable(
+      'FeedbackTable',
+      `LearnfyraFeedback-${appEnv}`,
+      'feedbackId',
+      {
+        gsis: [
+          {
+            indexName: 'worksheetId-index',
+            partitionKeyName: 'worksheetId',
+          },
+        ],
+      }
+    );
+
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
@@ -935,6 +950,25 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
     });
 
+    // ── Lambda: Feedback handler ────────────────────────────────────────────────
+    const feedbackFn = new NodejsFunction(this, 'FeedbackFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-feedback`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('feedbackHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(10),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+        FEEDBACK_TABLE_NAME: feedbackTable.tableName,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-feedback — user feedback collection`,
+    });
+
     worksheetBucket.grantRead(solveFn);
     worksheetBucket.grantRead(submitFn);
 
@@ -954,6 +988,7 @@ export class LearnfyraStack extends cdk.Stack {
       certificatesFn,
       adminPoliciesFn,
       guestFixtureFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
@@ -977,6 +1012,7 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addEnvironment('APP_RUNTIME', 'aws');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
@@ -1112,6 +1148,7 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addToRolePolicy(
         new iam.PolicyStatement({
@@ -1219,6 +1256,14 @@ export class LearnfyraStack extends cdk.Stack {
     apiResource
       .addResource('submit')
       .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    apiResource
+      .addResource('feedback')
+      .addMethod('POST', new apigateway.LambdaIntegration(feedbackFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -1476,6 +1521,7 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
       { id: 'Certificates', fn: certificatesFn, p95MsThreshold: 3000 },
       { id: 'AdminPolicies', fn: adminPoliciesFn, p95MsThreshold: 4000 },
+      { id: 'Feedback', fn: feedbackFn, p95MsThreshold: 3000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {
@@ -1680,6 +1726,7 @@ export class LearnfyraStack extends cdk.Stack {
       rewardsFn,
       studentFn,
       adminFn,
+      feedbackFn,
     ].map((fn) => `/aws/lambda/${fn.functionName}`);
 
     const topErrorsByFunctionQuery = [
