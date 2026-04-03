@@ -15,6 +15,7 @@ export interface WelcomeBannerProps {
   userName: string;
   worksheetCount: number;
   isGuest: boolean;
+  role?: string | null;
 }
 
 /**
@@ -24,11 +25,23 @@ export interface WelcomeBannerProps {
  * @param {WelcomeBannerProps} props
  * @returns {React.ReactElement}
  */
+const ROLE_LABELS: Record<string, { label: string; emoji: string }> = {
+  student: { label: 'Student', emoji: '' },
+  teacher: { label: 'Teacher', emoji: '' },
+  parent: { label: 'Parent', emoji: '' },
+  'guest-student': { label: 'Student', emoji: '' },
+  'guest-teacher': { label: 'Teacher', emoji: '' },
+  'guest-parent': { label: 'Parent', emoji: '' },
+};
+
 const WelcomeBanner: React.FC<WelcomeBannerProps> = ({
   greeting,
   userName,
   worksheetCount,
+  role,
 }) => {
+  const roleKey = role?.toLowerCase() ?? '';
+  const roleInfo = ROLE_LABELS[roleKey];
   return (
     <section
       aria-label="Welcome"
@@ -48,9 +61,16 @@ const WelcomeBanner: React.FC<WelcomeBannerProps> = ({
       <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         {/* Left: greeting + subtitle */}
         <div>
-          <h2 className="text-xl font-extrabold text-white">
-            {greeting}, {userName}!
-          </h2>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-xl font-extrabold text-white">
+              {greeting}, {userName}!
+            </h2>
+            {roleInfo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-xs font-bold uppercase tracking-wide backdrop-blur-sm">
+                {roleInfo.label}
+              </span>
+            )}
+          </div>
           <p className="text-white/75 text-sm mt-1">
             You have{' '}
             <span className="text-white font-bold">
