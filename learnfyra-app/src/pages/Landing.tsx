@@ -254,12 +254,12 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Wo
           </p>
 
           {/* ── Smart Search Box ──────────────────────────── */}
-          <div className="mt-8 animate-fade-up delay-300">
+          <div className="mt-8 animate-fade-up delay-300 relative z-30">
             <SmartSearchBox externalGrade={externalGrade} onExternalGradeHandled={onExternalGradeHandled} />
           </div>
 
           {/* CTA buttons */}
-          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400">
+          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400 relative z-10">
             <Button
               variant="primary"
               size="lg"
@@ -278,7 +278,7 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Wo
           </div>
 
           {/* Stats */}
-          <div className="mt-10 flex items-stretch gap-8 animate-fade-up delay-400">
+          <div className="mt-10 flex items-stretch gap-8 animate-fade-up delay-400 relative z-10">
             {[
               { number: '50K+', label: 'Students' },
               { number: '2K+', label: 'Teachers' },
