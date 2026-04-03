@@ -148,15 +148,33 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          VERSION="staging-${SHORT_SHA}-$(date -u +%Y%m%d%H%M%S)"
+
+          git fetch --tags --quiet
+          LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            RELEASE_VERSION="0.0.1"
+          else
+            MAJOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f1)
+            MINOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f2)
+            PATCH=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f3)
+            RELEASE_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          VERSION="${RELEASE_VERSION}-rc.${{ github.run_number }}+${SHORT_SHA}"
+
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          echo "latest_tag=${LATEST_TAG:-none}" >> $GITHUB_OUTPUT
           echo ""
           echo "╔══════════════════════════════════════════╗"
           echo "║         DEPLOY VERSION                   ║"
           echo "╠══════════════════════════════════════════╣"
           echo "║  Version:   $VERSION"
+          echo "║  Release:   $RELEASE_VERSION"
+          echo "║  Tag:       ${LATEST_TAG:-none}"
           echo "║  Commit:    $SHORT_SHA"
           echo "║  Branch:    ${{ github.ref_name }}"
           echo "║  Timestamp: $TIMESTAMP"
@@ -212,6 +230,8 @@ jobs:
         run: npm ci
 
       - name: Build Vite frontend (qa)
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd learnfyra-app
           npm ci
@@ -275,6 +295,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           SHORT_SHA="${{ steps.version.outputs.short_sha }}"
           TIMESTAMP="${{ steps.version.outputs.timestamp }}"
+          RELEASE_VERSION="${{ steps.version.outputs.release_version }}"
 
           LAMBDAS=$(aws lambda list-functions \
             --query "Functions[?starts_with(FunctionName, 'learnfyra-staging-')].FunctionName" \
@@ -284,7 +305,7 @@ jobs:
           for FN in $LAMBDAS; do
             aws lambda tag-resource \
               --resource $(aws lambda get-function --function-name "$FN" --query 'Configuration.FunctionArn' --output text) \
-              --tags "DeployVersion=$VERSION,DeployCommit=$SHORT_SHA,DeployTimestamp=$TIMESTAMP,DeployedBy=${{ github.actor }}"
+              --tags "DeployVersion=$VERSION,DeployCommit=$SHORT_SHA,DeployTimestamp=$TIMESTAMP,DeployedBy=${{ github.actor }},ReleaseVersion=$RELEASE_VERSION"
             echo "  ✓ $FN"
           done
 
