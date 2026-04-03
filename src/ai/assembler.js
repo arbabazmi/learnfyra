@@ -28,7 +28,7 @@ import { withRetry } from '../utils/retryUtils.js';
 import { getQuestionBankAdapter } from '../questionBank/index.js';
 import { recordQuestionReuse } from '../questionBank/reuseHook.js';
 import { logger } from '../utils/logger.js';
-import { buildQuestionSignature } from './repeatCapPolicy.js';
+import { buildQuestionSignature, getUserQuestionHistory } from './repeatCapPolicy.js';
 
 // ─── Model tiers ──────────────────────────────────────────────────────────────
 
@@ -309,6 +309,8 @@ export async function assembleWorksheet(options) {
     provenanceLevel = 'summary',
     repeatCapPercent = 100,
     seenQuestionSignatures,
+    userId,
+    guestId,
   } = options;
 
   const seenSignatures = seenQuestionSignatures instanceof Set
@@ -336,8 +338,34 @@ export async function assembleWorksheet(options) {
     repeatUsed = result.repeatUsed;
   }
 
-  const fromBank       = bankedSelected.length;
-  const missingCount   = questionCount - fromBank;
+  // ── Step 2.5: Apply questionId-based deduplication (80/20 rule) ────────────
+  const seenQuestionIds = await getUserQuestionHistory({ userId, guestId, grade, subject });
+
+  if (seenQuestionIds.size > 0 && bankedSelected.length > 0) {
+    const unseenBanked = bankedSelected.filter(q => !seenQuestionIds.has(q.questionId));
+    const seenBanked   = bankedSelected.filter(q =>  seenQuestionIds.has(q.questionId));
+    const minUnseen    = Math.ceil(questionCount * 0.8);
+
+    if (unseenBanked.length >= questionCount) {
+      // Enough unseen — use only unseen
+      bankedSelected = shuffled(unseenBanked).slice(0, questionCount);
+    } else if (unseenBanked.length >= minUnseen) {
+      // Enough for 80% — fill remainder from seen
+      const seenFill = questionCount - unseenBanked.length;
+      bankedSelected = [...shuffled(unseenBanked), ...shuffled(seenBanked).slice(0, seenFill)];
+    } else {
+      // Not enough unseen — use all unseen, AI will fill the rest
+      bankedSelected = shuffled(unseenBanked);
+    }
+
+    logger.info(
+      `Assembler — dedup: ${seenQuestionIds.size} seen IDs, ` +
+      `${unseenBanked.length} unseen candidates, using ${bankedSelected.length} from bank`
+    );
+  }
+
+  const fromBank     = bankedSelected.length;
+  const missingCount = questionCount - fromBank;
 
   logger.info(
     `Assembler — bank has ${candidates.length} candidate(s); ` +
@@ -430,7 +458,7 @@ export async function assembleWorksheet(options) {
   }
 
   // ── Step 8: Merge and renumber questions 1..N ─────────────────────────────
-  // Banked questions are placed first, generated questions fill the remainder.
+  // Banked and generated questions are shuffled together for variety.
   const bankedQuestions = shouldAttachQuestionProvenance(provenanceLevel)
     ? bankedSelected.map((question) => ({
       ...question,
@@ -438,7 +466,7 @@ export async function assembleWorksheet(options) {
     }))
     : bankedSelected;
 
-  const merged = [...bankedQuestions, ...generatedQuestions];
+  const merged = shuffled([...bankedQuestions, ...generatedQuestions]);
 
   const renumbered = merged.map((q, idx) => ({
     ...q,

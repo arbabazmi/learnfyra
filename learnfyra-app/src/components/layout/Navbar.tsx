@@ -89,7 +89,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
       )}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Main navigation">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-24">
 
           {/* ── Logo — image only, no text ──────────────────── */}
           <Link
@@ -130,7 +130,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
 
           {/* ── Desktop CTAs ─────────────────────────────────── */}
           <div className="hidden md:flex items-center gap-3">
-            {auth.isAuthenticated && auth.user ? (
+            {auth.tokenState === 'authenticated' && auth.user ? (
               <>
                 <Link
                   to="/dashboard"
@@ -208,7 +208,7 @@ const Navbar: React.FC<NavbarProps> = ({ onSignIn, onTryWorksheet }) => {
               ),
             )}
             <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
-              {auth.isAuthenticated && auth.user ? (
+              {auth.tokenState === 'authenticated' && auth.user ? (
                 <>
                   <Link
                     to="/dashboard"

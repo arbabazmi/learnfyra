@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type WorksheetStatus = 'completed' | 'new' | 'in-progress';
@@ -379,7 +379,7 @@ const WorksheetsListPage: React.FC = () => {
   });
 
   const auth = useAuth();
-  const token = getToken();
+  const token = getAuthToken();
 
   const [worksheets, setWorksheets] = React.useState<Worksheet[]>([]);
   const [isLoading, setIsLoading]   = React.useState(!auth.isGuest);

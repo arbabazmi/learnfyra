@@ -77,7 +77,7 @@ const SCHEMA_EXAMPLE = `{
       "type": "multiple-choice",
       "question": "What is 7 × 8?",
       "options": ["A. 54", "B. 56", "C. 48", "D. 63"],
-      "answer": "B. 56",
+      "answer": "B",
       "explanation": "7 times 8 equals 56.",
       "points": 1
     },
@@ -179,6 +179,33 @@ function _buildPromptBody(options, strict) {
     `- "number" starts at 1 and increments by 1 for each question\n` +
     `- "totalPoints" MUST equal the sum of all question "points" values\n` +
     `- "grade" field MUST be the integer ${grade} (not a string)\n\n` +
+    `ANSWER FORMAT RULES — STRICT, DO NOT DEVIATE:\n` +
+    `For "multiple-choice" questions:\n` +
+    `  - "answer" MUST be ONLY the correct option letter: "A", "B", "C", or "D"\n` +
+    `  - Do NOT include the option text (wrong: "B. 42", correct: "B")\n` +
+    `  - The letter MUST match exactly one of the four options\n` +
+    `For "true-false" questions:\n` +
+    `  - "answer" MUST be exactly "True" or "False" (capitalized, full word)\n` +
+    `  - Do NOT use "T", "F", "Yes", "No", or any other variation\n` +
+    `For "fill-in-the-blank" questions:\n` +
+    `  - "answer" MUST be the exact value that fills the blank\n` +
+    `  - For numbers: use plain digits (e.g., "42", "0.5"), no units, no words\n` +
+    `  - For text: use the simplest correct form, lowercase preferred\n` +
+    `  - ONE value only — no alternatives, no "or"\n` +
+    `For "short-answer" questions:\n` +
+    `  - "answer" MUST be 3-5 essential keywords separated by spaces\n` +
+    `  - These keywords are what the scorer checks for in the student's response\n` +
+    `  - Example: for "Explain photosynthesis", answer: "photosynthesis sunlight oxygen glucose"\n` +
+    `  - Do NOT write full sentences — only space-separated keywords\n` +
+    `  - Choose keywords that are specific and unambiguous\n` +
+    `For "matching" questions:\n` +
+    `  - "answer" MUST be an array of objects: [{"left": "term", "right": "definition"}, ...]\n` +
+    `  - Each object has exactly "left" and "right" string fields\n` +
+    `  - The pairs must match the question's terms exactly\n` +
+    `For "show-your-work" and "word-problem" questions:\n` +
+    `  - "answer" MUST be ONLY the final numeric answer WITHOUT units (e.g., "48", "12", "0.5")\n` +
+    `  - Do NOT include steps or explanation in the "answer" field\n` +
+    `  - Put the step-by-step explanation in the "explanation" field instead\n\n` +
     `Return ONLY a JSON object that matches this exact structure:\n` +
     `${SCHEMA_EXAMPLE}`
   );

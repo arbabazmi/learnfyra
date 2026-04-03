@@ -15,6 +15,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -380,6 +381,59 @@ export class LearnfyraStack extends cdk.Stack {
       'id'
     );
 
+    // ── DynamoDB: Worksheets table — stores full worksheet JSON for online solve ──
+    const worksheetsTable = createTable(
+      'WorksheetsTable',
+      `LearnfyraWorksheets-${appEnv}`,
+      'worksheetId',
+      {
+        ttlAttribute: 'expiresAt',
+        gsis: [
+          {
+            indexName: 'slug-index',
+            partitionKeyName: 'slug',
+            projectionType: dynamodb.ProjectionType.ALL,
+          },
+        ],
+      }
+    );
+
+    // ── DynamoDB: GuestSessions — tracks guest worksheet usage and limits ─────
+    const guestSessionsTable = createTable(
+      'GuestSessionsTable',
+      `LearnfyraGuestSessions-${appEnv}`,
+      'PK',
+      {
+        ttlAttribute: 'ttl',
+      }
+    );
+
+    // ── DynamoDB: UserQuestionHistory — per-user question exposure history ─────
+    const userQuestionHistoryTable = createTable(
+      'UserQuestionHistoryTable',
+      `LearnfyraUserQuestionHistory-${appEnv}`,
+      'PK',
+      {
+        sortKeyName: 'SK',
+        ttlAttribute: 'ttl',
+      }
+    );
+
+    // ── DynamoDB: Feedback — user feedback from solve results page ─────────────
+    const feedbackTable = createTable(
+      'FeedbackTable',
+      `LearnfyraFeedback-${appEnv}`,
+      'feedbackId',
+      {
+        gsis: [
+          {
+            indexName: 'worksheetId-index',
+            partitionKeyName: 'worksheetId',
+          },
+        ],
+      }
+    );
+
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
@@ -484,7 +538,7 @@ export class LearnfyraStack extends cdk.Stack {
     // JWT secret — stored in Secrets Manager (not SSM) so it is encrypted at rest
     // and resolved via CloudFormation dynamic reference into the Lambda env var.
     const jwtSecretValue = cdk.SecretValue.secretsManager(
-      `/learnfyra/${appEnv}/jwt-secret`
+      `/learnfyra/${dnsEnvLabel}/jwt-secret`
     ).unsafeUnwrap();
     const allowedOrigin = isDev ? '*' : (enableCustomDomains ? `https://${webDomainName}` : '*');
 
@@ -521,7 +575,7 @@ export class LearnfyraStack extends cdk.Stack {
     const googleIdp = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdp', {
       userPool,
       clientId: googleClientIds[appEnv],
-      clientSecretValue: cdk.SecretValue.secretsManager(`/learnfyra/${appEnv}/google-client-secret`),
+      clientSecretValue: cdk.SecretValue.secretsManager(`/learnfyra/${dnsEnvLabel}/google-client-secret`),
       scopes: ['openid', 'email', 'profile'],
       attributeMapping: {
         email: cognito.ProviderAttribute.GOOGLE_EMAIL,
@@ -860,6 +914,24 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-certificates — student certificate list and download`,
     });
 
+    // ── Lambda: Guest fixture handler ─────────────────────────────────────────
+    const guestFixtureFn = new NodejsFunction(this, 'GuestFixtureFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-guest-fixture`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('guestFixtureHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(5),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-guest-fixture — guest role preview fixtures`,
+    });
+
     // ── Lambda: Admin policies handler ────────────────────────────────────────
     const adminPoliciesFn = new NodejsFunction(this, 'AdminPoliciesFunction', {
       functionName: `learnfyra-${appEnv}-lambda-admin-policies`,
@@ -876,6 +948,25 @@ export class LearnfyraStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
+    });
+
+    // ── Lambda: Feedback handler ────────────────────────────────────────────────
+    const feedbackFn = new NodejsFunction(this, 'FeedbackFunction', {
+      functionName: `learnfyra-${appEnv}-lambda-feedback`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: resolveHandlerEntry('feedbackHandler.js'),
+      handler: 'handler',
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(10),
+      bundling,
+      environment: {
+        NODE_ENV: appEnv,
+        FEEDBACK_TABLE_NAME: feedbackTable.tableName,
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      tracing: tracingMode,
+      description: `learnfyra-${appEnv}-lambda-feedback — user feedback collection`,
     });
 
     worksheetBucket.grantRead(solveFn);
@@ -896,6 +987,8 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      guestFixtureFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
@@ -908,6 +1001,7 @@ export class LearnfyraStack extends cdk.Stack {
     [
       generateFn,
       authFn,
+      solveFn,
       submitFn,
       progressFn,
       analyticsFn,
@@ -918,6 +1012,7 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addEnvironment('APP_RUNTIME', 'aws');
       fn.addEnvironment('DYNAMO_ENV', appEnv);
@@ -926,13 +1021,29 @@ export class LearnfyraStack extends cdk.Stack {
 
     authFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
     authFn.addEnvironment('PWRESET_TABLE_NAME', passwordResetsTable.tableName);
+    authFn.addEnvironment('GUEST_SESSIONS_TABLE', guestSessionsTable.tableName);
+
+    // Cookie domain for guest token Set-Cookie header — scoped per environment
+    const cookieDomains: Record<string, string> = {
+      dev: '.dev.learnfyra.com',
+      staging: '.qa.learnfyra.com',
+      prod: '.learnfyra.com',
+    };
+    authFn.addEnvironment('COOKIE_DOMAIN', cookieDomains[appEnv] ?? 'localhost');
 
     generateFn.addEnvironment('MODEL_CONFIG_TABLE_NAME', modelConfigTable.tableName);
     generateFn.addEnvironment('MODEL_AUDIT_LOG_TABLE_NAME', modelAuditLogTable.tableName);
     generateFn.addEnvironment('QUESTION_EXPOSURE_HISTORY_TABLE_NAME', questionExposureHistoryTable.tableName);
     generateFn.addEnvironment('ADMIN_POLICIES_TABLE_NAME', adminPoliciesTable.tableName);
     generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+    generateFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    generateFn.addEnvironment('GUEST_SESSIONS_TABLE', guestSessionsTable.tableName);
+    generateFn.addEnvironment('USER_QUESTION_HISTORY_TABLE', userQuestionHistoryTable.tableName);
+    solveFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    submitFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
+    progressFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    progressFn.addEnvironment('USER_QUESTION_HISTORY_TABLE', userQuestionHistoryTable.tableName);
     progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
     progressFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
@@ -1026,6 +1137,8 @@ export class LearnfyraStack extends cdk.Stack {
     [
       generateFn,
       authFn,
+      solveFn,
+      submitFn,
       progressFn,
       analyticsFn,
       classFn,
@@ -1035,6 +1148,7 @@ export class LearnfyraStack extends cdk.Stack {
       dashboardFn,
       certificatesFn,
       adminPoliciesFn,
+      feedbackFn,
     ].forEach((fn) => {
       fn.addToRolePolicy(
         new iam.PolicyStatement({
@@ -1100,6 +1214,11 @@ export class LearnfyraStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
+    authResource
+      .addResource('guest')
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
 
     authResource
       .addResource('forgot-password')
@@ -1126,9 +1245,25 @@ export class LearnfyraStack extends cdk.Stack {
         apiKeyRequired: false,
       });
 
+    // GET /api/guest/preview?role=teacher|parent — public, no auth
+    const guestResource = apiResource.addResource('guest');
+    guestResource
+      .addResource('preview')
+      .addMethod('GET', new apigateway.LambdaIntegration(guestFixtureFn, { proxy: true }), {
+        apiKeyRequired: false,
+      });
+
     apiResource
       .addResource('submit')
       .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    apiResource
+      .addResource('feedback')
+      .addMethod('POST', new apigateway.LambdaIntegration(feedbackFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -1386,6 +1521,7 @@ export class LearnfyraStack extends cdk.Stack {
       { id: 'Dashboard', fn: dashboardFn, p95MsThreshold: 4000 },
       { id: 'Certificates', fn: certificatesFn, p95MsThreshold: 3000 },
       { id: 'AdminPolicies', fn: adminPoliciesFn, p95MsThreshold: 4000 },
+      { id: 'Feedback', fn: feedbackFn, p95MsThreshold: 3000 },
     ];
 
     monitoredFunctions.forEach(({ id, fn, p95MsThreshold }) => {
@@ -1590,6 +1726,7 @@ export class LearnfyraStack extends cdk.Stack {
       rewardsFn,
       studentFn,
       adminFn,
+      feedbackFn,
     ].map((fn) => `/aws/lambda/${fn.functionName}`);
 
     const topErrorsByFunctionQuery = [
@@ -2092,6 +2229,50 @@ export class LearnfyraStack extends cdk.Stack {
     }
 
     // ── Outputs ────────────────────────────────────────────────────────────────
+    // ── WAF: Rate limit POST /auth/guest (prod only) ───────────────────────
+    if (isProd) {
+      const guestRateLimitAcl = new wafv2.CfnWebACL(this, 'GuestRateLimitACL', {
+        scope: 'REGIONAL',
+        defaultAction: { allow: {} },
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `GuestRateLimit-${appEnv}`,
+          sampledRequestsEnabled: true,
+        },
+        rules: [
+          {
+            name: 'GuestTokenIssuerRateLimit',
+            priority: 1,
+            action: { block: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `GuestTokenIssuerRateLimit-${appEnv}`,
+              sampledRequestsEnabled: true,
+            },
+            statement: {
+              rateBasedStatement: {
+                limit: 20, // 20 requests per 5-minute sliding window per IP
+                aggregateKeyType: 'IP',
+                scopeDownStatement: {
+                  byteMatchStatement: {
+                    fieldToMatch: { uriPath: {} },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: '/auth/guest',
+                    textTransformations: [{ priority: 0, type: 'NONE' }],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      });
+
+      new wafv2.CfnWebACLAssociation(this, 'GuestRateLimitACLAssociation', {
+        resourceArn: api.deploymentStage.stageArn,
+        webAclArn: guestRateLimitAcl.attrArn,
+      });
+    }
+
     new cdk.CfnOutput(this, 'FrontendUrl', {
       value: `https://${distribution.distributionDomainName}`,
       description: 'CloudFront URL (open this in your browser)',

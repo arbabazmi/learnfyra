@@ -137,6 +137,77 @@ export function coerceTypes(data) {
   return data;
 }
 
+// ─── Answer normalization ─────────────────────────────────────────────────────
+
+/**
+ * Normalizes and validates the answer field based on question type.
+ * Fixes common AI output issues to match the scoring engine's expectations.
+ * Mutates the question object in-place.
+ *
+ * @param {Object} question - A single question object (already coerced by coerceTypes)
+ * @returns {void}
+ */
+function normalizeAnswer(question) {
+  const { type, answer } = question;
+
+  // Skip normalization if answer is missing — let validation catch it
+  if (answer === undefined || answer === null) return;
+
+  switch (type) {
+    case 'multiple-choice': {
+      // Extract just the letter from answers like "B. 42" or "B"
+      if (typeof answer === 'string') {
+        const match = answer.trim().match(/^([A-Da-d])/);
+        if (match) {
+          question.answer = match[1].toUpperCase();
+        }
+      }
+      break;
+    }
+
+    case 'true-false': {
+      // Normalize to "True" or "False"
+      const norm = String(answer).trim().toLowerCase();
+      if (norm === 't' || norm === 'true' || norm === 'yes') {
+        question.answer = 'True';
+      } else if (norm === 'f' || norm === 'false' || norm === 'no') {
+        question.answer = 'False';
+      }
+      break;
+    }
+
+    case 'fill-in-the-blank': {
+      // Trim whitespace, ensure it's a string
+      question.answer = String(answer).trim();
+      break;
+    }
+
+    case 'short-answer': {
+      // Ensure answer is a string of keywords
+      question.answer = String(answer).trim();
+      break;
+    }
+
+    case 'matching': {
+      // Validate it's an array of {left, right} objects
+      if (Array.isArray(answer)) {
+        question.answer = answer.map(pair => ({
+          left:  String(pair.left  || '').trim(),
+          right: String(pair.right || '').trim(),
+        }));
+      }
+      break;
+    }
+
+    case 'show-your-work':
+    case 'word-problem': {
+      // Ensure answer is just the final answer string
+      question.answer = String(answer).trim();
+      break;
+    }
+  }
+}
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 /**
@@ -410,6 +481,12 @@ export async function generateWorksheet(options) {
       const jsonStr = extractJSON(rawText);
       const parsed  = JSON.parse(jsonStr);
       const coerced = coerceTypes(parsed);
+
+      if (Array.isArray(coerced.questions)) {
+        for (const q of coerced.questions) {
+          normalizeAnswer(q);
+        }
+      }
 
       validateTopLevel(coerced);
       // Validate question count matches what we asked Claude for

@@ -1,12 +1,14 @@
 /**
  * @file src/pages/AuthCallbackPage.tsx
  * @description Handles the OAuth redirect from the backend.
- * Reads token + user from URL params, stores in localStorage, redirects to dashboard.
+ * Reads token + user from URL params, stores in localStorage,
+ * clears guest state, and redirects to pre-login URL or dashboard.
  */
 
 import * as React from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { GUEST_STORAGE_KEYS } from '@/lib/auth';
 import { Logo } from '@/components/ui/Logo';
 
 const AuthCallbackPage: React.FC = () => {
@@ -38,11 +40,14 @@ const AuthCallbackPage: React.FC = () => {
     try {
       const user = JSON.parse(userRaw || '{}');
 
-      // Use AuthContext signIn — updates both localStorage AND React state
+      // signIn clears guest cookie + guest sessionStorage keys
       auth.signIn(token, user);
       processed.current = true;
 
-      navigate('/dashboard', { replace: true });
+      // Redirect to pre-login URL if set, otherwise dashboard
+      const returnUrl = sessionStorage.getItem(GUEST_STORAGE_KEYS.preLoginUrl);
+      sessionStorage.removeItem(GUEST_STORAGE_KEYS.preLoginUrl);
+      navigate(returnUrl ?? '/dashboard', { replace: true });
     } catch {
       navigate('/', { replace: true });
     }

@@ -14,7 +14,6 @@ import {
   ChevronDown,
   Minus,
   Plus,
-  FileText,
   FileDown,
   Printer,
   KeyRound,
@@ -24,11 +23,14 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
 import { saveWorksheet, loadWorksheet } from '@/modules/solve/worksheetStorage';
-import { printWorksheet, downloadAsWord, downloadAsPDF } from '@/modules/solve/worksheetExport';
+import { printWorksheet, downloadAsPDF } from '@/modules/solve/worksheetExport';
+import { mapSolveDataToWorksheet } from '@/modules/solve/apiMapper';
 import type { Subject } from '@/modules/solve/types';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
+import { LimitReachedModal } from '@/components/auth/LimitReachedModal';
 
 const DIFFICULTIES = [
   {
@@ -99,6 +101,11 @@ function estimateMinutes(questionCount: number, difficulty: DifficultyValue): nu
 type GenerationState = 'idle' | 'generating' | 'success';
 
 const GenerateWorksheetPage: React.FC = () => {
+  const auth = useAuth();
+  // Guest-teacher and guest-parent can view the form but cannot generate
+  const isGuestRestricted = auth.tokenState === 'guest'
+    && (auth.role === 'guest-teacher' || auth.role === 'guest-parent');
+
   // ── Form state
   const [grade,          setGrade]          = React.useState<string>('7');
   const [subject,        setSubject]        = React.useState<string>('Math');
@@ -114,6 +121,8 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
+  const [generatedSlug, setGeneratedSlug] = React.useState<string | null>(null);
+  const [showLimitModal, setShowLimitModal] = React.useState(false);
   const navigate = useNavigate();
 
   usePageMeta({
@@ -171,7 +180,7 @@ const GenerateWorksheetPage: React.FC = () => {
   const handleGenerate = async () => {
     if (selectedTypes.length === 0 || generatingRef.current) return;
 
-    const token = getToken();
+    const token = getAuthToken();
     generatingRef.current = true;
     setGenState('generating');
     setGenError('');
@@ -199,15 +208,46 @@ const GenerateWorksheetPage: React.FC = () => {
 
       const data = await res.json();
 
+      if (res.status === 403 && data?.code === 'GUEST_LIMIT_REACHED') {
+        setShowLimitModal(true);
+        setGenState('idle');
+        return;
+      }
+
       if (!res.ok) {
         throw new Error(data.error || `Generation failed (${res.status})`);
       }
 
-      // Store the worksheet ID from the API response
+      // Update guest worksheet count from backend response
+      if (data.guestUsed !== undefined) {
+        sessionStorage.setItem(GUEST_STORAGE_KEYS.used, String(data.guestUsed));
+        sessionStorage.setItem(GUEST_STORAGE_KEYS.limit, String(data.guestLimit ?? 10));
+      }
+
+      // Store the worksheet ID and SEO slug from the API response
       const wsId = data.metadata?.id || data.worksheetId;
       if (!wsId) throw new Error('No worksheet ID in response');
 
       setGeneratedId(wsId);
+      setGeneratedSlug(data.metadata?.slug || null);
+
+      // Fetch worksheet data via API and save to localStorage for solve page
+      try {
+        const slug = data.metadata?.slug;
+        const solveId = slug || wsId;
+        const solveRes = await fetch(`${apiUrl}/api/solve/${solveId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (solveRes.ok) {
+          const contentType = solveRes.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const solveData = await solveRes.json();
+            const ws = mapSolveDataToWorksheet(solveData);
+            saveWorksheet(ws);
+          }
+        }
+      } catch { /* solve page will fetch from API directly if localStorage is empty */ }
+
       setGenState('success');
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
@@ -293,7 +333,7 @@ const GenerateWorksheetPage: React.FC = () => {
             {/* Primary CTA — solve online */}
             <div className="flex flex-wrap justify-center gap-3">
               <Button variant="primary" size="lg" className="gap-2" asChild>
-                <Link to={`/solve/${generatedId}`}>
+                <Link to={`/solve/${generatedSlug || generatedId}`}>
                   <Sparkles className="size-4" />
                   Start Solving Online
                 </Link>
@@ -310,7 +350,7 @@ const GenerateWorksheetPage: React.FC = () => {
             </div>
 
             {/* Download & Print grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid sm:grid-cols-3 gap-3">
               {/* PDF */}
               <button
                 type="button"
@@ -318,29 +358,13 @@ const GenerateWorksheetPage: React.FC = () => {
                   const ws = loadWorksheet(generatedId);
                   if (ws) downloadAsPDF(ws);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center group-hover:bg-destructive/15 transition-colors">
                   <FileDown className="size-5 text-destructive" />
                 </div>
                 <span className="text-sm font-bold text-foreground">Save as PDF</span>
                 <span className="text-[11px] text-muted-foreground">Print dialog → Save as PDF</span>
-              </button>
-
-              {/* Word */}
-              <button
-                type="button"
-                onClick={() => {
-                  const ws = loadWorksheet(generatedId);
-                  if (ws) downloadAsWord(ws);
-                }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center group-hover:bg-primary/15 transition-colors">
-                  <FileText className="size-5 text-primary" />
-                </div>
-                <span className="text-sm font-bold text-foreground">Download Word</span>
-                <span className="text-[11px] text-muted-foreground">.doc format</span>
               </button>
 
               {/* Print */}
@@ -350,7 +374,7 @@ const GenerateWorksheetPage: React.FC = () => {
                   const ws = loadWorksheet(generatedId);
                   if (ws) printWorksheet(ws);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-primary-light hover:border-primary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center group-hover:bg-accent/20 transition-colors">
                   <Printer className="size-5 text-amber-600" />
@@ -364,15 +388,15 @@ const GenerateWorksheetPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   const ws = loadWorksheet(generatedId);
-                  if (ws) downloadAsWord(ws, true);
+                  if (ws) downloadAsPDF(ws, true);
                 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-secondary-light hover:border-secondary/30 transition-all group"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-surface hover:bg-secondary-light hover:border-secondary/30 transition-all group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-secondary-light flex items-center justify-center group-hover:bg-secondary/15 transition-colors">
                   <KeyRound className="size-5 text-secondary" />
                 </div>
                 <span className="text-sm font-bold text-foreground">Answer Key</span>
-                <span className="text-[11px] text-muted-foreground">.doc with answers</span>
+                <span className="text-[11px] text-muted-foreground">PDF with answers</span>
               </button>
             </div>
 
@@ -669,18 +693,35 @@ const GenerateWorksheetPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Generate button */}
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full gap-2"
-                  onClick={handleGenerate}
-                  loading={genState === 'generating'}
-                  disabled={selectedTypes.length === 0 || genState === 'generating'}
-                >
-                  {genState !== 'generating' && <Sparkles className="size-5" />}
-                  {genState === 'generating' ? 'Generating...' : 'Generate Worksheet'}
-                </Button>
+                {/* Generate button — or login CTA for restricted guest roles */}
+                {isGuestRestricted ? (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full gap-2"
+                    onClick={() => {
+                      sessionStorage.setItem(
+                        GUEST_STORAGE_KEYS.preLoginUrl,
+                        window.location.pathname + window.location.search,
+                      );
+                      navigate('/');
+                    }}
+                  >
+                    Login to Generate Worksheets
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full gap-2"
+                    onClick={handleGenerate}
+                    loading={genState === 'generating'}
+                    disabled={selectedTypes.length === 0 || genState === 'generating'}
+                  >
+                    {genState !== 'generating' && <Sparkles className="size-5" />}
+                    {genState === 'generating' ? 'Generating...' : 'Generate Worksheet'}
+                  </Button>
+                )}
 
                 {genError && (
                   <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive font-semibold">
@@ -790,6 +831,11 @@ const GenerateWorksheetPage: React.FC = () => {
         )}
 
       </div>
+
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+      />
     </AppLayout>
   );
 };

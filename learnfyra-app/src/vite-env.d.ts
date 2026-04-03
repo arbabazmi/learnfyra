@@ -8,6 +8,9 @@ interface ImportMetaEnv {
   // App URLs
   readonly VITE_APP_URL?: string;
   readonly VITE_API_URL?: string;
+  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_APP_ENV?: string;
+  readonly VITE_MAILHOG_URL?: string;
 }
 
 interface ImportMeta {

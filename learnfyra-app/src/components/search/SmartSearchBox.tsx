@@ -49,7 +49,7 @@ const SmartSearchBox: React.FC<SmartSearchBoxProps> = ({ externalGrade, onExtern
   };
 
   const maybeShowNudge = (ctx: SearchContext) => {
-    if (auth.isAuthenticated || wasNudgeShown()) {
+    if (auth.tokenState === 'authenticated' || wasNudgeShown()) {
       goToWorksheet(ctx);
     } else {
       setPendingContext(ctx);
@@ -110,7 +110,7 @@ const SmartSearchBox: React.FC<SmartSearchBoxProps> = ({ externalGrade, onExtern
 
   return (
     <>
-      <div ref={dropdown.containerRef} className="relative z-10 w-full max-w-[540px]">
+      <div ref={dropdown.containerRef} className="relative z-30 w-full max-w-[540px]">
         {/* ── Search input ────────────────────────────────── */}
         <form onSubmit={handleSearch} className="relative">
           <div

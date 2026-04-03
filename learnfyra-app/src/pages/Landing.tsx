@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   Sparkles,
   TrendingUp,
@@ -34,6 +34,7 @@ import { Footer } from '@/components/layout/Footer';
 import { AuthModal, type ModalStep } from '@/components/AuthModal';
 import { RoleSelectionPanel } from '@/components/guest/RoleSelectionPanel';
 import { SmartSearchBox } from '@/components/search/SmartSearchBox';
+import { useAuth } from '@/contexts/AuthContext';
 import { useInView } from '@/hooks/useInView';
 import { usePageMeta } from '@/lib/pageMeta';
 
@@ -210,11 +211,12 @@ const WorksheetMockup: React.FC = () => {
 
 interface HeroProps {
   onTryWorksheet: () => void;
+  ctaLabel?: string;
   externalGrade?: string | null;
   onExternalGradeHandled?: () => void;
 }
 
-const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExternalGradeHandled }) => (
+const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Worksheet', externalGrade, onExternalGradeHandled }) => (
   <section id="hero" className="relative overflow-hidden bg-white">
     {/* Dot grid */}
     <div className="absolute inset-0 bg-dot-pattern opacity-50 pointer-events-none" aria-hidden="true" />
@@ -252,19 +254,19 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExt
           </p>
 
           {/* ── Smart Search Box ──────────────────────────── */}
-          <div className="mt-8 animate-fade-up delay-300">
+          <div className="mt-8 animate-fade-up delay-300 relative z-30">
             <SmartSearchBox externalGrade={externalGrade} onExternalGradeHandled={onExternalGradeHandled} />
           </div>
 
           {/* CTA buttons */}
-          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400">
+          <div className="mt-6 flex flex-wrap gap-4 animate-fade-up delay-400 relative z-10">
             <Button
               variant="primary"
               size="lg"
               className="gap-2 shadow-primary-sm hover:shadow-primary-md"
               onClick={onTryWorksheet}
             >
-              Try a Worksheet
+              {ctaLabel}
               <ArrowRight className="size-5" />
             </Button>
             <Button variant="ghost" size="lg" className="gap-2 border border-border hover:border-primary/30" asChild>
@@ -275,22 +277,6 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExt
             </Button>
           </div>
 
-          {/* Stats */}
-          <div className="mt-10 flex items-stretch gap-8 animate-fade-up delay-400">
-            {[
-              { number: '50K+', label: 'Students' },
-              { number: '2K+', label: 'Teachers' },
-              { number: '500K+', label: 'Worksheets Generated' },
-            ].map((stat, i, arr) => (
-              <React.Fragment key={stat.label}>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[26px] font-extrabold leading-none text-foreground">{stat.number}</span>
-                  <span className="text-[13px] text-muted-foreground">{stat.label}</span>
-                </div>
-                {i < arr.length - 1 && <div className="w-px bg-border self-stretch" />}
-              </React.Fragment>
-            ))}
-          </div>
         </div>
 
         {/* Right — mockup */}
@@ -329,17 +315,6 @@ const TrustStrip: React.FC<{ onGradeClick?: (grade: string) => void }> = ({ onGr
               {g}
             </button>
           ))}
-        </div>
-        {/* Rating strip */}
-        <div className="flex justify-center items-center gap-2 mt-5">
-          <div className="flex gap-0.5">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="size-3.5 text-accent fill-accent" />
-            ))}
-          </div>
-          <span className="text-[13px] font-semibold text-muted-foreground">
-            4.9 / 5 average · 2,000+ teacher reviews
-          </span>
         </div>
       </div>
     </section>
@@ -874,14 +849,6 @@ const TestimonialsSection: React.FC = () => (
         <h2 className="text-3xl lg:text-4xl font-extrabold text-foreground mt-2">
           Real Results for Real Students
         </h2>
-        <div className="flex justify-center items-center gap-1.5 pt-1">
-          {[...Array(5)].map((_, i) => (
-            <Star key={i} className="size-4 text-accent fill-accent" />
-          ))}
-          <span className="text-[13px] font-semibold text-muted-foreground ml-1">
-            4.9 / 5 from 2,000+ reviews
-          </span>
-        </div>
       </FadeIn>
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -939,7 +906,7 @@ const TestimonialsSection: React.FC = () => (
 // CTA BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet }) => (
+const CTASection: React.FC<{ onTryWorksheet?: () => void; ctaLabel?: string }> = ({ onTryWorksheet, ctaLabel = 'Try a Worksheet' }) => (
   <section className="relative py-24 overflow-hidden bg-primary">
     {/* Dot grid */}
     <div
@@ -963,13 +930,6 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
     />
 
     <FadeIn className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-      {/* Stars */}
-      <div className="flex items-center justify-center gap-1 mb-5">
-        {[...Array(5)].map((_, i) => (
-          <Star key={i} className="size-5 text-accent fill-accent" />
-        ))}
-        <span className="text-white/70 text-[13px] font-semibold ml-2">4.9 / 5 · 2,000+ reviews</span>
-      </div>
 
       <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-5 leading-tight">
         Ready to Transform Learning?
@@ -977,7 +937,7 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
 
       {/* Single clean subtext — no Handlee here, not the right context */}
       <p className="text-[17px] text-white/75 mb-10 max-w-lg mx-auto">
-        Join 50,000+ students already using Learnfyra. Free to start — no credit card required.
+        Free to start — no credit card required.
       </p>
 
       <div className="flex flex-wrap justify-center gap-4">
@@ -987,7 +947,7 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
           className="text-primary font-extrabold gap-2 hover:bg-white/90 shadow-md"
           onClick={onTryWorksheet}
         >
-          Try a Worksheet — Free
+          {ctaLabel} — Free
           <ArrowRight className="size-5" />
         </Button>
         <button className="inline-flex items-center gap-2 px-7 h-12 rounded-xl border-2 border-white/30 text-white text-[15px] font-bold transition-all duration-150 hover:bg-white/10 hover:border-white/50">
@@ -1004,6 +964,9 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const Landing: React.FC = () => {
+  const auth = useAuth();
+  const navigate = useNavigate();
+
   // Auth modal state (for Sign In only)
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalStep, setModalStep] = React.useState<ModalStep>('role');
@@ -1014,18 +977,31 @@ const Landing: React.FC = () => {
   // Grade chip → search box bridge
   const [externalGrade, setExternalGrade] = React.useState<string | null>(null);
 
+  const ctaLabel = (auth.role === 'teacher' || auth.role === 'guest-teacher')
+    ? 'Create Worksheet'
+    : 'Try a Worksheet';
+
   const openSignIn = () => { setModalStep('signin'); setModalOpen(true); };
   const openRoleFlow = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setRoleFlowOpen(true);
   };
 
+  const handleCtaClick = () => {
+    if (auth.tokenState === 'none') {
+      auth.openRoleModal();
+      return;
+    }
+    navigate('/worksheet/new');
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar onSignIn={openSignIn} onTryWorksheet={openRoleFlow} />
+      <Navbar onSignIn={openSignIn} onTryWorksheet={handleCtaClick} />
       <main className="flex-1">
         <HeroSection
-          onTryWorksheet={openRoleFlow}
+          onTryWorksheet={handleCtaClick}
+          ctaLabel={ctaLabel}
           externalGrade={externalGrade}
           onExternalGradeHandled={() => setExternalGrade(null)}
         />
@@ -1035,7 +1011,7 @@ const Landing: React.FC = () => {
         <HowItWorksSection />
         <RoleCardsSection />
         <TestimonialsSection />
-        <CTASection onTryWorksheet={openRoleFlow} />
+        <CTASection onTryWorksheet={handleCtaClick} ctaLabel={ctaLabel} />
       </main>
       <Footer />
 
