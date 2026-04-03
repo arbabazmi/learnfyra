@@ -79,7 +79,7 @@ export default function SolvePage() {
           if (token) auth.refresh(); // update auth context with new guest state
         }
 
-        const res = await fetch(`${apiUrl}/api/solve/${worksheetId}`, {
+        const res = await fetch(`${apiUrl}/api/solve/${worksheetId}?mode=practice`, {
           signal: controller.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });

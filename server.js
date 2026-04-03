@@ -415,7 +415,7 @@ app.get('/api/solve/:worksheetId', async (req, res) => {
   try {
     const fn = await getSolveHandler();
     const result = await fn(
-      { httpMethod: 'GET', pathParameters: { worksheetId: req.params.worksheetId } },
+      { httpMethod: 'GET', pathParameters: { worksheetId: req.params.worksheetId }, queryStringParameters: req.query },
       {},
     );
     res.status(result.statusCode).json(JSON.parse(result.body));

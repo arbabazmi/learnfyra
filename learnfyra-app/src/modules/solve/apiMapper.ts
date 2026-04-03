@@ -30,8 +30,8 @@ interface ApiQuestion {
   pairs?: Array<{ left: string; right: string }>;
   leftItems?: string[];
   rightItems?: string[];
-  answer?: string;
-  explanation?: string;
+  answer?: string;       // included when mode=practice
+  explanation?: string;  // included when mode=practice
 }
 
 /** Shape of the full API response from GET /api/solve/{id} */
@@ -86,8 +86,8 @@ function mapQuestion(api: ApiQuestion): Question {
     id: `q-${api.number}`,
     number: api.number,
     question: api.question,
-    correctAnswer: '',    // not provided in solve response (answers hidden)
-    explanation: '',      // not provided in solve response
+    correctAnswer: api.answer || '',       // included when mode=practice
+    explanation: api.explanation || '',     // included when mode=practice
     hint1: '',
     hint2: '',
     difficulty: 'medium' as Difficulty,
