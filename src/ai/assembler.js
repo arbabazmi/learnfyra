@@ -458,7 +458,7 @@ export async function assembleWorksheet(options) {
   }
 
   // ── Step 8: Merge and renumber questions 1..N ─────────────────────────────
-  // Banked questions are placed first, generated questions fill the remainder.
+  // Banked and generated questions are shuffled together for variety.
   const bankedQuestions = shouldAttachQuestionProvenance(provenanceLevel)
     ? bankedSelected.map((question) => ({
       ...question,

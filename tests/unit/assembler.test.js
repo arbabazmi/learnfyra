@@ -321,12 +321,16 @@ describe('assembleWorksheet — partial bank coverage', () => {
   it('full provenance attaches per-question provenance for banked and generated questions', async () => {
     const { worksheet, provenance } = await assembleWorksheet({ ...baseOptions, provenanceLevel: 'full' });
     expect(provenance.level).toBe('full');
-    expect(worksheet.questions[0].provenance).toMatchObject({
+    const banked = worksheet.questions.filter(q => q.provenance.source === 'bank');
+    const generated = worksheet.questions.filter(q => q.provenance.source === 'generated');
+    expect(banked).toHaveLength(3);
+    expect(generated).toHaveLength(2);
+    expect(banked[0].provenance).toMatchObject({
       source: 'bank',
       questionId: expect.stringMatching(/^bqid-/),
       reuseRecorded: true,
     });
-    expect(worksheet.questions[4].provenance).toMatchObject({
+    expect(generated[0].provenance).toMatchObject({
       source: 'generated',
       modelUsed: 'claude-haiku-4-5-20251001',
     });
