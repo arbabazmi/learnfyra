@@ -6,6 +6,8 @@
 export interface DashboardStats {
   worksheetsDone: number;
   inProgress: number;
+  newWorksheets?: number;
+  totalWorksheets?: number;
   bestScore: number;
   studyTime: string;
   downloaded?: number;

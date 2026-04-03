@@ -55,28 +55,26 @@ async function handleStats(decoded) {
   const db = getDbAdapter();
   const studentId = decoded.sub;
 
-  // Get all attempts for this student
-  const attempts = await db.queryByField('attempts', 'studentId', studentId);
+  // Fetch worksheets and attempts in parallel
+  const [worksheets, attempts] = await Promise.all([
+    db.queryByField('worksheets', 'createdBy', studentId).catch(() => []),
+    db.queryByField('attempts', 'studentId', studentId),
+  ]);
 
-  if (!attempts || attempts.length === 0) {
-    return okResponse({
-      worksheetsDone: 0,
-      inProgress: 0,
-      bestScore: 0,
-      studyTime: '0h',
-    });
-  }
+  // Build set of worksheetIds that have been completed
+  const completedAttempts = (attempts || []).filter(a => a.percentage != null && a.percentage >= 0);
+  const inProgressAttempts = (attempts || []).filter(a => a.percentage == null || a.percentage < 0);
+  const attemptedIds = new Set((attempts || []).map(a => a.worksheetId));
 
-  // Completed = has a percentage score
-  const completed = attempts.filter(a => a.percentage != null && a.percentage >= 0);
-  const inProgress = attempts.filter(a => a.percentage == null || a.percentage < 0);
+  // "New" worksheets = generated but never attempted
+  const newCount = (worksheets || []).filter(w => !attemptedIds.has(w.worksheetId)).length;
 
-  const bestScore = completed.length > 0
-    ? Math.round(Math.max(...completed.map(a => a.percentage)))
+  const bestScore = completedAttempts.length > 0
+    ? Math.round(Math.max(...completedAttempts.map(a => a.percentage)))
     : 0;
 
   // Total time in seconds → human-readable
-  const totalSeconds = attempts.reduce((sum, a) => sum + (a.timeTaken || 0), 0);
+  const totalSeconds = (attempts || []).reduce((sum, a) => sum + (a.timeTaken || 0), 0);
   const totalHours = Math.floor(totalSeconds / 3600);
   const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
   const studyTime = totalHours > 0
@@ -84,8 +82,10 @@ async function handleStats(decoded) {
     : `${totalMinutes}m`;
 
   return okResponse({
-    worksheetsDone: completed.length,
-    inProgress: inProgress.length,
+    worksheetsDone: completedAttempts.length,
+    inProgress: inProgressAttempts.length,
+    newWorksheets: newCount,
+    totalWorksheets: (worksheets || []).length,
     bestScore,
     studyTime,
   });
@@ -97,27 +97,50 @@ async function handleRecentWorksheets(decoded) {
   const db = getDbAdapter();
   const studentId = decoded.sub;
 
-  const attempts = await db.queryByField('attempts', 'studentId', studentId);
+  // Fetch worksheets and attempts in parallel
+  const [worksheets, attempts] = await Promise.all([
+    db.queryByField('worksheets', 'createdBy', studentId).catch(() => []),
+    db.queryByField('attempts', 'studentId', studentId),
+  ]);
 
-  if (!attempts || attempts.length === 0) {
-    return okResponse([]);
+  // Build map of worksheetId → best attempt
+  const bestAttemptMap = new Map();
+  for (const a of (attempts || [])) {
+    if (!a.worksheetId) continue;
+    const existing = bestAttemptMap.get(a.worksheetId);
+    if (!existing || (a.percentage != null && (existing.percentage == null || a.percentage > existing.percentage))) {
+      bestAttemptMap.set(a.worksheetId, a);
+    }
   }
 
-  // Sort by most recent first
-  const sorted = [...attempts].sort((a, b) =>
-    new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-  );
+  // Merge: every worksheet gets a status based on its best attempt
+  const merged = (worksheets || []).map(w => {
+    const attempt = bestAttemptMap.get(w.worksheetId);
+    let status = 'new';
+    let score = null;
+    if (attempt) {
+      if (attempt.percentage != null && attempt.percentage >= 0) {
+        status = 'completed';
+        score = Math.round(attempt.percentage);
+      } else {
+        status = 'in-progress';
+      }
+    }
+    return {
+      id: w.slug || w.worksheetId,
+      title: w.title || w.topic || `${w.subject} Worksheet`,
+      subject: w.subject,
+      grade: w.grade,
+      score,
+      totalPoints: w.totalPoints || 10,
+      status,
+      createdAt: w.createdAt || '',
+    };
+  });
 
-  // Take last 4 and map to dashboard format
-  const recent = sorted.slice(0, 4).map(a => ({
-    id: a.attemptId || a.worksheetId,
-    title: a.topic || `${a.subject} Worksheet`,
-    subject: a.subject,
-    grade: a.grade,
-    score: a.percentage != null ? Math.round(a.percentage) : null,
-    totalPoints: a.totalPoints || 10,
-    status: a.percentage != null ? 'completed' : 'in-progress',
-  }));
+  // Sort by most recent first, take last 4
+  merged.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const recent = merged.slice(0, 4);
 
   return okResponse(recent);
 }
