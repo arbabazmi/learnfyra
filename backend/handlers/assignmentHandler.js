@@ -59,8 +59,8 @@ async function handleCreateAssignment(decoded, body) {
   if (!classId || !UUID_REGEX.test(classId)) {
     return errorResponse(400, 'VALIDATION_ERROR', 'classId must be a valid UUID.');
   }
-  if (!worksheetId || !UUID_REGEX.test(worksheetId)) {
-    return errorResponse(400, 'VALIDATION_ERROR', 'worksheetId must be a valid UUID.');
+  if (!worksheetId || typeof worksheetId !== 'string' || worksheetId.trim().length === 0) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'worksheetId is required.');
   }
   if (!mode || !VALID_MODES.includes(mode)) {
     return errorResponse(400, 'VALIDATION_ERROR', `mode must be one of: ${VALID_MODES.join(', ')}.`);
@@ -96,11 +96,18 @@ async function handleCreateAssignment(decoded, body) {
     return errorResponse(409, 'CLASS_ARCHIVED', 'Cannot create assignments for an archived class.');
   }
 
-  // Verify worksheet exists
-  const worksheet = await db.getItem('worksheets', worksheetId);
+  // Verify worksheet exists — support both UUID and slug lookup
+  let worksheet = await db.getItem('worksheets', worksheetId);
+  if (!worksheet) {
+    // Try slug-based lookup
+    const slugMatches = await db.queryByField('worksheets', 'slug', worksheetId);
+    worksheet = slugMatches.length > 0 ? slugMatches[0] : null;
+  }
   if (!worksheet) {
     return errorResponse(404, 'WORKSHEET_NOT_FOUND', 'Worksheet not found.');
   }
+  // Normalize to the actual worksheetId (UUID) for storage
+  const resolvedWorksheetId = worksheet.worksheetId || worksheetId;
 
   const now = new Date().toISOString();
   const assignmentId = randomUUID();
@@ -110,7 +117,7 @@ async function handleCreateAssignment(decoded, body) {
     SK: 'METADATA',
     assignmentId,
     classId,
-    worksheetId,
+    worksheetId: resolvedWorksheetId,
     teacherId: decoded.sub,
     title: worksheet.title || `${worksheet.topic} — Grade ${worksheet.grade}`,
     mode,

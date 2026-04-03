@@ -5,11 +5,23 @@
  */
 
 import * as React from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import * as teacherService from '@/services/api/teacherService';
 import { useTeacher } from '@/contexts/TeacherContext';
+import { apiUrl } from '@/lib/env';
+import { getAuthToken } from '@/lib/auth';
 import type { AssignmentMode, RetakePolicy } from '@/types/teacher';
+
+interface WorksheetOption {
+  worksheetId: string;
+  title: string;
+  subject: string;
+  grade: number;
+  topic: string;
+  difficulty: string;
+  questionCount: number;
+}
 
 const selectClass =
   'w-full h-11 pl-4 pr-9 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer';
@@ -29,6 +41,21 @@ const AssignmentCreateForm: React.FC<AssignmentCreateFormProps> = ({
   const { currentClassId, fetchAssignments } = useTeacher();
 
   const [worksheetId, setWorksheetId] = React.useState('');
+  const [worksheets, setWorksheets] = React.useState<WorksheetOption[]>([]);
+  const [loadingWorksheets, setLoadingWorksheets] = React.useState(true);
+
+  // Fetch teacher's worksheets on mount
+  React.useEffect(() => {
+    const token = getAuthToken();
+    if (!token) { setLoadingWorksheets(false); return; }
+    fetch(`${apiUrl}/api/worksheets/mine?limit=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : { worksheets: [] })
+      .then(data => setWorksheets(data.worksheets || []))
+      .catch(() => {})
+      .finally(() => setLoadingWorksheets(false));
+  }, []);
   const [mode, setMode] = React.useState<AssignmentMode>('practice');
   const [retakePolicy, setRetakePolicy] =
     React.useState<RetakePolicy>('unlimited');
@@ -76,20 +103,38 @@ const AssignmentCreateForm: React.FC<AssignmentCreateFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
 
-      {/* Worksheet ID */}
+      {/* Worksheet Selection */}
       <div className="space-y-1.5">
         <label htmlFor="ws-id" className="text-xs font-bold text-foreground">
-          Worksheet ID <span className="text-destructive">*</span>
+          Worksheet <span className="text-destructive">*</span>
         </label>
-        <input
-          id="ws-id"
-          type="text"
-          value={worksheetId}
-          onChange={(e) => setWorksheetId(e.target.value)}
-          placeholder="Paste worksheet UUID"
-          required
-          className={inputClass}
-        />
+        {loadingWorksheets ? (
+          <div className="flex items-center gap-2 h-11 px-4 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading your worksheets...
+          </div>
+        ) : worksheets.length === 0 ? (
+          <div className="h-11 px-4 flex items-center text-sm text-muted-foreground rounded-xl border border-border bg-surface">
+            No worksheets found. Generate a worksheet first, then come back to assign it.
+          </div>
+        ) : (
+          <div className="relative">
+            <select
+              id="ws-id"
+              value={worksheetId}
+              onChange={(e) => setWorksheetId(e.target.value)}
+              required
+              className={selectClass}
+            >
+              <option value="">Select a worksheet...</option>
+              {worksheets.map((ws) => (
+                <option key={ws.worksheetId} value={ws.worksheetId}>
+                  {ws.title} — Grade {ws.grade} · {ws.subject} · {ws.difficulty} ({ws.questionCount}Q)
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          </div>
+        )}
       </div>
 
       {/* Mode */}
