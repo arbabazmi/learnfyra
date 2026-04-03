@@ -378,6 +378,20 @@ export default function ResultsScreen({ results, grade, worksheetId, onRetake, o
           )}
         </motion.div>
 
+        {/* AI compliance disclaimer */}
+        <motion.div
+          className="mt-6 p-3 rounded-lg bg-amber-50 border border-amber-200 text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.85 }}
+        >
+          <p className="text-xs text-amber-700 leading-relaxed">
+            <span className="font-semibold">AI-Generated Content:</span> This worksheet and its scoring were evaluated by AI. There may be occasional inaccuracies.
+            If you believe an answer was scored incorrectly, please{' '}
+            <a href="mailto:support@learnfyra.com" className="underline font-semibold hover:text-amber-900">report the issue</a>.
+          </p>
+        </motion.div>
+
         {/* CTAs */}
         <motion.div
           className="flex flex-wrap gap-3 mt-8 justify-center"
