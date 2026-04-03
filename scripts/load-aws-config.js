@@ -40,6 +40,8 @@ const LOCAL_OVERRIDES = {
   NODE_ENV: 'development',
   ALLOWED_ORIGIN: '*',
   DEBUG_MODE: 'true',
+  OAUTH_CALLBACK_BASE_URL: 'http://localhost:5173',
+  GOOGLE_REDIRECT_URI: 'http://localhost:3000/api/auth/callback/google',
 };
 
 /**
@@ -126,13 +128,17 @@ export async function loadAwsConfig(env) {
     const lambdaFn = `learnfyra-${targetEnv}-lambda-generate`;
     const lambdaCount = await loadLambdaEnv(lambda, lambdaFn);
 
+    // 2b. Load env vars from auth Lambda (OAuth-specific: Cognito, Google, cookie config)
+    const authLambdaFn = `learnfyra-${targetEnv}-lambda-auth`;
+    const authCount = await loadLambdaEnv(lambda, authLambdaFn).catch(() => 0);
+
     // 3. Apply local overrides
     LOCAL_OVERRIDES.DYNAMO_ENV = targetEnv;
     for (const [key, value] of Object.entries(LOCAL_OVERRIDES)) {
       process.env[key] = value;
     }
 
-    console.log(`\n  ☁️  AWS config loaded (${targetEnv}): ${ssmCount} secrets + ${lambdaCount} env vars`);
+    console.log(`\n  ☁️  AWS config loaded (${targetEnv}): ${ssmCount} secrets + ${lambdaCount + authCount} env vars`);
     return true;
   } catch (err) {
     // Fail gracefully — fall back to .env
