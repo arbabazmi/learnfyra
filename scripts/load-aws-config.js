@@ -14,8 +14,9 @@
  * Falls back gracefully if AWS is not available (returns false).
  */
 
-import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
-import { LambdaClient, GetFunctionConfigurationCommand } from '@aws-sdk/client-lambda';
+// Lazy imports — resolved inside loadAwsConfig() to avoid crashing
+// when @aws-sdk/client-lambda is not installed (CI, production Lambda)
+let SSMClient, GetParametersByPathCommand, LambdaClient, GetFunctionConfigurationCommand;
 
 // SSM parameter name → process.env key mapping
 const SSM_KEY_MAP = {
@@ -118,6 +119,18 @@ export async function loadAwsConfig(env) {
   const region = process.env.AWS_REGION || 'us-east-1';
 
   try {
+    // Lazy-load AWS SDKs — avoids top-level import crash when packages are missing
+    if (!SSMClient) {
+      const ssmMod = await import('@aws-sdk/client-ssm');
+      SSMClient = ssmMod.SSMClient;
+      GetParametersByPathCommand = ssmMod.GetParametersByPathCommand;
+    }
+    if (!LambdaClient) {
+      const lambdaMod = await import('@aws-sdk/client-lambda');
+      LambdaClient = lambdaMod.LambdaClient;
+      GetFunctionConfigurationCommand = lambdaMod.GetFunctionConfigurationCommand;
+    }
+
     const ssm = new SSMClient({ region });
     const lambda = new LambdaClient({ region });
 
