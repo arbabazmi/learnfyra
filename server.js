@@ -93,7 +93,10 @@ app.use('/api', (_req, res, next) => {
 });
 
 // Serve locally generated worksheet files for download
-app.use('/local-files', express.static(LOCAL_FILES_DIR));
+app.use('/local-files', (_req, res, next) => {
+  res.set(corsHeaders);
+  next();
+}, express.static(LOCAL_FILES_DIR));
 
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {

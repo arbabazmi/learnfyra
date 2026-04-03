@@ -18,7 +18,7 @@ function FilterChipRow<T extends string>({ label, options, selected, onSelect }:
       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest shrink-0 w-20">
         {label}
       </span>
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mb-1 scrollbar-none">
+      <div className="flex gap-1.5 flex-wrap">
         {options.map((opt) => {
           const active = selected === opt;
           return (
