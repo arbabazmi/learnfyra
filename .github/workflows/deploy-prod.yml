@@ -179,6 +179,8 @@ jobs:
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "dist_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          API_URL=$(jq -r '.["LearnfyraStack-prod"]["ApiUrl"]' infra/cdk/cdk-outputs.json)
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
         run: |
@@ -191,6 +193,50 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ steps.cdk-outputs.outputs.dist_id }} \
             --paths "/*"
+
+      - name: Smoke check production routes
+        run: |
+          set -euo pipefail
+          BASE_API="${{ steps.cdk-outputs.outputs.api_url }}api"
+          FAILURES=0
+
+          check_get() {
+            NAME="$1"
+            URL="$2"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post() {
+            NAME="$1"
+            URL="$2"
+            BODY="$3"
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$URL" -H "Content-Type: application/json" -d "$BODY")
+            echo "$NAME -> $CODE"
+            if [[ "$CODE" =~ ^5 ]]; then
+              FAILURES=$((FAILURES + 1))
+            fi
+          }
+
+          check_post "auth/guest" "$BASE_API/auth/guest" '{"role":"student"}'
+          check_get "guest/preview?role=teacher" "$BASE_API/guest/preview?role=teacher"
+          check_post "auth/register" "$BASE_API/auth/register" '{"email":"smoke+prod@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/login" "$BASE_API/auth/login" '{"email":"smoke+prod@learnfyra.com","password":"SmokePass123!"}'
+          check_post "auth/logout" "$BASE_API/auth/logout" '{}'
+          check_get "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
+          check_post "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
+          check_get "progress/history" "$BASE_API/progress/history"
+          check_get "student/profile" "$BASE_API/student/profile"
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "Smoke checks failed: $FAILURES endpoint(s) returned 5xx."
+            exit 1
+          fi
+
+          echo "Production smoke checks passed."
 
       - name: Print production URL
         run: echo "Production deployed at ${{ steps.cdk-outputs.outputs.frontend_url }}"

@@ -408,6 +408,17 @@ export class LearnfyraStack extends cdk.Stack {
       }
     );
 
+    // ── DynamoDB: UserQuestionHistory — per-user question exposure history ─────
+    const userQuestionHistoryTable = createTable(
+      'UserQuestionHistoryTable',
+      `LearnfyraUserQuestionHistory-${appEnv}`,
+      'PK',
+      {
+        sortKeyName: 'SK',
+        ttlAttribute: 'ttl',
+      }
+    );
+
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
@@ -512,7 +523,7 @@ export class LearnfyraStack extends cdk.Stack {
     // JWT secret — stored in Secrets Manager (not SSM) so it is encrypted at rest
     // and resolved via CloudFormation dynamic reference into the Lambda env var.
     const jwtSecretValue = cdk.SecretValue.secretsManager(
-      `/learnfyra/${appEnv}/jwt-secret`
+      `/learnfyra/${dnsEnvLabel}/jwt-secret`
     ).unsafeUnwrap();
     const allowedOrigin = isDev ? '*' : (enableCustomDomains ? `https://${webDomainName}` : '*');
 
@@ -549,7 +560,7 @@ export class LearnfyraStack extends cdk.Stack {
     const googleIdp = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdp', {
       userPool,
       clientId: googleClientIds[appEnv],
-      clientSecretValue: cdk.SecretValue.secretsManager(`/learnfyra/${appEnv}/google-client-secret`),
+      clientSecretValue: cdk.SecretValue.secretsManager(`/learnfyra/${dnsEnvLabel}/google-client-secret`),
       scopes: ['openid', 'email', 'profile'],
       attributeMapping: {
         email: cognito.ProviderAttribute.GOOGLE_EMAIL,
@@ -990,9 +1001,12 @@ export class LearnfyraStack extends cdk.Stack {
     generateFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
     generateFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
     generateFn.addEnvironment('GUEST_SESSIONS_TABLE', guestSessionsTable.tableName);
+    generateFn.addEnvironment('USER_QUESTION_HISTORY_TABLE', userQuestionHistoryTable.tableName);
     solveFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
     submitFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
+    progressFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
+    progressFn.addEnvironment('USER_QUESTION_HISTORY_TABLE', userQuestionHistoryTable.tableName);
     progressFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     progressFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
     progressFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);

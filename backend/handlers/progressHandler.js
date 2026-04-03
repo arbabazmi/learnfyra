@@ -20,7 +20,7 @@ import { randomUUID } from 'crypto';
 import { validateToken } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
@@ -230,6 +230,9 @@ function resolveDisplayName(user) {
 // ── Lazy DynamoDB document client for atomic aggregate updates ─────────────────
 let _aggregateDdbClient = null;
 
+// ── Lazy DynamoDB document client for UserQuestionHistory writes ───────────────
+let _historyDocClient = null;
+
 /**
  * Returns a DynamoDBDocumentClient for atomic aggregate increments.
  * Shares the same config as dynamoDbAdapter (endpoint + region from env).
@@ -413,6 +416,108 @@ async function handleSave(decoded, body) {
   };
 
   await db.putItem('attempts', attempt);
+
+  // ── Mark questions as seen (non-fatal) ─────────────────────────────────────
+  try {
+    if (worksheetId) {
+      const isAws = process.env.APP_RUNTIME === 'aws' || process.env.APP_RUNTIME === 'dynamodb';
+      const isGuest = typeof decoded.role === 'string' && decoded.role.startsWith('guest-');
+      const userPrefix = isGuest ? 'GUEST' : 'USER';
+      const PK = `${userPrefix}#${decoded.sub}`;
+
+      if (isAws) {
+        // AWS: read worksheet from DynamoDB, write history to DynamoDB
+        const historyTable = process.env.USER_QUESTION_HISTORY_TABLE;
+        const worksheetsTable = process.env.WORKSHEETS_TABLE_NAME;
+        if (historyTable && worksheetsTable) {
+          if (!_historyDocClient) {
+            const clientConfig = { region: process.env.AWS_REGION || 'us-east-1' };
+            const endpoint = process.env.DYNAMODB_ENDPOINT;
+            if (endpoint) {
+              clientConfig.endpoint = endpoint;
+              clientConfig.credentials = {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'local',
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'local',
+              };
+            }
+            _historyDocClient = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig), {
+              marshallOptions: { removeUndefinedValues: true },
+            });
+          }
+
+          const wsResult = await _historyDocClient.send(new GetCommand({
+            TableName: worksheetsTable,
+            Key: { worksheetId },
+            ProjectionExpression: 'questions, grade, subject',
+          }));
+
+          const wsData = wsResult.Item;
+          if (wsData && Array.isArray(wsData.questions)) {
+            const questionIds = wsData.questions
+              .map((q) => q.questionId)
+              .filter((id) => typeof id === 'string' && id.trim());
+
+            if (questionIds.length > 0) {
+              const wsGrade = wsData.grade || grade;
+              const wsSubject = wsData.subject || subject;
+              const nowSeconds = Math.floor(Date.now() / 1000);
+
+              await _historyDocClient.send(new UpdateCommand({
+                TableName: historyTable,
+                Key: { PK, SK: `GRADE#${wsGrade}#SUBJ#${wsSubject}` },
+                UpdateExpression: 'ADD seenQuestionIds :ids SET lastUpdated = :ts, #ttl = :ttl',
+                ExpressionAttributeNames: { '#ttl': 'ttl' },
+                ExpressionAttributeValues: {
+                  ':ids': new Set(questionIds),
+                  ':ts': new Date().toISOString(),
+                  ':ttl': nowSeconds + 7776000,
+                },
+              }));
+            }
+          }
+        }
+      } else {
+        // Local dev: read worksheet from solve-data.json, write history to local JSON
+        const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('fs');
+        const { join } = await import('path');
+
+        const solveDataPath = join(process.cwd(), 'worksheets-local', worksheetId, 'solve-data.json');
+        if (existsSync(solveDataPath)) {
+          const wsData = JSON.parse(readFileSync(solveDataPath, 'utf8'));
+          const questionIds = (wsData.questions || [])
+            .map((q) => q.questionId)
+            .filter((id) => typeof id === 'string' && id.trim());
+
+          if (questionIds.length > 0) {
+            const wsGrade = wsData.grade || grade;
+            const wsSubject = wsData.subject || subject;
+            const SK = `GRADE#${wsGrade}#SUBJ#${wsSubject}`;
+            const key = `${PK}|${SK}`;
+
+            const dataDir = join(process.cwd(), 'data-local');
+            if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+            const filePath = join(dataDir, 'userQuestionHistory.json');
+
+            let data = {};
+            try { data = JSON.parse(readFileSync(filePath, 'utf8')); } catch { /* first write */ }
+
+            const existing = new Set(data[key]?.seenQuestionIds ?? []);
+            for (const id of questionIds) existing.add(id);
+
+            data[key] = {
+              seenQuestionIds: [...existing],
+              lastUpdated: new Date().toISOString(),
+              ttl: Math.floor(Date.now() / 1000) + 7776000,
+            };
+
+            writeFileSync(filePath, JSON.stringify(data, null, 2));
+          }
+        }
+      }
+    }
+  } catch (historyErr) {
+    console.error('Question history update failed (non-fatal):', historyErr);
+  }
 
   // ── Reward calculation (non-fatal) ──────────────────────────────────────────
   let rewards = null;

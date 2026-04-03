@@ -275,6 +275,8 @@ jobs:
           check POST "auth/logout" "$BASE_API/auth/logout" '{}'
           check POST "auth/forgot-password" "$BASE_API/auth/forgot-password" '{"email":"test@test.com"}'
           check POST "auth/refresh" "$BASE_API/auth/refresh" '{}'
+          check POST "auth/guest" "$BASE_API/auth/guest" '{"role":"student"}'
+          check GET  "guest/preview?role=teacher" "$BASE_API/guest/preview?role=teacher"
           check GET  "solve/{id}" "$BASE_API/solve/smoke-worksheet-id"
           check POST "submit" "$BASE_API/submit" '{"worksheetId":"smoke","answers":[]}'
           check GET  "progress/history" "$BASE_API/progress/history"

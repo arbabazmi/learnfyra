@@ -57,6 +57,12 @@ interface AuthState {
   selectedRole: UserRole | null;
   /** Whether the guest has data worth saving (completed worksheets). */
   guestHasData: boolean;
+  /** Whether the role-picker modal should be visible. */
+  showRoleModal: boolean;
+  /** Open the role-picker modal. */
+  openRoleModal: () => void;
+  /** Close the role-picker modal. */
+  closeRoleModal: () => void;
   /** Sign in — stores token and user, clears guest data if migrated. */
   signIn: (token: string, user: AuthUser) => void;
   /** Sign out — clears auth, returns to guest state. */
@@ -86,6 +92,7 @@ function deriveState(): { tokenState: TokenState; guestClaims: Record<string, un
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = React.useState<AuthUser | null>(getUser);
   const [guestHasData, setGuestHasData] = React.useState(hasGuestData);
+  const [showRoleModal, setShowRoleModal] = React.useState(false);
   const [tokenState, setTokenState] = React.useState<TokenState>('none');
   const [guestClaims, setGuestClaims] = React.useState<Record<string, unknown> | null>(null);
 
@@ -132,6 +139,9 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const email = tokenState === 'authenticated' ? (user?.email ?? null) : null;
   const worksheetCount = parseInt(sessionStorage.getItem(GUEST_STORAGE_KEYS.used) ?? '0', 10);
   const worksheetLimit = parseInt(sessionStorage.getItem(GUEST_STORAGE_KEYS.limit) ?? '10', 10);
+
+  const openRoleModal = React.useCallback(() => setShowRoleModal(true), []);
+  const closeRoleModal = React.useCallback(() => setShowRoleModal(false), []);
 
   const refresh = React.useCallback(() => {
     setUser(getUser());
@@ -181,6 +191,9 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       isGuest,
       selectedRole,
       guestHasData,
+      showRoleModal,
+      openRoleModal,
+      closeRoleModal,
       signIn,
       signOut,
       refresh,
@@ -188,6 +201,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     [
       tokenState, user, role, userId, guestId, displayName, email,
       worksheetCount, worksheetLimit, isGuest, selectedRole, guestHasData,
+      showRoleModal, openRoleModal, closeRoleModal,
       signIn, signOut, refresh,
     ],
   );

@@ -121,6 +121,7 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
+  const [generatedSlug, setGeneratedSlug] = React.useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
   const navigate = useNavigate();
 
@@ -223,11 +224,12 @@ const GenerateWorksheetPage: React.FC = () => {
         sessionStorage.setItem(GUEST_STORAGE_KEYS.limit, String(data.guestLimit ?? 10));
       }
 
-      // Store the worksheet ID from the API response
+      // Store the worksheet ID and SEO slug from the API response
       const wsId = data.metadata?.id || data.worksheetId;
       if (!wsId) throw new Error('No worksheet ID in response');
 
       setGeneratedId(wsId);
+      setGeneratedSlug(data.metadata?.slug || null);
       setGenState('success');
     } catch (err) {
       setGenError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
@@ -313,7 +315,7 @@ const GenerateWorksheetPage: React.FC = () => {
             {/* Primary CTA — solve online */}
             <div className="flex flex-wrap justify-center gap-3">
               <Button variant="primary" size="lg" className="gap-2" asChild>
-                <Link to={`/solve/${generatedId}`}>
+                <Link to={`/solve/${generatedSlug || generatedId}`}>
                   <Sparkles className="size-4" />
                   Start Solving Online
                 </Link>

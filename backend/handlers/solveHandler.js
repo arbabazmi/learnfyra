@@ -177,7 +177,22 @@ export const handler = async (event, context) => {
       }
     } else {
       const baseDir = resolve(join(__dirname, 'worksheets-local'));
-      const localDir = resolve(join(baseDir, worksheetId));
+
+      // Resolve slug to UUID via local slug index if needed
+      let dirName = worksheetId;
+      if (isSlug) {
+        try {
+          const indexPath = join(baseDir, 'slug-index.json');
+          const slugIndex = JSON.parse(await fs.readFile(indexPath, 'utf8'));
+          if (slugIndex[worksheetId]) {
+            dirName = slugIndex[worksheetId];
+          }
+        } catch {
+          // No slug index yet — fall through, will 404 naturally
+        }
+      }
+
+      const localDir = resolve(join(baseDir, dirName));
 
       if (!isWithinBaseDir(baseDir, localDir)) {
         return {

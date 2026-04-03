@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react';
+import { useNavigate } from 'react-router';
 import {
   GraduationCap,
   BookOpen,
@@ -56,16 +57,16 @@ const ROLES: RoleDef[] = [
 
 const RolePickerModal: React.FC = () => {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [selected, setSelected] = React.useState<RoleDef | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [visible, setVisible] = React.useState(false);
 
-  // Determine visibility on mount and when tokenState changes
+  // Sync visibility with context
   React.useEffect(() => {
-    const modalShown = sessionStorage.getItem(GUEST_STORAGE_KEYS.modalShown);
-    setVisible(auth.tokenState === 'none' && !modalShown);
-  }, [auth.tokenState]);
+    setVisible(auth.showRoleModal);
+  }, [auth.showRoleModal]);
 
   // Lock body scroll
   React.useEffect(() => {
@@ -93,8 +94,9 @@ const RolePickerModal: React.FC = () => {
 
       // Backend sets cookie via Set-Cookie header
       sessionStorage.setItem(GUEST_STORAGE_KEYS.modalShown, '1');
+      auth.closeRoleModal();
       auth.refresh();
-      setVisible(false);
+      navigate('/worksheet/new');
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -108,6 +110,7 @@ const RolePickerModal: React.FC = () => {
       window.location.pathname + window.location.search,
     );
     sessionStorage.setItem(GUEST_STORAGE_KEYS.modalShown, '1');
+    auth.closeRoleModal();
 
     try {
       const res = await fetch(googleOAuth.initiateUrl, {

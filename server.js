@@ -15,7 +15,7 @@ import 'dotenv/config';
 import express from 'express';
 import morgan from 'morgan';
 import { randomUUID } from 'crypto';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -193,10 +193,16 @@ app.post('/api/generate', async (req, res) => {
       worksheetPath: worksheetPaths[0],
     });
 
+    // Generate SEO slug for this worksheet
+    stage = 'worksheet:generate-slug';
+    const { generateWorksheetSlug } = await import('./src/utils/slugify.js');
+    const slug = generateWorksheetSlug(grade, subject, topic, difficulty, uuid);
+
     // Save solve-data.json for the online solve feature
     stage = 'worksheet:write-solve-data';
     const solveData = {
       worksheetId: uuid,
+      slug,
       generatedAt: new Date().toISOString(),
       grade,
       subject,
@@ -210,6 +216,13 @@ app.post('/api/generate', async (req, res) => {
       questions: worksheet.questions,
     };
     writeFileSync(join(outputDir, 'solve-data.json'), JSON.stringify(solveData, null, 2));
+
+    // Write slug index for local slug-based lookups
+    const slugIndexPath = join(LOCAL_FILES_DIR, 'slug-index.json');
+    let slugIndex = {};
+    try { slugIndex = JSON.parse(readFileSync(slugIndexPath, 'utf8')); } catch { /* first run */ }
+    slugIndex[slug] = uuid;
+    writeFileSync(slugIndexPath, JSON.stringify(slugIndex, null, 2));
     logGenerateEvent('info', 'server solve data written', {
       requestId,
       clientRequestId,
@@ -243,11 +256,14 @@ app.post('/api/generate', async (req, res) => {
       success: true,
       worksheetKey,
       answerKeyKey,
+      slug,
       requestId,
       clientRequestId,
       metadata: {
         id: uuid,
-        solveUrl: `/worksheet/${uuid}`,
+        slug,
+        solveUrl: `/solve/${slug}`,
+        solveUrlUuid: `/solve/${uuid}`,
         generatedAt: now.toISOString(),
         grade,
         subject,
@@ -390,6 +406,7 @@ app.post('/api/submit', async (req, res) => {
 
 // ── Lazy-load Phase 3 handlers ────────────────────────────────────────────────
 let _authHandler;
+let _guestFixtureHandler;
 let _studentHandler;
 let _progressHandler;
 let _dashboardHandler;
@@ -408,6 +425,14 @@ const getAuthHandler = async () => {
     _authHandler = mod.handler;
   }
   return _authHandler;
+};
+
+const getGuestFixtureHandler = async () => {
+  if (!_guestFixtureHandler) {
+    const mod = await import('./backend/handlers/guestFixtureHandler.js');
+    _guestFixtureHandler = mod.handler;
+  }
+  return _guestFixtureHandler;
 };
 
 /**
@@ -559,12 +584,38 @@ app.post('/api/auth/guest', async (req, res) => {
   try {
     const fn = await getAuthHandler();
     const result = await fn(
-      { httpMethod: 'POST', path: '/api/auth/guest', headers: req.headers, body: '{}' },
+      { httpMethod: 'POST', path: '/api/auth/guest', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders);
+    // Forward Set-Cookie from handler (Lambda response → Express)
+    if (result.headers?.['Set-Cookie']) {
+      res.setHeader('Set-Cookie', result.headers['Set-Cookie']);
+    }
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth guest route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/guest/preview ───────────────────────────────────────────────────
+app.get('/api/guest/preview', async (req, res) => {
+  try {
+    const fn = await getGuestFixtureHandler();
+    const result = await fn(
+      {
+        httpMethod: 'GET',
+        path: '/api/guest/preview',
+        headers: req.headers,
+        body: null,
+        queryStringParameters: req.query,
+      },
       {},
     );
     res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
-    console.error('auth guest route error:', err);
+    console.error('guest preview route error:', err);
     res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });
