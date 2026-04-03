@@ -29,7 +29,7 @@
     "bcryptjs": "^3.0.3",
     "docx": "8.5.0",
     "dotenv": "16.4.5",
-    "inquirer": "9.3.7",
+    "inquirer": "9.3.8",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.4",
     "puppeteer": "22.15.0",
