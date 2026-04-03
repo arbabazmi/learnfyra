@@ -102,10 +102,17 @@ function worksheetRecordToWorksheet(r: WorksheetRecord): Worksheet {
 }
 
 // ── Config maps ────────────────────────────────────────────────────────────
-const statusConfig: Record<WorksheetStatus, { label: string; variant: 'success' | 'primary' | 'warning' }> = {
-  completed:    { label: 'Done',        variant: 'success' },
-  new:          { label: 'New',         variant: 'primary' },
-  'in-progress': { label: 'In Progress', variant: 'warning' },
+const statusConfig: Record<WorksheetStatus, { label: string; variant: 'success' | 'primary' | 'warning'; className: string }> = {
+  completed:     { label: 'Done',        variant: 'success', className: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  new:           { label: 'New',         variant: 'primary', className: 'bg-blue-50 text-blue-600 border-blue-200' },
+  'in-progress': { label: 'In Progress', variant: 'warning', className: 'bg-amber-50 text-amber-700 border-amber-300' },
+};
+
+/** Returns a colored left-border class for each status to make cards visually distinct */
+const statusBorderColor: Record<WorksheetStatus, string> = {
+  completed:     'border-l-emerald-500',
+  new:           'border-l-blue-400',
+  'in-progress': 'border-l-amber-400',
 };
 
 const difficultyConfig: Record<Difficulty, { variant: 'success' | 'warning' | 'destructive' | 'primary' }> = {
@@ -149,14 +156,15 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
 
 // ── WorksheetCard (grid view) ───────────────────────────────────────────────
 const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
-  const { label: statusLabel, variant: statusVariant } = statusConfig[ws.status];
+  const { label: statusLabel, className: statusClassName } = statusConfig[ws.status];
   const { variant: diffVariant } = difficultyConfig[ws.difficulty];
   const subjectColor = subjectColorMap[ws.subject] ?? '#3D9AE8';
+  const borderClass = statusBorderColor[ws.status];
 
   return (
     <Link
       to={`/solve/${ws.id}`}
-      className="group block bg-white rounded-2xl border border-border shadow-card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      className={`group block bg-white rounded-2xl border border-border shadow-card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 border-l-4 ${borderClass}`}
       aria-label={`Open ${ws.title}`}
     >
       {/* Colored top strip */}
@@ -179,7 +187,11 @@ const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
           >
             {ws.subject}
           </Badge>
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusClassName}`}>
+            {ws.status === 'completed' && '✓ '}
+            {ws.status === 'in-progress' && '◔ '}
+            {statusLabel}
+          </span>
         </div>
 
         {/* Title */}
@@ -231,7 +243,7 @@ const WorksheetCard: React.FC<{ ws: Worksheet }> = ({ ws }) => {
 
 // ── WorksheetRow (list view) ────────────────────────────────────────────────
 const WorksheetRow: React.FC<{ ws: Worksheet; isLast: boolean }> = ({ ws, isLast }) => {
-  const { label: statusLabel, variant: statusVariant } = statusConfig[ws.status];
+  const { label: statusLabel, className: statusClassName } = statusConfig[ws.status];
   const { variant: diffVariant } = difficultyConfig[ws.difficulty];
   const subjectColor = subjectColorMap[ws.subject] ?? '#3D9AE8';
 
@@ -297,7 +309,11 @@ const WorksheetRow: React.FC<{ ws: Worksheet; isLast: boolean }> = ({ ws, isLast
             {ws.score}%
           </Badge>
         ) : (
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusClassName}`}>
+            {ws.status === 'completed' && '✓ '}
+            {ws.status === 'in-progress' && '◔ '}
+            {statusLabel}
+          </span>
         )}
       </td>
 
