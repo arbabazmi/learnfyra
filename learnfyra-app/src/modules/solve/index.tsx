@@ -3,7 +3,7 @@
  * @description Module entry point and route wrapper for the Solve module.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { AppLayout } from '@/components/layout/AppLayout';
 import ModeSelector from './components/ModeSelector';
@@ -173,6 +173,51 @@ function mapSubmitResponse(
   };
 }
 
+/**
+ * Persists a worksheet attempt to the backend (POST /api/progress/save).
+ * Best-effort: failures are logged but never block the results screen.
+ * Populates LearnfyraAttempts + LearnfyraAggregates in DynamoDB.
+ */
+async function saveProgress(
+  worksheet: Worksheet,
+  solveResults: SolveResults,
+  session: SolveSession,
+): Promise<void> {
+  const token = getAuthToken();
+  if (!token) return; // guest/anonymous — nothing to track
+
+  const answers = solveResults.results.map((r) => ({
+    number: r.number,
+    answer: r.studentAnswer,
+  }));
+
+  try {
+    await fetch(`${apiUrl}/api/progress/save`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        worksheetId: worksheet.worksheetId,
+        grade: worksheet.grade,
+        subject: worksheet.subject,
+        topic: worksheet.topic,
+        difficulty: worksheet.difficulty,
+        totalScore: solveResults.totalScore,
+        totalPoints: solveResults.totalPoints,
+        percentage: solveResults.percentage,
+        answers,
+        timeTaken: solveResults.timeTaken,
+        timed: session.mode === 'exam',
+      }),
+    });
+  } catch (err) {
+    // Non-fatal: results are already displayed; progress save is best-effort
+    console.error('Progress save failed (non-fatal):', err);
+  }
+}
+
 function SolveController({ worksheet }: { worksheet: Worksheet }) {
   const navigate = useNavigate();
   const {
@@ -189,6 +234,9 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
   // Server-scored results (for exam mode)
   const [serverResults, setServerResults] = useState<SolveResults | null>(null);
   const [submitError, setSubmitError] = useState('');
+
+  // Track whether progress has been saved for the current attempt to avoid duplicates
+  const progressSavedRef = useRef(false);
 
   // Client-side results (fallback for practice mode / local worksheets)
   const clientResults = useSolveResults(worksheet, session);
@@ -228,13 +276,29 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
 
         if (!res.ok) throw new Error(`Submit failed (${res.status})`);
         const data = await res.json();
-        setServerResults(mapSubmitResponse(data, session, worksheet));
+        const mapped = mapSubmitResponse(data, session, worksheet);
+        setServerResults(mapped);
+
+        // Persist attempt to backend (populates Attempts + Aggregates tables)
+        if (!progressSavedRef.current) {
+          progressSavedRef.current = true;
+          saveProgress(worksheet, mapped, session);
+        }
       } catch (err) {
         console.error('Submit API error:', err);
         setSubmitError(err instanceof Error ? err.message : 'Scoring failed');
       }
     })();
   }, [session.status, session.mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save progress for practice mode when the session is submitted
+  useEffect(() => {
+    if (session.status !== 'submitted' || session.mode !== 'practice') return;
+    if (!clientResults || progressSavedRef.current) return;
+
+    progressSavedRef.current = true;
+    saveProgress(worksheet, clientResults, session);
+  }, [session.status, session.mode, clientResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Use server results for exam, client results for practice
   const results = session.mode === 'exam' ? serverResults : clientResults;
@@ -243,17 +307,20 @@ function SolveController({ worksheet }: { worksheet: Worksheet }) {
     startSession(mode);
     setServerResults(null);
     setSubmitError('');
+    progressSavedRef.current = false;
   }, [startSession]);
 
   const handleRetake = useCallback(() => {
     setServerResults(null);
     setSubmitError('');
+    progressSavedRef.current = false;
     startSession(session.mode);
   }, [startSession, session.mode]);
 
   const handleSwitchMode = useCallback(() => {
     setServerResults(null);
     setSubmitError('');
+    progressSavedRef.current = false;
     startSession(session.mode === 'exam' ? 'practice' : 'exam');
   }, [startSession, session.mode]);
 
