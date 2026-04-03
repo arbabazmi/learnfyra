@@ -61,9 +61,14 @@ async function handleStats(decoded) {
     db.queryByField('attempts', 'studentId', studentId),
   ]);
 
-  // Build set of worksheetIds that have been completed
+  // Build set of worksheetIds that have been completed (unique worksheets, not retakes)
   const completedAttempts = (attempts || []).filter(a => a.percentage != null && a.percentage >= 0);
-  const inProgressAttempts = (attempts || []).filter(a => a.percentage == null || a.percentage < 0);
+  const completedWorksheetIds = new Set(completedAttempts.map(a => a.worksheetId));
+  const inProgressIds = new Set(
+    (attempts || [])
+      .filter(a => (a.percentage == null || a.percentage < 0) && !completedWorksheetIds.has(a.worksheetId))
+      .map(a => a.worksheetId)
+  );
   const attemptedIds = new Set((attempts || []).map(a => a.worksheetId));
 
   // "New" worksheets = generated but never attempted
@@ -82,8 +87,8 @@ async function handleStats(decoded) {
     : `${totalMinutes}m`;
 
   return okResponse({
-    worksheetsDone: completedAttempts.length,
-    inProgress: inProgressAttempts.length,
+    worksheetsDone: completedWorksheetIds.size,
+    inProgress: inProgressIds.size,
     newWorksheets: newCount,
     totalWorksheets: (worksheets || []).length,
     bestScore,

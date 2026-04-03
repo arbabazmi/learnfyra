@@ -470,7 +470,7 @@ const ReportsPage: React.FC = () => {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <Link
-                          to={`/worksheet/${row.worksheetId}`}
+                          to={`/solve/${row.worksheetId}`}
                           className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                         >
                           Review <ArrowRight className="size-3" />
