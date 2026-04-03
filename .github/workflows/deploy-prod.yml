@@ -273,7 +273,7 @@ jobs:
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
           echo "dist_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
-          API_URL=$(jq -r '.["LearnfyraStack-prod"]["ApiUrl"]' infra/cdk/cdk-outputs.json)
+          API_URL=$(jq -r '.["LearnfyraStack-prod"]["ApiGatewayUrl"]' infra/cdk/cdk-outputs.json)
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Sync frontend to S3
