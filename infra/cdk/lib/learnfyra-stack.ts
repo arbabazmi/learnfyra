@@ -966,6 +966,7 @@ export class LearnfyraStack extends cdk.Stack {
     [
       generateFn,
       authFn,
+      solveFn,
       submitFn,
       progressFn,
       analyticsFn,
