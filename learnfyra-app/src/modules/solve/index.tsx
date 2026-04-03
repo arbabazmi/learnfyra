@@ -236,7 +236,9 @@ async function saveProgress(
         grade: worksheet.grade,
         subject: worksheet.subject,
         topic: worksheet.topic,
-        difficulty: worksheet.difficulty,
+        // Backend expects capitalized difficulty ('Easy', 'Medium', 'Hard', 'Mixed')
+        // but the solve module uses lowercase ('easy', 'medium', 'hard')
+        difficulty: worksheet.difficulty.charAt(0).toUpperCase() + worksheet.difficulty.slice(1),
         totalScore: solveResults.totalScore,
         totalPoints: solveResults.totalPoints,
         percentage: solveResults.percentage,
