@@ -30,6 +30,8 @@ import AchievementsPage      from './pages/AchievementsPage';
 import SettingsPage          from './pages/SettingsPage';
 import NotFoundPage          from './pages/NotFoundPage';
 import SolvePage             from './modules/solve';
+import { RolePickerModal }   from './components/auth/RolePickerModal';
+import { GuestBanner }       from './components/auth/GuestBanner';
 // @ts-expect-error — JSX test runner, no TS types
 import TestRunnerPage        from './pages/TestRunnerPage.jsx';
 
@@ -41,6 +43,9 @@ function WorksheetRedirect() {
 
 export default function App() {
   return (
+    <>
+    <GuestBanner />
+    <RolePickerModal />
     <Routes>
       {/* ── Public ──────────────────────────────────────── */}
       <Route path="/"              element={<Landing />} />
@@ -66,5 +71,6 @@ export default function App() {
       {/* ── Fallback ────────────────────────────────────── */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </>
   );
 }

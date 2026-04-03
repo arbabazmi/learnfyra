@@ -148,7 +148,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
         })}
 
         {/* User row — auth-aware */}
-        {auth.isAuthenticated && auth.user ? (
+        {auth.tokenState === 'authenticated' && auth.user ? (
           <div className="flex items-center gap-3 px-3 py-2.5 mt-2 rounded-xl bg-surface">
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
               <GraduationCap className="size-4" />

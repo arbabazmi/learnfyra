@@ -225,6 +225,8 @@ jobs:
           check_post "auth/register" "$BASE_API/auth/register" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
           check_post "auth/login" "$BASE_API/auth/login" '{"email":"smoke+staging@learnfyra.com","password":"SmokePass123!"}'
           check_post "auth/logout" "$BASE_API/auth/logout" '{}'
+          check_post "auth/guest" "$BASE_API/auth/guest" '{"role":"student"}'
+          check_get "guest/preview?role=teacher" "$BASE_API/guest/preview?role=teacher"
           check_get "solve/{worksheetId}" "$BASE_API/solve/smoke-worksheet-id"
           check_post "submit" "$BASE_API/submit" '{"worksheetId":"smoke-worksheet-id","answers":[]}'
           check_post "progress/save" "$BASE_API/progress/save" '{"studentId":"smoke-student","worksheetId":"smoke-worksheet-id","score":0}'

@@ -20,7 +20,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Badge } from '@/components/ui/Badge';
 import { usePageMeta } from '@/lib/pageMeta';
 import { useAuth } from '@/contexts/AuthContext';
-import { getToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth';
 import { apiUrl } from '@/lib/env';
 
 // ── API response types ────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ const ReportsPage: React.FC = () => {
   });
 
   const auth = useAuth();
-  const token = getToken();
+  const token = getAuthToken();
 
   const [data, setData] = React.useState<ReportsData>({
     stats: null,

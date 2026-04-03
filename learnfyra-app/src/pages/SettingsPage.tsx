@@ -22,7 +22,7 @@ import { usePageMeta } from '@/lib/pageMeta';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiUrl } from '@/lib/env';
-import { getToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth';
 
 // ── Inline toggle switch ────────────────────────────────────────────────────
 
@@ -231,7 +231,7 @@ const SettingsPage: React.FC = () => {
       setEmail(auth.user.email || '');
     }
 
-    const token = getToken();
+    const token = getAuthToken();
     if (!token) { setProfileLoading(false); return; }
 
     fetch(`${apiUrl}/api/student/profile`, {
@@ -303,7 +303,7 @@ const SettingsPage: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = getToken();
+    const token = getAuthToken();
     if (!token) { showToast('You must be signed in to save.', true); return; }
     setIsSaving(true);
     try {

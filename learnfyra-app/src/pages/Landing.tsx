@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   Sparkles,
   TrendingUp,
@@ -34,6 +34,7 @@ import { Footer } from '@/components/layout/Footer';
 import { AuthModal, type ModalStep } from '@/components/AuthModal';
 import { RoleSelectionPanel } from '@/components/guest/RoleSelectionPanel';
 import { SmartSearchBox } from '@/components/search/SmartSearchBox';
+import { useAuth } from '@/contexts/AuthContext';
 import { useInView } from '@/hooks/useInView';
 import { usePageMeta } from '@/lib/pageMeta';
 
@@ -210,11 +211,12 @@ const WorksheetMockup: React.FC = () => {
 
 interface HeroProps {
   onTryWorksheet: () => void;
+  ctaLabel?: string;
   externalGrade?: string | null;
   onExternalGradeHandled?: () => void;
 }
 
-const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExternalGradeHandled }) => (
+const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, ctaLabel = 'Try a Worksheet', externalGrade, onExternalGradeHandled }) => (
   <section id="hero" className="relative overflow-hidden bg-white">
     {/* Dot grid */}
     <div className="absolute inset-0 bg-dot-pattern opacity-50 pointer-events-none" aria-hidden="true" />
@@ -264,7 +266,7 @@ const HeroSection: React.FC<HeroProps> = ({ onTryWorksheet, externalGrade, onExt
               className="gap-2 shadow-primary-sm hover:shadow-primary-md"
               onClick={onTryWorksheet}
             >
-              Try a Worksheet
+              {ctaLabel}
               <ArrowRight className="size-5" />
             </Button>
             <Button variant="ghost" size="lg" className="gap-2 border border-border hover:border-primary/30" asChild>
@@ -939,7 +941,7 @@ const TestimonialsSection: React.FC = () => (
 // CTA BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet }) => (
+const CTASection: React.FC<{ onTryWorksheet?: () => void; ctaLabel?: string }> = ({ onTryWorksheet, ctaLabel = 'Try a Worksheet' }) => (
   <section className="relative py-24 overflow-hidden bg-primary">
     {/* Dot grid */}
     <div
@@ -987,7 +989,7 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
           className="text-primary font-extrabold gap-2 hover:bg-white/90 shadow-md"
           onClick={onTryWorksheet}
         >
-          Try a Worksheet — Free
+          {ctaLabel} — Free
           <ArrowRight className="size-5" />
         </Button>
         <button className="inline-flex items-center gap-2 px-7 h-12 rounded-xl border-2 border-white/30 text-white text-[15px] font-bold transition-all duration-150 hover:bg-white/10 hover:border-white/50">
@@ -1004,6 +1006,9 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void }> = ({ onTryWorksheet 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const Landing: React.FC = () => {
+  const auth = useAuth();
+  const navigate = useNavigate();
+
   // Auth modal state (for Sign In only)
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalStep, setModalStep] = React.useState<ModalStep>('role');
@@ -1014,18 +1019,31 @@ const Landing: React.FC = () => {
   // Grade chip → search box bridge
   const [externalGrade, setExternalGrade] = React.useState<string | null>(null);
 
+  const ctaLabel = (auth.role === 'teacher' || auth.role === 'guest-teacher')
+    ? 'Create Worksheet'
+    : 'Try a Worksheet';
+
   const openSignIn = () => { setModalStep('signin'); setModalOpen(true); };
   const openRoleFlow = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setRoleFlowOpen(true);
   };
 
+  const handleCtaClick = () => {
+    if (auth.tokenState === 'none') {
+      auth.openRoleModal();
+      return;
+    }
+    navigate('/worksheet/new');
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar onSignIn={openSignIn} onTryWorksheet={openRoleFlow} />
+      <Navbar onSignIn={openSignIn} onTryWorksheet={handleCtaClick} />
       <main className="flex-1">
         <HeroSection
-          onTryWorksheet={openRoleFlow}
+          onTryWorksheet={handleCtaClick}
+          ctaLabel={ctaLabel}
           externalGrade={externalGrade}
           onExternalGradeHandled={() => setExternalGrade(null)}
         />
@@ -1035,7 +1053,7 @@ const Landing: React.FC = () => {
         <HowItWorksSection />
         <RoleCardsSection />
         <TestimonialsSection />
-        <CTASection onTryWorksheet={openRoleFlow} />
+        <CTASection onTryWorksheet={handleCtaClick} ctaLabel={ctaLabel} />
       </main>
       <Footer />
 

@@ -422,7 +422,7 @@ export const handler = async (event, context) => {
       }));
 
       const worksheetIds = sessionResult.Item?.worksheetIds;
-      const usedCount = worksheetIds ? worksheetIds.size ?? Object.keys(worksheetIds).length : 0;
+      const usedCount = worksheetIds?.size ?? 0;
 
       if (usedCount >= 10) {
         logEvent('info', 'generateHandler guest limit reached', {
@@ -584,6 +584,8 @@ export const handler = async (event, context) => {
       provenanceLevel,
       repeatCapPercent: repeatPolicy.capPercent,
       seenQuestionSignatures,
+      userId: isGuestUser ? undefined : decoded.sub,
+      guestId: isGuestUser ? decoded.sub : undefined,
         });
     logEvent('info', 'generateHandler worksheet generated', {
       requestId,
@@ -783,7 +785,7 @@ export const handler = async (event, context) => {
           Key: { PK: `GUEST#${guestId}` },
         }));
         const updatedIds = updated.Item?.worksheetIds;
-        const used = updatedIds ? (updatedIds.size ?? Object.keys(updatedIds).length) : 1;
+        const used = updatedIds?.size ?? 1;
         guestUsage = { guestUsed: used, guestLimit: 10 };
       } catch {
         // Fallback: estimate count

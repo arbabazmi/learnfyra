@@ -211,3 +211,61 @@ export async function recordExposureHistory({
 
   return saved;
 }
+
+/**
+ * Reads the UserQuestionHistory table for a specific user + grade + subject.
+ * Returns a Set of questionIds the user has already seen.
+ *
+ * @param {Object} input
+ * @param {string} [input.userId]   - Authenticated user ID (sub claim)
+ * @param {string} [input.guestId]  - Guest user ID
+ * @param {number} input.grade      - Grade level
+ * @param {string} input.subject    - Subject name
+ * @returns {Promise<Set<string>>}  Set of seen questionIds
+ */
+export async function getUserQuestionHistory({ userId, guestId, grade, subject }) {
+  // Need userId or guestId to form the key
+  if (!userId && !guestId) return new Set();
+
+  const PK = guestId ? `GUEST#${guestId}` : `USER#${userId}`;
+  const SK = `GRADE#${grade}#SUBJ#${subject}`;
+  const isAws = process.env.APP_RUNTIME === 'aws' || process.env.APP_RUNTIME === 'dynamodb';
+
+  try {
+    if (isAws) {
+      const tableName = process.env.USER_QUESTION_HISTORY_TABLE;
+      if (!tableName) return new Set();
+
+      const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+      const { DynamoDBDocumentClient, GetCommand } = await import('@aws-sdk/lib-dynamodb');
+
+      if (!getUserQuestionHistory._docClient) {
+        getUserQuestionHistory._docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+      }
+
+      const result = await getUserQuestionHistory._docClient.send(new GetCommand({
+        TableName: tableName,
+        Key: { PK, SK },
+        ProjectionExpression: 'seenQuestionIds',
+      }));
+
+      return result.Item?.seenQuestionIds instanceof Set
+        ? result.Item.seenQuestionIds
+        : new Set(result.Item?.seenQuestionIds ?? []);
+    }
+
+    // Local dev: read from data-local/userQuestionHistory.json
+    const { readFileSync } = await import('fs');
+    const { join } = await import('path');
+    const filePath = join(process.cwd(), 'data-local', 'userQuestionHistory.json');
+    const data = JSON.parse(readFileSync(filePath, 'utf8'));
+    const key = `${PK}|${SK}`;
+    return new Set(data[key]?.seenQuestionIds ?? []);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('getUserQuestionHistory failed (non-fatal):', err);
+    }
+    return new Set();
+  }
+}
+getUserQuestionHistory._docClient = null;

@@ -10,6 +10,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { mockClient } from 'aws-sdk-client-mock';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
@@ -25,6 +26,7 @@ const sampleWorksheet = JSON.parse(
 
 const s3Mock  = mockClient(S3Client);
 const ssmMock = mockClient(SSMClient);
+const dynamoDocMock = mockClient(DynamoDBDocumentClient);
 
 // ─── Module-level jest.fn() stubs (created before mockModule factories) ───────
 
@@ -222,11 +224,14 @@ function scenarioMeta(scenario, requested = 10) {
 beforeEach(() => {
   s3Mock.reset();
   ssmMock.reset();
+  dynamoDocMock.reset();
   jest.clearAllMocks();
 
   // Env vars — handler reads these lazily so they must be set before invocation
   process.env.ANTHROPIC_API_KEY     = 'sk-ant-test';
   process.env.WORKSHEET_BUCKET_NAME = 'test-integration-bucket';
+  process.env.WORKSHEETS_TABLE_NAME = 'LearnfyraWorksheets-test';
+  process.env.GUEST_SESSIONS_TABLE  = 'LearnfyraGuestSessions-test';
   process.env.NODE_ENV              = 'test';
 
   // Default: S3 accepts every PutObject without error
@@ -545,78 +550,76 @@ describe('generateFlow — role enforcement (403)', () => {
 
 });
 
-// ─── 6. solve-data.json S3 upload — content type verification ─────────────────
+// ─── 6. Worksheet data written to DynamoDB (replaces S3 solve-data.json) ─────
 
-describe('generateFlow — solve-data.json S3 upload', () => {
+describe('generateFlow — worksheet DynamoDB write', () => {
 
-  it('uploads solve-data.json with application/json content type', async () => {
+  it('writes worksheet data to DynamoDB Worksheets table', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    expect(solveCall).toBeDefined();
-    expect(solveCall.args[0].input.ContentType).toBe('application/json');
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut).toBeDefined();
   });
 
-  it('solve-data.json key uses the same base path prefix as the worksheet key', async () => {
+  it('DynamoDB record contains worksheetId', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const calls       = s3Mock.commandCalls(PutObjectCommand);
-    const worksheetKey = calls[0].args[0].input.Key;
-    const solveKey     = calls.find((c) => c.args[0].input.Key.includes('solve-data.json'))
-      .args[0].input.Key;
-    const basePrefix = worksheetKey.replace(/\/worksheet\.[a-z]+$/, '');
-    expect(solveKey).toContain(basePrefix);
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item).toHaveProperty('worksheetId');
   });
 
-  it('solve-data.json S3 body is valid JSON', async () => {
+  it('DynamoDB record contains createdAt ISO timestamp', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    expect(() => JSON.parse(solveCall.args[0].input.Body)).not.toThrow();
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('solve-data.json body contains worksheetId', async () => {
+  it('DynamoDB record contains questions array', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    const uploaded = JSON.parse(solveCall.args[0].input.Body);
-    expect(uploaded).toHaveProperty('worksheetId');
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    const questions = worksheetPut.args[0].input.Item.questions;
+    expect(Array.isArray(questions)).toBe(true);
+    expect(questions.length).toBeGreaterThan(0);
   });
 
-  it('solve-data.json body contains generatedAt ISO timestamp', async () => {
+  it('DynamoDB record contains grade, subject, topic, difficulty', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    const uploaded = JSON.parse(solveCall.args[0].input.Body);
-    expect(uploaded.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const item = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test').args[0].input.Item;
+    expect(item.grade).toBe(3);
+    expect(item.subject).toBe('Math');
+    expect(item.topic).toBeDefined();
+    expect(item.difficulty).toBe('Medium');
   });
 
-  it('solve-data.json body contains the questions array from the assembled worksheet', async () => {
+  it('DynamoDB record contains slug for SEO-friendly solve URL', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    const uploaded = JSON.parse(solveCall.args[0].input.Body);
-    expect(Array.isArray(uploaded.questions)).toBe(true);
-    expect(uploaded.questions.length).toBeGreaterThan(0);
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item).toHaveProperty('slug');
   });
 
-  it('solve-data.json is the second S3 upload (after worksheet, before answer key)', async () => {
+  it('DynamoDB record contains expiresAt TTL', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const calls       = s3Mock.commandCalls(PutObjectCommand);
-    const solveIndex  = calls.findIndex((c) => c.args[0].input.Key.includes('solve-data.json'));
-    expect(solveIndex).toBe(1);
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item).toHaveProperty('expiresAt');
+    expect(typeof worksheetPut.args[0].input.Item.expiresAt).toBe('number');
   });
 
-  it('uploads to the correct bucket (WORKSHEET_BUCKET_NAME)', async () => {
+  it('DynamoDB record contains createdBy matching JWT sub', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    expect(solveCall.args[0].input.Bucket).toBe('test-integration-bucket');
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item.createdBy).toBe('teacher-user-123');
+  });
+
+  it('no solve-data.json uploaded to S3', async () => {
+    await handler(mockEvent(validBody), mockContext);
+    const s3Keys = s3Mock.commandCalls(PutObjectCommand).map(c => c.args[0].input.Key);
+    expect(s3Keys.some(k => k.includes('solve-data.json'))).toBe(false);
   });
 
 });
@@ -631,13 +634,11 @@ describe('generateFlow — teacherId from JWT sub', () => {
     expect(metadata.teacherId).toBe('teacher-user-123');
   });
 
-  it('solve-data.json body contains teacherId from the JWT sub claim', async () => {
+  it('DynamoDB worksheet record contains createdBy from the JWT sub claim', async () => {
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    const uploaded = JSON.parse(solveCall.args[0].input.Body);
-    expect(uploaded.teacherId).toBe('teacher-user-123');
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item.createdBy).toBe('teacher-user-123');
   });
 
   it('metadata.teacherId updates when a different teacher JWT is used', async () => {
@@ -651,18 +652,16 @@ describe('generateFlow — teacherId from JWT sub', () => {
     expect(metadata.teacherId).toBe('teacher-user-999');
   });
 
-  it('solve-data.json teacherId updates when a different teacher JWT is used', async () => {
+  it('DynamoDB createdBy updates when a different teacher JWT is used', async () => {
     mockValidateToken.mockResolvedValueOnce({
       sub:   'teacher-user-999',
       email: 'otherteacher@learnfyra.com',
       role:  'teacher',
     });
     await handler(mockEvent(validBody), mockContext);
-    const solveCall = s3Mock.commandCalls(PutObjectCommand).find(
-      (c) => c.args[0].input.Key.includes('solve-data.json')
-    );
-    const uploaded = JSON.parse(solveCall.args[0].input.Body);
-    expect(uploaded.teacherId).toBe('teacher-user-999');
+    const putCalls = dynamoDocMock.commandCalls(PutCommand);
+    const worksheetPut = putCalls.find(c => c.args[0].input.TableName === 'LearnfyraWorksheets-test');
+    expect(worksheetPut.args[0].input.Item.createdBy).toBe('teacher-user-999');
   });
 
   it('admin role is accepted and teacherId is set to admin JWT sub', async () => {
@@ -731,10 +730,11 @@ describe('generateFlow — backward-compatible response shape', () => {
     expect(JSON.parse(result.body).worksheetKey).toContain('worksheet.html');
   });
 
-  it('metadata contains a solveUrl pointing to the correct worksheetId', async () => {
+  it('metadata contains solveUrl with slug and solveUrlUuid with worksheetId', async () => {
     const result = await handler(mockEvent(validBody), mockContext);
     const { metadata } = JSON.parse(result.body);
-    expect(metadata.solveUrl).toBe(`/solve/${metadata.id}`);
+    expect(metadata.solveUrl).toMatch(/^\/solve\//);
+    expect(metadata.solveUrlUuid).toBe(`/solve/${metadata.id}`);
   });
 
   it('metadata.id matches the worksheetId embedded in the worksheetKey path', async () => {
@@ -743,14 +743,14 @@ describe('generateFlow — backward-compatible response shape', () => {
     expect(body.worksheetKey).toContain(body.metadata.id);
   });
 
-  it('three S3 uploads are made when includeAnswerKey is true', async () => {
+  it('two S3 uploads are made when includeAnswerKey is true (worksheet + answer-key)', async () => {
     await handler(mockEvent(validBody), mockContext);
-    expect(s3Mock.commandCalls(PutObjectCommand)).toHaveLength(3);
+    expect(s3Mock.commandCalls(PutObjectCommand)).toHaveLength(2);
   });
 
-  it('two S3 uploads are made when includeAnswerKey is false', async () => {
+  it('one S3 upload is made when includeAnswerKey is false (worksheet only)', async () => {
     await handler(mockEvent({ ...validBody, includeAnswerKey: false }), mockContext);
-    expect(s3Mock.commandCalls(PutObjectCommand)).toHaveLength(2);
+    expect(s3Mock.commandCalls(PutObjectCommand)).toHaveLength(1);
   });
 
   it('CORS headers are present on every 200 response', async () => {
