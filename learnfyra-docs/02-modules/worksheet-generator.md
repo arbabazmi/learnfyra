@@ -1,5 +1,9 @@
 # M02 + M03 — Question Bank & Worksheet Generator
 
+**Updated: feat/my-worksheets-tracking (2026-04-03)**
+- Step 10 (Write to storage) now records `createdBy = userId` in `LearnfyraGenerationLog` for authenticated users
+- This enables `GET /api/worksheets/mine` to return worksheets by owner
+
 ## Overview
 
 M02 is the Question Bank — a DynamoDB-backed store of reusable, deduplicated questions indexed by grade, subject, topic, type, and difficulty.
@@ -178,6 +182,22 @@ Step 10: Write to storage
   APP_RUNTIME=aws:   S3 PUT to worksheets/{year}/{month}/{day}/{uuid}/
   APP_RUNTIME=local: write to worksheets-local/{uuid}/
 
+  DynamoDB GenerationLog PutItem (AWS only):
+    {
+      worksheetId,
+      generatedAt,
+      grade, subject, topic, difficulty,
+      questionCount, generationMode, provenanceLevel,
+      modelUsed, durationMs,
+      createdBy: userId || null,   ← set if request is authenticated
+      formats, s3Prefix, ttl
+    }
+
+  Note: createdBy MUST be set on every authenticated generation. This field
+  powers GET /api/worksheets/mine via the createdBy-index GSI. Guest
+  generations (no Authorization header) write createdBy as null and do not
+  appear in any user's worksheet list.
+
 Step 11: Return
   {worksheetId, downloadUrls, solveUrl, estimatedTime,
    generationMode, provenanceLevel, questionCount}
@@ -276,6 +296,10 @@ src/exporters/
 backend/handlers/
   generateHandler.js — Lambda handler for POST /api/generate
   downloadHandler.js — Lambda handler for GET /api/download
+
+scripts/
+  load-aws-config.js — fetches secrets from SSM + Lambda env vars for local dev
+                       (run via npm run dev:aws or npm run dev:staging)
 ```
 
 ### Accepted Input Schema
