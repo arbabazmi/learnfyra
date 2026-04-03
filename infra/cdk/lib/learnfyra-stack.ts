@@ -1077,6 +1077,7 @@ export class LearnfyraStack extends cdk.Stack {
 
     dashboardFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
     dashboardFn.addEnvironment('AGGREGATES_TABLE_NAME', aggregatesTable.tableName);
+    dashboardFn.addEnvironment('WORKSHEETS_TABLE_NAME', worksheetsTable.tableName);
 
     adminFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
     adminFn.addEnvironment('ATTEMPTS_TABLE_NAME', attemptsTable.tableName);
