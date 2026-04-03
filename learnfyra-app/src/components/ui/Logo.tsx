@@ -25,10 +25,10 @@ interface LogoProps {
 }
 
 const heightMap: Record<LogoSize, string> = {
-  sm:  'h-20',
-  nav: 'h-28',
-  md:  'h-32',
-  lg:  'h-40',
+  sm:  'h-32',
+  nav: 'h-44',
+  md:  'h-48',
+  lg:  'h-60',
 };
 
 const Logo: React.FC<LogoProps> = ({ size = 'nav', dark = false, className }) => {
