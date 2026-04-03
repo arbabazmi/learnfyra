@@ -94,7 +94,13 @@ const TABLE_CONFIG = {
   adminpolicies:      { envVar: 'ADMIN_POLICIES_TABLE_NAME',      suffix: 'AdminPolicies',      pk: 'id'          },
   adminauditevents:   { envVar: 'ADMIN_AUDIT_EVENTS_TABLE_NAME',  suffix: 'AdminAuditEvents',   pk: 'id'          },
   adminidempotency:   { envVar: 'ADMIN_IDEMPOTENCY_TABLE_NAME',   suffix: 'AdminIdempotency',   pk: 'id'          },
-  repeatcapoverrides: { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME', suffix: 'RepeatCapOverrides', pk: 'id'         },
+  repeatcapoverrides:        { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME',          suffix: 'RepeatCapOverrides',         pk: 'id'         },
+  // M05 — Teacher & Parent Roles
+  assignments:               { envVar: 'ASSIGNMENTS_TABLE_NAME',                   suffix: 'Assignments',                pk: 'PK',   sk: 'SK' },
+  studentassignmentstatus:   { envVar: 'STUDENT_ASSIGNMENT_STATUS_TABLE_NAME',     suffix: 'StudentAssignmentStatus',    pk: 'PK',   sk: 'SK' },
+  parentchildlinks:          { envVar: 'PARENT_CHILD_LINKS_TABLE_NAME',            suffix: 'ParentChildLinks',           pk: 'PK',   sk: 'SK' },
+  parentinvitecodes:         { envVar: 'PARENT_INVITE_CODES_TABLE_NAME',           suffix: 'ParentInviteCodes',          pk: 'PK',   sk: 'SK' },
+  reviewqueueitems:          { envVar: 'REVIEW_QUEUE_ITEMS_TABLE_NAME',            suffix: 'ReviewQueueItems',           pk: 'PK',   sk: 'SK' },
 };
 
 /**

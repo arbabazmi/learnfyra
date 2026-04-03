@@ -34,6 +34,11 @@ import { RolePickerModal }   from './components/auth/RolePickerModal';
 import { GuestBanner }       from './components/auth/GuestBanner';
 // @ts-expect-error — JSX test runner, no TS types
 import TestRunnerPage        from './pages/TestRunnerPage.jsx';
+import TeacherDashboard      from './pages/teacher/TeacherDashboard';
+import ClassCreatePage       from './pages/teacher/ClassCreatePage';
+import ParentDashboard       from './pages/parent/ParentDashboard';
+import LinkChildPage         from './pages/parent/LinkChildPage';
+import JoinClassPage         from './pages/student/JoinClassPage';
 
 /** Redirect old /worksheet/:id to /solve/:id */
 function WorksheetRedirect() {
@@ -64,6 +69,17 @@ export default function App() {
       <Route path="/reports"          element={<ReportsPage />} />
       <Route path="/achievements"     element={<AchievementsPage />} />
       <Route path="/settings"         element={<SettingsPage />} />
+
+      {/* ── Teacher ─────────────────────────────────────── */}
+      <Route path="/teacher/dashboard"  element={<TeacherDashboard />} />
+      <Route path="/teacher/class/new"  element={<ClassCreatePage />} />
+
+      {/* ── Parent ──────────────────────────────────────── */}
+      <Route path="/parent/dashboard"   element={<ParentDashboard />} />
+      <Route path="/parent/link"        element={<LinkChildPage />} />
+
+      {/* ── Student ─────────────────────────────────────── */}
+      <Route path="/student/join-class" element={<JoinClassPage />} />
 
       {/* ── Dev tools ──────────────────────────────────── */}
       <Route path="/tests" element={<TestRunnerPage />} />
