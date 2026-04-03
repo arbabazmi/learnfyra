@@ -76,7 +76,7 @@ function writeTable(table, records) {
  * @returns {string|undefined} The key value or undefined
  */
 function getPrimaryKey(item) {
-  return item.id ?? item.userId ?? item.classId ?? item.attemptId;
+  return item.id ?? item.worksheetId ?? item.userId ?? item.classId ?? item.attemptId;
 }
 
 /**

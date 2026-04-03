@@ -87,6 +87,7 @@ const TABLE_CONFIG = {
   config:             { envVar: 'CONFIG_TABLE_NAME',              suffix: 'Config',             pk: 'configKey'   },
   modelconfig:        { envVar: 'MODEL_CONFIG_TABLE_NAME',        suffix: 'ModelConfig',        pk: 'id'          },
   modelauditlog:      { envVar: 'MODEL_AUDIT_LOG_TABLE_NAME',     suffix: 'ModelAuditLog',      pk: 'id'          },
+  worksheets:             { envVar: 'WORKSHEETS_TABLE_NAME',                suffix: 'Worksheets',               pk: 'worksheetId' },
   questionexposurehistory: { envVar: 'QUESTION_EXPOSURE_HISTORY_TABLE_NAME', suffix: 'QuestionExposureHistory', pk: 'id' },
   passwordresets:     { envVar: 'PWRESET_TABLE_NAME',             suffix: 'PasswordResets',     pk: 'tokenId'     },
   parentlinks:        { envVar: 'PARENT_LINKS_TABLE_NAME',        suffix: 'ParentLinks',        pk: 'id'          },
