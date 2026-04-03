@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { Logo } from '@/components/ui/Logo';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiUrl } from '@/lib/env';
+import { getAuthToken } from '@/lib/auth';
 
 interface NavItem {
   label: string;
@@ -31,12 +33,14 @@ interface NavItem {
   badge?: string;
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard',   href: '/dashboard',  icon: LayoutDashboard },
-  { label: 'Worksheets',  href: '/worksheet',  icon: FileText,        badge: '3' },
-  { label: 'Reports',     href: '/reports',    icon: BarChart3 },
-  { label: 'Achievements',href: '/achievements',icon: Award },
-];
+function buildNavItems(worksheetCount?: number): NavItem[] {
+  return [
+    { label: 'Dashboard',   href: '/dashboard',    icon: LayoutDashboard },
+    { label: 'Worksheets',  href: '/worksheet',    icon: FileText, badge: worksheetCount ? String(worksheetCount) : undefined },
+    { label: 'Reports',     href: '/reports',      icon: BarChart3 },
+    { label: 'Achievements',href: '/achievements', icon: Award },
+  ];
+}
 
 const bottomItems: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
@@ -65,6 +69,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
   const navigate = useNavigate();
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [worksheetCount, setWorksheetCount] = React.useState<number | undefined>(undefined);
+
+  // Fetch worksheet count for sidebar badge
+  React.useEffect(() => {
+    if (auth.isGuest) return;
+    const token = getAuthToken();
+    if (!token) return;
+    fetch(`${apiUrl}/api/dashboard/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setWorksheetCount(data.totalWorksheets || 0);
+      })
+      .catch(() => {});
+  }, [auth.isGuest]);
+
+  const navItems = buildNavItems(worksheetCount);
 
   const handleSignOut = () => {
     auth.signOut();
