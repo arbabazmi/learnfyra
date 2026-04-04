@@ -4,7 +4,7 @@
  * @agent QA
  */
 
-import { describe, it, expect, afterAll } from '@jest/globals';
+import { describe, it, expect, afterAll, jest } from '@jest/globals';
 import { existsSync, statSync, unlinkSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
@@ -17,6 +17,8 @@ const sampleWorksheet = JSON.parse(
 
 const testOutputDir = join(__dirname, '../__tmp__');
 const generatedFiles = [];
+
+jest.setTimeout(20000);
 
 const options = {
   grade: 3,

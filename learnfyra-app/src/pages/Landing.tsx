@@ -24,10 +24,10 @@ import {
   ChevronRight,
   Brain,
   Award,
-  CalendarDays,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 import { Badge } from '@/components/ui/Badge';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -298,9 +298,6 @@ const TrustStrip: React.FC<{ onGradeClick?: (grade: string) => void }> = ({ onGr
   return (
     <section className="bg-surface border-y border-border py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <p className="text-center text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] mb-6">
-          Trusted by schools across the USA
-        </p>
         {/* Grade chips — clickable, feeds into search box */}
         <div className="flex flex-wrap justify-center gap-2">
           {grades.map((g) => (
@@ -506,11 +503,8 @@ const DashboardPreviewSection: React.FC = () => {
               <div className="bg-white flex" style={{ minHeight: '420px' }}>
                 {/* Sidebar */}
                 <div className="w-48 border-r border-border bg-surface shrink-0 p-4 space-y-1">
-                  <div className="flex items-center gap-2 mb-5 px-1">
-                    <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                      <GraduationCap className="size-4 text-white" />
-                    </div>
-                    <span className="text-sm font-extrabold text-foreground">Learnfyra</span>
+                  <div className="mb-5 px-1">
+                    <Logo size="sm" className="h-7 w-auto" />
                   </div>
                   {[
                     { icon: BarChart3, label: 'Dashboard', active: true },
@@ -902,6 +896,8 @@ const TestimonialsSection: React.FC = () => (
   </section>
 );
 
+const SHOW_TESTIMONIALS = false; // Keep available for future use on the Home page.
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CTA BANNER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -948,12 +944,7 @@ const CTASection: React.FC<{ onTryWorksheet?: () => void; ctaLabel?: string }> =
           onClick={onTryWorksheet}
         >
           {ctaLabel} — Free
-          <ArrowRight className="size-5" />
         </Button>
-        <button className="inline-flex items-center gap-2 px-7 h-12 rounded-xl border-2 border-white/30 text-white text-[15px] font-bold transition-all duration-150 hover:bg-white/10 hover:border-white/50">
-          <CalendarDays className="size-5" />
-          Schedule a Demo
-        </button>
       </div>
     </FadeIn>
   </section>
@@ -1010,7 +1001,7 @@ const Landing: React.FC = () => {
         <DashboardPreviewSection />
         <HowItWorksSection />
         <RoleCardsSection />
-        <TestimonialsSection />
+        {SHOW_TESTIMONIALS && <TestimonialsSection />}
         <CTASection onTryWorksheet={handleCtaClick} ctaLabel={ctaLabel} />
       </main>
       <Footer />

@@ -64,7 +64,7 @@ const DoNotSellPage: React.FC = () => {
             </p>
             <p className="text-sm text-foreground leading-relaxed mb-4">
               This applies to all users of the Learnfyra platform, including students, teachers,
-              parents, and tutors. We collect only the information needed to provide our educational
+              and parents. We collect only the information needed to provide our educational
               service, and we keep it strictly for that purpose.
             </p>
             <p className="text-sm text-foreground leading-relaxed">
