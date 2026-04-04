@@ -1,14 +1,16 @@
 # M01 Auth Frontend — Requirements Spec
 **Module:** M01
 **Status:** Pending Implementation
-**Version:** 1.1
-**Last Updated:** 2026-03-28
+**Version:** 2.0 — COPPA-Compliant Authentication
+**Last Updated:** 2026-04-03
 
 ---
 
 ## Overview
 
-M01 Frontend covers all client-side authentication surfaces for Learnfyra: the login page, the registration page with role selection, the Google OAuth PKCE redirect flow, secure token storage with auto-refresh, protected route enforcement, and the logout UI. These pages are served as static files from `learnfyra-{env}-s3-frontend` via CloudFront. All token exchange calls target the frozen auth API contracts in `04-api-contracts/auth-api.md`. The backend auth handlers (M01-BE-01 through M01-BE-08) are already deployed and are not touched by this module.
+M01 Frontend covers all client-side authentication surfaces for Learnfyra: the login page, the registration page with role selection and **COPPA-compliant age gate**, the Google OAuth PKCE redirect flow, secure token storage with auto-refresh, protected route enforcement, the **parent-gated child registration flow**, the **parental consent page**, and the **Parent Dashboard for child account management**. These pages are served as static files from `learnfyra-{env}-s3-frontend` via CloudFront. All token exchange calls target the auth API contracts in `04-api-contracts/auth-api.md`. The backend auth handlers (M01-BE-01 through M01-BE-08) are already deployed and are not touched by this module.
+
+**COPPA Compliance:** Since Learnfyra serves children under 13, the frontend MUST implement an age gate, prevent direct signup for children under 13, and provide a parent-gated consent flow. See `02-modules/auth.md` and `07-requirements/auth/README.md` for the full COPPA architecture.
 
 ---
 
@@ -56,6 +58,36 @@ M01 Frontend covers all client-side authentication surfaces for Learnfyra: the l
 **So that** I see only the features relevant to me immediately after authentication
 **Priority:** P1
 
+### US-FE-AUTH-008: Age Gate Before Registration (COPPA)
+**As a** new visitor
+**I want to** see an age verification question before any registration form
+**So that** I am directed to the correct registration flow (standard or parent-gated)
+**Priority:** P0
+
+### US-FE-AUTH-009: Parent-Gated Child Registration (COPPA)
+**As a** child under 13
+**I want to** provide my parent's email to request an account
+**So that** my parent can consent and create my account securely
+**Priority:** P0
+
+### US-FE-AUTH-010: Parental Consent Page (COPPA)
+**As a** parent
+**I want to** review what data will be collected about my child and give explicit consent
+**So that** I can make an informed decision about my child's use of the platform
+**Priority:** P0
+
+### US-FE-AUTH-011: Parent Dashboard — Child Management (COPPA)
+**As a** parent
+**I want to** view, manage, and delete my children's accounts from a dashboard
+**So that** I maintain control over my children's data as required by COPPA
+**Priority:** P0
+
+### US-FE-AUTH-012: Start Child Session (COPPA)
+**As a** parent
+**I want to** start a supervised session for my child from my dashboard
+**So that** my child can use the platform with restricted permissions
+**Priority:** P1
+
 ---
 
 ## Functional Requirements
@@ -75,16 +107,71 @@ The system SHALL provide a login page served at `/login.html` and stored at `fro
 - If a valid in-memory or refreshable access token already exists, the page SHALL redirect to the role-appropriate dashboard without rendering the form.
 - A link to `/register.html` SHALL be present.
 
-### REQ-FE-AUTH-002: Register Page (register.html)
+### REQ-FE-AUTH-002: Register Page with Age Gate (register.html)
 **Priority:** P0
-**Tasks:** M01-FE-02
+**Tasks:** M01-FE-02, M01-FE-06 (new — age gate)
 
-The system SHALL provide a registration page at `/register.html` and stored at `frontend/register.html`. The page SHALL contain:
-- Full name, email, password, and confirm-password inputs.
-- A role selector offering exactly three options: Student, Teacher, Parent. The Admin role SHALL NOT appear.
-- Client-side validation that runs before the API call: passwords must match, password must be at least 8 characters with at least one uppercase letter, one number, and one special character. Errors SHALL be shown adjacent to the relevant field.
-- On submission with valid inputs, the page SHALL initiate the Cognito registration flow (mechanism to be resolved in Open Questions).
-- A link back to `/login.html` SHALL be present.
+The system SHALL provide a registration page at `/register.html` and stored at `frontend/register.html`. The page SHALL implement a multi-step flow:
+
+**Step 1 — Age Gate (COPPA):**
+- The FIRST screen shown SHALL be an age gate: "Are you under 13?"
+- Two clear buttons: "Yes, I am under 13" and "No, I am 13 or older"
+- NO personal data input fields are visible at this step
+- The age gate CANNOT be skipped or dismissed — it blocks all further interaction
+
+**Step 2a — If "No, I am 13 or older" (standard registration):**
+- Full name, email, password, and confirm-password inputs
+- A role selector offering exactly three options: Student, Teacher, Parent. The Admin role SHALL NOT appear
+- Client-side validation: passwords must match, password must be at least 8 characters with at least one uppercase letter, one number, and one special character. Errors SHALL be shown adjacent to the relevant field
+- On submission with valid inputs, the page SHALL initiate the Cognito registration flow
+- A link back to `/login.html` SHALL be present
+
+**Step 2b — If "Yes, I am under 13" (parent-gated flow):**
+- The page SHALL display ONLY two fields:
+  - Parent email (required) — with help text: "Enter your parent's or guardian's email address"
+  - Your nickname (optional) — with help text: "What should we call you?"
+- NO email, password, Google OAuth, or role selector fields are shown
+- On submission, the page SHALL call `POST /api/auth/child-request` with `{ parentEmail, childNickname }`
+- On 202 response, show a child-friendly message: "We sent an email to your parent. Ask them to check their inbox!"
+- On 429 response, show: "Too many requests. Please try again tomorrow."
+- NO account is created. NO Cognito interaction occurs. NO token is issued.
+
+### REQ-FE-AUTH-002a: Parental Consent Page (consent.html) — NEW (COPPA)
+**Priority:** P0
+**Tasks:** M01-FE-07 (new)
+
+The system SHALL provide a consent page at `/consent.html` and stored at `frontend/consent.html`. This page is accessed via the consent link in the parent email. The page SHALL:
+
+1. Read the `token` parameter from the URL query string
+2. Call `GET /api/auth/consent/:token` to retrieve consent details
+3. If the token is invalid/expired, show: "This consent link has expired. Your child can request a new one."
+4. If valid, display:
+   - Child's nickname (if provided)
+   - Clear description of what data is collected
+   - Parent's COPPA rights (review, download, delete, revoke)
+   - Link to the full Privacy Policy
+   - If parent is NOT logged in: registration/login form (email/password or Google OAuth)
+   - An affirmative "I Consent and Create Account" button (NOT a pre-checked checkbox)
+5. On clicking "I Consent", call `POST /api/auth/consent/:token` with consent and parent account data
+6. On 201 response, redirect parent to the Parent Dashboard showing the newly created child account
+
+### REQ-FE-AUTH-002b: Parent Dashboard (parent-dashboard.html) — NEW (COPPA)
+**Priority:** P0
+**Tasks:** M01-FE-08 (new)
+
+The system SHALL provide a Parent Dashboard at `/parent-dashboard.html`. This page requires authentication (parent role). The page SHALL:
+
+1. Call `GET /api/auth/children` to list all linked child accounts
+2. For each child, display:
+   - Child name/nickname
+   - Account creation date
+   - Last active date
+   - Actions: "Start Session", "View Data", "Download Data", "Delete Account"
+3. **Start Session:** Call `POST /api/auth/child-session`, then redirect to `index.html` with the child's scoped token
+4. **View Data:** Call `GET /api/auth/child-data/:childId` and display a summary of worksheets and scores
+5. **Download Data:** Call `GET /api/auth/child-data/:childId` and trigger a JSON file download
+6. **Delete Account:** Show a confirmation dialog ("This will permanently delete [child name]'s account and all their data. This cannot be undone."), then call `DELETE /api/auth/children/:childId`
+7. **Revoke Consent:** Show a dialog explaining revocation, accept an optional reason, then call `POST /api/auth/revoke-consent/:childId`
 
 ### REQ-FE-AUTH-003: Google OAuth PKCE Client-Side Flow
 **Priority:** P0
@@ -232,6 +319,58 @@ Every authenticated page's navigation SHALL include a "Sign Out" button or link.
 **When** the error is displayed
 **Then** the submit button is disabled for 60 seconds and the message "Too many attempts. Please wait 60 seconds." is visible.
 
+### COPPA Acceptance Criteria (new)
+
+### AC-FE-AUTH-015: Age Gate Displays First
+**Given** a new visitor navigates to `register.html`
+**When** the page loads
+**Then** an age gate ("Are you under 13?") is the first and only interactive element visible — no name, email, or password fields are rendered.
+
+### AC-FE-AUTH-016: Age Gate Cannot Be Bypassed
+**Given** a visitor is on the age gate step of `register.html`
+**When** they attempt to proceed without selecting an age option (e.g., via URL manipulation or form injection)
+**Then** no registration form is rendered and no API calls are made.
+
+### AC-FE-AUTH-017: Under-13 Flow Shows Minimal Fields Only
+**Given** a visitor selects "Yes, I am under 13"
+**When** the form updates
+**Then** only two fields are shown: parent email (required) and nickname (optional). No email, password, Google sign-in, or role selector appears.
+
+### AC-FE-AUTH-018: Under-13 Submission Does Not Create Account
+**Given** a child enters a parent email and submits
+**When** `POST /api/auth/child-request` returns 202
+**Then** no token is stored in localStorage or memory, no redirect occurs, and a message says "We sent an email to your parent."
+
+### AC-FE-AUTH-019: Consent Page Displays Data Practices
+**Given** a parent clicks the consent link in their email
+**When** `consent.html` loads with a valid token
+**Then** the page displays: what data is collected, how it is used, parent rights under COPPA, and a link to the Privacy Policy.
+
+### AC-FE-AUTH-020: Consent Page Requires Affirmative Action
+**Given** a parent is on the consent page
+**When** they have not clicked the "I Consent" button
+**Then** no account creation or data collection occurs — the consent checkbox (if any) is NOT pre-checked.
+
+### AC-FE-AUTH-021: Parent Dashboard Lists Children
+**Given** a parent is logged in and navigates to `parent-dashboard.html`
+**When** `GET /api/auth/children` returns a list
+**Then** each child is shown with name, creation date, last active date, and action buttons.
+
+### AC-FE-AUTH-022: Child Account Deletion Requires Confirmation
+**Given** a parent clicks "Delete Account" for a child on the Parent Dashboard
+**When** the confirmation dialog appears
+**Then** the dialog clearly states that deletion is permanent and includes the child's name, and deletion only proceeds after explicit confirmation.
+
+### AC-FE-AUTH-023: Child Session Starts with Scoped Token
+**Given** a parent clicks "Start Session" for a child
+**When** `POST /api/auth/child-session` returns 200
+**Then** the page redirects to `index.html` with a scoped child token that has `ageGroup: under13` and limited permissions.
+
+### AC-FE-AUTH-024: Expired Consent Token Shows Clear Message
+**Given** a parent clicks a consent link that has expired (72+ hours)
+**When** `GET /api/auth/consent/:token` returns 404
+**Then** the page shows "This consent link has expired. Your child can request a new one." with no form fields.
+
 ---
 
 ## Local Development Requirements
@@ -303,6 +442,10 @@ Before any AWS work begins, verify the following sequence on `http://localhost:3
 - Admin console authentication UI — provisioned out-of-band only.
 - Two-factor authentication — Phase 2.
 - In-app notification for parent-child link confirmation — email handled by M01-BE-07.
+- Individual child login codes (children log in via parent session in Phase 1) — Phase 2.
+- Credit card or government ID verification for parental consent — Phase 2 (Email Plus method in Phase 1).
+- Child session daily time limits (configurable by parent) — Phase 2.
+- FERPA compliance for teacher-managed student data — separate legal review needed.
 
 ---
 
@@ -327,3 +470,7 @@ Before any AWS work begins, verify the following sequence on `http://localhost:3
 2. The OAuth callback destination: is it handled on `login.html` itself (via URL `?code=` query string detection), or on a dedicated `frontend/callback.html`? This determines the `redirect_uri` registered in Cognito and Google Cloud Console and must be decided before task M01-FE-03 begins.
 3. `window.LEARNFYRA_CONFIG` injection mechanism: embedded by the CI/CD pipeline as a generated `config.js` file included in each HTML page, or injected by a CloudFront Function? This is a DevOps decision that blocks M01-FE-03 and M01-FE-08.
 4. Should the "Sign Out" button appear on `solve.html` (guest-accessible)? Clarification needed on which pages conditionally show auth UI vs always show it.
+5. **(COPPA)** Should the age gate persist the response in sessionStorage to avoid re-asking on page reload during registration? Or should it always re-ask to prevent circumvention?
+6. **(COPPA)** Should `consent.html` support the parent creating an account via Google OAuth as part of the consent flow, or require email/password first with Google linking later?
+7. **(COPPA)** Should the Parent Dashboard be a separate page (`parent-dashboard.html`) or a section within a unified dashboard page?
+8. **(COPPA)** Should child session tokens be stored in sessionStorage (cleared on tab close) rather than localStorage for additional safety?
