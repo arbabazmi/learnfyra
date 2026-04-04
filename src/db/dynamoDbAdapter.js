@@ -95,6 +95,10 @@ const TABLE_CONFIG = {
   adminauditevents:   { envVar: 'ADMIN_AUDIT_EVENTS_TABLE_NAME',  suffix: 'AdminAuditEvents',   pk: 'id'          },
   adminidempotency:   { envVar: 'ADMIN_IDEMPOTENCY_TABLE_NAME',   suffix: 'AdminIdempotency',   pk: 'id'          },
   repeatcapoverrides: { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME', suffix: 'RepeatCapOverrides', pk: 'id'         },
+  school:             { envVar: 'SCHOOL_TABLE_NAME',              suffix: 'School',             pk: 'PK', sk: 'SK' },
+  schooluserlink:     { envVar: 'SCHOOL_USER_LINK_TABLE_NAME',    suffix: 'SchoolUserLink',     pk: 'PK', sk: 'SK' },
+  auditlog:           { envVar: 'AUDIT_LOG_TABLE_NAME',           suffix: 'AuditLog',           pk: 'PK', sk: 'SK' },
+  compliancelog:      { envVar: 'COMPLIANCE_LOG_TABLE_NAME',      suffix: 'ComplianceLog',      pk: 'PK', sk: 'SK' },
 };
 
 /**
