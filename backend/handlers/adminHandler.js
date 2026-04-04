@@ -7,7 +7,13 @@ import { createHash, randomUUID } from 'crypto';
 import { validateToken, requireRole } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { writeAuditLog, extractIp, extractUserAgent } from '../../src/admin/auditLogger.js';
+import { writeComplianceLog } from '../../src/admin/complianceLogger.js';
+import { executeCoppaDeletion } from '../../src/admin/coppaDeleter.js';
+import { getCostDashboard, getTopExpensiveRequests } from '../../src/admin/costDashboard.js';
+import { validateConfigValue } from '../../src/admin/configValidator.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -840,6 +846,846 @@ async function handleListAuditEvents(queryStringParameters) {
   };
 }
 
+// ── Path parameter helper ─────────────────────────────────────────────────────
+
+/**
+ * Extracts a captured group from a path using a regex pattern.
+ * @param {string} path
+ * @param {RegExp} pattern
+ * @returns {string|null}
+ */
+function extractPathParam(path, pattern) {
+  const match = path.match(pattern);
+  return match ? match[1] : null;
+}
+
+// ── Lazy Cognito client ───────────────────────────────────────────────────────
+
+let _cognitoClient = null;
+function getCognitoClient() {
+  if (!_cognitoClient) {
+    _cognitoClient = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
+  }
+  return _cognitoClient;
+}
+
+// ── Config DynamoDB helpers ───────────────────────────────────────────────────
+
+function resolveConfigTable() {
+  return (
+    process.env.CONFIG_TABLE_NAME ||
+    `LearnfyraConfig-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`
+  );
+}
+
+function resolveSchoolTable() {
+  return (
+    process.env.SCHOOL_TABLE_NAME ||
+    `LearnfyraSchools-${process.env.DYNAMO_ENV || process.env.NODE_ENV || 'local'}`
+  );
+}
+
+function getDocClient() {
+  const cfg = { region: process.env.AWS_REGION || 'us-east-1' };
+  const endpoint = process.env.DYNAMODB_ENDPOINT;
+  if (endpoint) {
+    cfg.endpoint = endpoint;
+    cfg.credentials = {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'local',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'local',
+    };
+  }
+  return DynamoDBDocumentClient.from(new DynamoDBClient(cfg), {
+    marshallOptions: { removeUndefinedValues: true },
+  });
+}
+
+// ── M07: User Management ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/users — list/search users
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleListUsers(event, decoded) {
+  const db = getDbAdapter();
+  const qs = event.queryStringParameters || {};
+
+  const limitParsed = parseIntParam(qs.limit, 50, 1, 200);
+  if (limitParsed.error) {
+    return errorResponse(400, 'limit must be an integer between 1 and 200.', 'ADMIN_INVALID_REQUEST');
+  }
+  const offsetParsed = parseIntParam(qs.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  if (offsetParsed.error) {
+    return errorResponse(400, 'offset must be a non-negative integer.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const all = await db.listAll('users');
+  let items = Array.isArray(all) ? all : [];
+
+  if (qs.role) items = items.filter((u) => u.role === qs.role);
+  if (qs.suspended === 'true') items = items.filter((u) => u.suspended === true);
+  if (qs.suspended === 'false') items = items.filter((u) => u.suspended !== true);
+  if (qs.q) {
+    const q = qs.q.toLowerCase();
+    items = items.filter(
+      (u) =>
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.name && u.name.toLowerCase().includes(q)),
+    );
+  }
+
+  const page = items
+    .slice(offsetParsed.value, offsetParsed.value + limitParsed.value)
+    .map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      suspended: u.suspended || false,
+      createdAt: u.createdAt,
+    }));
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      users: page,
+      pagination: { limit: limitParsed.value, offset: offsetParsed.value, returned: page.length },
+    }),
+  };
+}
+
+/**
+ * GET /api/admin/users/:userId — get user detail
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleGetUser(event, decoded, userId) {
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ user }),
+  };
+}
+
+/**
+ * PATCH /api/admin/users/:userId/suspend — suspend user
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleSuspendUser(event, decoded, userId) {
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  const reasonErr = validateReason(body.reason || '');
+  if (reasonErr) return errorResponse(400, reasonErr, 'ADMIN_INVALID_REQUEST');
+
+  const now = new Date().toISOString();
+  await db.putItem('users', { ...user, suspended: true, suspendedAt: now, suspendedBy: decoded.sub });
+
+  writeAuditLog({
+    action: 'admin.user.suspend',
+    actorId: decoded.sub,
+    targetId: userId,
+    reason: body.reason.trim(),
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'User suspended.', userId, suspendedAt: now }),
+  };
+}
+
+/**
+ * PATCH /api/admin/users/:userId/unsuspend — unsuspend user
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleUnsuspendUser(event, decoded, userId) {
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  const reasonErr = validateReason(body.reason || '');
+  if (reasonErr) return errorResponse(400, reasonErr, 'ADMIN_INVALID_REQUEST');
+
+  const now = new Date().toISOString();
+  const { suspendedAt, suspendedBy, ...rest } = user;
+  await db.putItem('users', { ...rest, suspended: false, unsuspendedAt: now, unsuspendedBy: decoded.sub });
+
+  writeAuditLog({
+    action: 'admin.user.unsuspend',
+    actorId: decoded.sub,
+    targetId: userId,
+    reason: body.reason.trim(),
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'User unsuspended.', userId, unsuspendedAt: now }),
+  };
+}
+
+/**
+ * POST /api/admin/users/:userId/force-logout — force Cognito logout
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleForceLogout(event, decoded, userId) {
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+
+  const userPoolId = process.env.COGNITO_USER_POOL_ID;
+  if (!userPoolId) return errorResponse(500, 'Cognito user pool not configured.', 'ADMIN_INTERNAL_ERROR');
+
+  try {
+    await getCognitoClient().send(
+      new AdminUserGlobalSignOutCommand({ UserPoolId: userPoolId, Username: user.email || userId }),
+    );
+  } catch (err) {
+    console.error('Cognito AdminUserGlobalSignOut failed:', err);
+    return errorResponse(502, 'Failed to sign out user from Cognito.', 'ADMIN_UPSTREAM_ERROR');
+  }
+
+  writeAuditLog({
+    action: 'admin.user.force-logout',
+    actorId: decoded.sub,
+    targetId: userId,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: new Date().toISOString(),
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'User signed out from all sessions.', userId }),
+  };
+}
+
+/**
+ * PATCH /api/admin/users/:userId/role — change user role
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleChangeRole(event, decoded, userId) {
+  const VALID_ROLES = ['student', 'teacher', 'parent', 'school_admin', 'super_admin'];
+  if (decoded.sub === userId) {
+    return errorResponse(400, 'Admins cannot change their own role.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  if (!VALID_ROLES.includes(body.role)) {
+    return errorResponse(400, `role must be one of: ${VALID_ROLES.join(', ')}.`, 'ADMIN_INVALID_REQUEST');
+  }
+  const reasonErr = validateReason(body.reason || '');
+  if (reasonErr) return errorResponse(400, reasonErr, 'ADMIN_INVALID_REQUEST');
+
+  const now = new Date().toISOString();
+  const previousRole = user.role;
+  await db.putItem('users', { ...user, role: body.role, roleChangedAt: now, roleChangedBy: decoded.sub });
+
+  writeAuditLog({
+    action: 'admin.user.role-change',
+    actorId: decoded.sub,
+    targetId: userId,
+    before: { role: previousRole },
+    after: { role: body.role },
+    reason: body.reason.trim(),
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'User role updated.', userId, role: body.role, changedAt: now }),
+  };
+}
+
+/**
+ * DELETE /api/admin/users/:userId — COPPA deletion
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} userId
+ */
+async function handleCoppaDelete(event, decoded, userId) {
+  const db = getDbAdapter();
+  const user = await db.getItem('users', userId);
+  if (!user) return errorResponse(404, 'User not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  if (!body.confirmationToken) {
+    return errorResponse(400, 'confirmationToken is required for COPPA deletion.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const now = new Date().toISOString();
+
+  // Compliance log must succeed before deletion proceeds
+  await writeComplianceLog({
+    event: 'coppa.deletion.initiated',
+    actorId: decoded.sub,
+    targetUserId: userId,
+    confirmationToken: body.confirmationToken,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    initiatedAt: now,
+  });
+
+  await executeCoppaDeletion(userId, { actorId: decoded.sub, confirmationToken: body.confirmationToken });
+
+  writeAuditLog({
+    action: 'admin.user.coppa-delete',
+    actorId: decoded.sub,
+    targetId: userId,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'User data deleted per COPPA request.', userId, deletedAt: now }),
+  };
+}
+
+// ── M07: Question Bank Moderation ────────────────────────────────────────────
+
+/**
+ * GET /api/admin/question-bank — list questions with filters
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleListQuestions(event, decoded) {
+  const db = getDbAdapter();
+  const qs = event.queryStringParameters || {};
+
+  const limitParsed = parseIntParam(qs.limit, 50, 1, 200);
+  if (limitParsed.error) {
+    return errorResponse(400, 'limit must be an integer between 1 and 200.', 'ADMIN_INVALID_REQUEST');
+  }
+  const offsetParsed = parseIntParam(qs.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  if (offsetParsed.error) {
+    return errorResponse(400, 'offset must be a non-negative integer.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const all = await db.listAll('questions');
+  let items = Array.isArray(all) ? all : [];
+
+  if (qs.flagged === 'true') items = items.filter((q) => q.flagged === true);
+  if (qs.flagged === 'false') items = items.filter((q) => q.flagged !== true);
+  if (qs.deleted === 'true') items = items.filter((q) => q.deleted === true);
+  if (qs.deleted !== 'true') items = items.filter((q) => q.deleted !== true);
+  if (qs.subject) items = items.filter((q) => q.subject === qs.subject);
+  if (qs.grade) items = items.filter((q) => String(q.grade) === String(qs.grade));
+
+  const page = items.slice(offsetParsed.value, offsetParsed.value + limitParsed.value);
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      questions: page,
+      pagination: { limit: limitParsed.value, offset: offsetParsed.value, returned: page.length },
+    }),
+  };
+}
+
+/**
+ * PATCH /api/admin/question-bank/:questionId/flag — flag a question
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} questionId
+ */
+async function handleFlagQuestion(event, decoded, questionId) {
+  const db = getDbAdapter();
+  const question = await db.getItem('questions', questionId);
+  if (!question) return errorResponse(404, 'Question not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  const now = new Date().toISOString();
+  await db.putItem('questions', {
+    ...question,
+    flagged: true,
+    flaggedAt: now,
+    flaggedBy: decoded.sub,
+    flagReason: body.reason || null,
+  });
+
+  writeAuditLog({
+    action: 'admin.question.flag',
+    actorId: decoded.sub,
+    targetId: questionId,
+    reason: body.reason || null,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Question flagged.', questionId, flaggedAt: now }),
+  };
+}
+
+/**
+ * PATCH /api/admin/question-bank/:questionId/unflag — unflag a question
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} questionId
+ */
+async function handleUnflagQuestion(event, decoded, questionId) {
+  const db = getDbAdapter();
+  const question = await db.getItem('questions', questionId);
+  if (!question) return errorResponse(404, 'Question not found.', 'ADMIN_NOT_FOUND');
+
+  const now = new Date().toISOString();
+  const { flaggedAt, flaggedBy, flagReason, ...rest } = question;
+  await db.putItem('questions', { ...rest, flagged: false, unflaggedAt: now, unflaggedBy: decoded.sub });
+
+  writeAuditLog({
+    action: 'admin.question.unflag',
+    actorId: decoded.sub,
+    targetId: questionId,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Question unflagged.', questionId, unflaggedAt: now }),
+  };
+}
+
+/**
+ * DELETE /api/admin/question-bank/:questionId — soft-delete question
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} questionId
+ */
+async function handleSoftDeleteQuestion(event, decoded, questionId) {
+  const db = getDbAdapter();
+  const question = await db.getItem('questions', questionId);
+  if (!question) return errorResponse(404, 'Question not found.', 'ADMIN_NOT_FOUND');
+  if (question.deleted) return errorResponse(409, 'Question is already deleted.', 'ADMIN_CONFLICT');
+
+  const body = JSON.parse(event.body || '{}');
+  const now = new Date().toISOString();
+  await db.putItem('questions', {
+    ...question,
+    deleted: true,
+    deletedAt: now,
+    deletedBy: decoded.sub,
+    deleteReason: body.reason || null,
+  });
+
+  writeAuditLog({
+    action: 'admin.question.soft-delete',
+    actorId: decoded.sub,
+    targetId: questionId,
+    reason: body.reason || null,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Question soft-deleted.', questionId, deletedAt: now }),
+  };
+}
+
+// ── M07: Cost Dashboard ───────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/cost-dashboard — cost aggregation by window
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleCostDashboard(event, decoded) {
+  const qs = event.queryStringParameters || {};
+  const window = qs.window || 'day';
+  const VALID_WINDOWS = ['hour', 'day', 'week', 'month'];
+  if (!VALID_WINDOWS.includes(window)) {
+    return errorResponse(400, `window must be one of: ${VALID_WINDOWS.join(', ')}.`, 'ADMIN_INVALID_REQUEST');
+  }
+
+  const data = await getCostDashboard({ window, from: qs.from, to: qs.to });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ window, ...data }),
+  };
+}
+
+/**
+ * GET /api/admin/cost-dashboard/top-expensive — top 10 expensive requests
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleTopExpensive(event, decoded) {
+  const qs = event.queryStringParameters || {};
+  const limitParsed = parseIntParam(qs.limit, 10, 1, 100);
+  if (limitParsed.error) {
+    return errorResponse(400, 'limit must be an integer between 1 and 100.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const data = await getTopExpensiveRequests({ limit: limitParsed.value, from: qs.from, to: qs.to });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ requests: data, limit: limitParsed.value }),
+  };
+}
+
+// ── M07: Config Management ────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/config — list all config entries
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleGetAllConfig(event, decoded) {
+  const docClient = getDocClient();
+  const tableName = resolveConfigTable();
+
+  const result = await docClient.send(new ScanCommand({ TableName: tableName }));
+  const items = result.Items || [];
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ config: items }),
+  };
+}
+
+/**
+ * GET /api/admin/config/:configType — get specific config
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} configType
+ */
+async function handleGetConfigByKey(event, decoded, configType) {
+  const docClient = getDocClient();
+  const tableName = resolveConfigTable();
+
+  const result = await docClient.send(
+    new GetCommand({ TableName: tableName, Key: { PK: `CONFIG#${configType}`, SK: 'METADATA' } }),
+  );
+
+  if (!result.Item) return errorResponse(404, 'Config not found.', 'ADMIN_NOT_FOUND');
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ config: result.Item }),
+  };
+}
+
+/**
+ * PUT /api/admin/config/:configType — update config with type validation
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} configType
+ */
+async function handleUpdateConfig(event, decoded, configType) {
+  const body = JSON.parse(event.body || '{}');
+  const validationError = validateConfigValue(configType, body.value);
+  if (validationError) return errorResponse(400, validationError, 'ADMIN_INVALID_REQUEST');
+
+  const docClient = getDocClient();
+  const tableName = resolveConfigTable();
+  const now = new Date().toISOString();
+
+  const item = {
+    PK: `CONFIG#${configType}`,
+    SK: 'METADATA',
+    configType,
+    value: body.value,
+    updatedAt: now,
+    updatedBy: decoded.sub,
+  };
+
+  await docClient.send(new PutCommand({ TableName: tableName, Item: item }));
+
+  writeAuditLog({
+    action: 'admin.config.update',
+    actorId: decoded.sub,
+    targetId: configType,
+    after: { value: body.value },
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Config updated.', configType, updatedAt: now }),
+  };
+}
+
+// ── M07: School Management ────────────────────────────────────────────────────
+
+/**
+ * POST /api/admin/schools — create school
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleCreateSchool(event, decoded) {
+  const body = JSON.parse(event.body || '{}');
+  if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+    return errorResponse(400, 'name is required.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const docClient = getDocClient();
+  const tableName = resolveSchoolTable();
+  const schoolId = randomUUID();
+  const now = new Date().toISOString();
+
+  const item = {
+    PK: `SCHOOL#${schoolId}`,
+    SK: 'METADATA',
+    schoolId,
+    name: body.name.trim(),
+    district: body.district || null,
+    state: body.state || null,
+    contactEmail: body.contactEmail || null,
+    createdAt: now,
+    createdBy: decoded.sub,
+    updatedAt: now,
+  };
+
+  await docClient.send(new PutCommand({ TableName: tableName, Item: item }));
+
+  writeAuditLog({
+    action: 'admin.school.create',
+    actorId: decoded.sub,
+    targetId: schoolId,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 201,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'School created.', schoolId, createdAt: now }),
+  };
+}
+
+/**
+ * GET /api/admin/schools — list schools
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleListSchools(event, decoded) {
+  const docClient = getDocClient();
+  const tableName = resolveSchoolTable();
+
+  const result = await docClient.send(
+    new ScanCommand({ TableName: tableName, FilterExpression: 'SK = :sk', ExpressionAttributeValues: { ':sk': 'METADATA' } }),
+  );
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ schools: result.Items || [] }),
+  };
+}
+
+/**
+ * GET /api/admin/schools/:schoolId — get school
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} schoolId
+ */
+async function handleGetSchool(event, decoded, schoolId) {
+  const docClient = getDocClient();
+  const tableName = resolveSchoolTable();
+
+  const result = await docClient.send(
+    new GetCommand({ TableName: tableName, Key: { PK: `SCHOOL#${schoolId}`, SK: 'METADATA' } }),
+  );
+
+  if (!result.Item) return errorResponse(404, 'School not found.', 'ADMIN_NOT_FOUND');
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ school: result.Item }),
+  };
+}
+
+/**
+ * PATCH /api/admin/schools/:schoolId — update school
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} schoolId
+ */
+async function handleUpdateSchool(event, decoded, schoolId) {
+  const docClient = getDocClient();
+  const tableName = resolveSchoolTable();
+
+  const existing = await docClient.send(
+    new GetCommand({ TableName: tableName, Key: { PK: `SCHOOL#${schoolId}`, SK: 'METADATA' } }),
+  );
+  if (!existing.Item) return errorResponse(404, 'School not found.', 'ADMIN_NOT_FOUND');
+
+  const body = JSON.parse(event.body || '{}');
+  const now = new Date().toISOString();
+  const ALLOWED_FIELDS = ['name', 'district', 'state', 'contactEmail'];
+  const updates = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (body[field] !== undefined) updates[field] = body[field];
+  }
+  if (Object.keys(updates).length === 0) {
+    return errorResponse(400, 'No valid fields provided for update.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const updated = { ...existing.Item, ...updates, updatedAt: now, updatedBy: decoded.sub };
+  await docClient.send(new PutCommand({ TableName: tableName, Item: updated }));
+
+  writeAuditLog({
+    action: 'admin.school.update',
+    actorId: decoded.sub,
+    targetId: schoolId,
+    after: updates,
+    ip: extractIp(event),
+    userAgent: extractUserAgent(event),
+    createdAt: now,
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'School updated.', schoolId, updatedAt: now }),
+  };
+}
+
+// ── M07: Audit & Compliance ───────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/audit-log — query audit log with filters
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleQueryAuditLog(event, decoded) {
+  const db = getDbAdapter();
+  const qs = event.queryStringParameters || {};
+
+  const limitParsed = parseIntParam(qs.limit, 50, 1, 500);
+  if (limitParsed.error) {
+    return errorResponse(400, 'limit must be an integer between 1 and 500.', 'ADMIN_INVALID_REQUEST');
+  }
+  const offsetParsed = parseIntParam(qs.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  if (offsetParsed.error) {
+    return errorResponse(400, 'offset must be a non-negative integer.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const all = await db.listAll('auditLog');
+  let items = Array.isArray(all) ? all : [];
+
+  if (qs.actorId) items = items.filter((e) => e.actorId === qs.actorId);
+  if (qs.action) items = items.filter((e) => e.action === qs.action);
+  if (qs.targetId) items = items.filter((e) => e.targetId === qs.targetId);
+  if (qs.from) items = items.filter((e) => e.createdAt >= qs.from);
+  if (qs.to) items = items.filter((e) => e.createdAt <= qs.to);
+
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const page = sorted.slice(offsetParsed.value, offsetParsed.value + limitParsed.value);
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      events: page,
+      pagination: { limit: limitParsed.value, offset: offsetParsed.value, returned: page.length },
+    }),
+  };
+}
+
+/**
+ * GET /api/admin/compliance-log — list compliance log
+ * @param {Object} event
+ * @param {Object} decoded
+ */
+async function handleListComplianceLog(event, decoded) {
+  const db = getDbAdapter();
+  const qs = event.queryStringParameters || {};
+
+  const limitParsed = parseIntParam(qs.limit, 50, 1, 500);
+  if (limitParsed.error) {
+    return errorResponse(400, 'limit must be an integer between 1 and 500.', 'ADMIN_INVALID_REQUEST');
+  }
+  const offsetParsed = parseIntParam(qs.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  if (offsetParsed.error) {
+    return errorResponse(400, 'offset must be a non-negative integer.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const all = await db.listAll('complianceLog');
+  let items = Array.isArray(all) ? all : [];
+
+  if (qs.eventType) items = items.filter((e) => e.event === qs.eventType);
+  if (qs.actorId) items = items.filter((e) => e.actorId === qs.actorId);
+  if (qs.targetUserId) items = items.filter((e) => e.targetUserId === qs.targetUserId);
+  if (qs.from) items = items.filter((e) => e.initiatedAt >= qs.from);
+  if (qs.to) items = items.filter((e) => e.initiatedAt <= qs.to);
+
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.initiatedAt || b.createdAt).getTime() - new Date(a.initiatedAt || a.createdAt).getTime(),
+  );
+
+  const page = sorted.slice(offsetParsed.value, offsetParsed.value + limitParsed.value);
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      entries: page,
+      pagination: { limit: limitParsed.value, offset: offsetParsed.value, returned: page.length },
+    }),
+  };
+}
+
 export const handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
 
@@ -889,6 +1735,129 @@ export const handler = async (event, context) => {
 
     if (method === 'GET' && path.endsWith('/api/admin/audit/events')) {
       return await handleListAuditEvents(event.queryStringParameters || {});
+    }
+
+    // ── M07: User Management ────────────────────────────────────────────────
+
+    if (method === 'GET' && /\/api\/admin\/users$/.test(path)) {
+      return await handleListUsers(event, decoded);
+    }
+
+    {
+      const userId = extractPathParam(path, /\/api\/admin\/users\/([^/]+)\/suspend$/);
+      if (method === 'PATCH' && userId) {
+        return await handleSuspendUser(event, decoded, userId);
+      }
+    }
+
+    {
+      const userId = extractPathParam(path, /\/api\/admin\/users\/([^/]+)\/unsuspend$/);
+      if (method === 'PATCH' && userId) {
+        return await handleUnsuspendUser(event, decoded, userId);
+      }
+    }
+
+    {
+      const userId = extractPathParam(path, /\/api\/admin\/users\/([^/]+)\/force-logout$/);
+      if (method === 'POST' && userId) {
+        return await handleForceLogout(event, decoded, userId);
+      }
+    }
+
+    {
+      const userId = extractPathParam(path, /\/api\/admin\/users\/([^/]+)\/role$/);
+      if (method === 'PATCH' && userId) {
+        return await handleChangeRole(event, decoded, userId);
+      }
+    }
+
+    {
+      const userId = extractPathParam(path, /\/api\/admin\/users\/([^/]+)$/);
+      if (method === 'GET' && userId) {
+        return await handleGetUser(event, decoded, userId);
+      }
+      if (method === 'DELETE' && userId) {
+        return await handleCoppaDelete(event, decoded, userId);
+      }
+    }
+
+    // ── M07: Question Bank Moderation ───────────────────────────────────────
+
+    if (method === 'GET' && /\/api\/admin\/question-bank$/.test(path)) {
+      return await handleListQuestions(event, decoded);
+    }
+
+    {
+      const questionId = extractPathParam(path, /\/api\/admin\/question-bank\/([^/]+)\/flag$/);
+      if (method === 'PATCH' && questionId) {
+        return await handleFlagQuestion(event, decoded, questionId);
+      }
+    }
+
+    {
+      const questionId = extractPathParam(path, /\/api\/admin\/question-bank\/([^/]+)\/unflag$/);
+      if (method === 'PATCH' && questionId) {
+        return await handleUnflagQuestion(event, decoded, questionId);
+      }
+    }
+
+    {
+      const questionId = extractPathParam(path, /\/api\/admin\/question-bank\/([^/]+)$/);
+      if (method === 'DELETE' && questionId) {
+        return await handleSoftDeleteQuestion(event, decoded, questionId);
+      }
+    }
+
+    // ── M07: Cost Dashboard ─────────────────────────────────────────────────
+
+    if (method === 'GET' && /\/api\/admin\/cost-dashboard\/top-expensive$/.test(path)) {
+      return await handleTopExpensive(event, decoded);
+    }
+
+    if (method === 'GET' && /\/api\/admin\/cost-dashboard$/.test(path)) {
+      return await handleCostDashboard(event, decoded);
+    }
+
+    // ── M07: Config Management ──────────────────────────────────────────────
+
+    if (method === 'GET' && /\/api\/admin\/config$/.test(path)) {
+      return await handleGetAllConfig(event, decoded);
+    }
+
+    {
+      const configType = extractPathParam(path, /\/api\/admin\/config\/([^/]+)$/);
+      if (configType) {
+        if (method === 'GET') return await handleGetConfigByKey(event, decoded, configType);
+        if (method === 'PUT') return await handleUpdateConfig(event, decoded, configType);
+      }
+    }
+
+    // ── M07: School Management ──────────────────────────────────────────────
+
+    if (method === 'POST' && /\/api\/admin\/schools$/.test(path)) {
+      return await handleCreateSchool(event, decoded);
+    }
+
+    if (method === 'GET' && /\/api\/admin\/schools$/.test(path)) {
+      return await handleListSchools(event, decoded);
+    }
+
+    {
+      const schoolId = extractPathParam(path, /\/api\/admin\/schools\/([^/]+)$/);
+      if (schoolId) {
+        if (method === 'GET') return await handleGetSchool(event, decoded, schoolId);
+        if (method === 'PATCH') return await handleUpdateSchool(event, decoded, schoolId);
+      }
+    }
+
+    // ── M07: Audit & Compliance ─────────────────────────────────────────────
+
+    if (method === 'GET' && /\/api\/admin\/audit-log$/.test(path)) {
+      return await handleQueryAuditLog(event, decoded);
+    }
+
+    if (method === 'GET' && /\/api\/admin\/compliance-log$/.test(path)) {
+      return await handleListComplianceLog(event, decoded);
     }
 
     return errorResponse(404, 'Route not found.', 'ADMIN_NOT_FOUND');

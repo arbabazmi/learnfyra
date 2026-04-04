@@ -1289,6 +1289,117 @@ app.get('/api/admin/audit/events', async (req, res) => {
   }
 });
 
+// ── M07 Admin Routes (user mgmt, question bank, cost, config, schools, audit) ─
+
+/** Generic admin route helper — forwards Express request to adminHandler Lambda */
+function adminRoute(method, expressPath, lambdaPath) {
+  const httpMethod = method.toUpperCase();
+  const fn = method === 'delete' ? 'delete' : method;
+  app[fn](expressPath, async (req, res) => {
+    try {
+      const handler = await getAdminHandler();
+      const path = typeof lambdaPath === 'function' ? lambdaPath(req) : lambdaPath;
+      const result = await handler(
+        {
+          httpMethod,
+          path,
+          headers: req.headers,
+          body: req.body ? JSON.stringify(req.body) : null,
+          queryStringParameters: req.query && Object.keys(req.query).length ? req.query : null,
+          pathParameters: req.params || null,
+          requestContext: { requestId: randomUUID(), identity: { sourceIp: req.ip } },
+        },
+        { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-admin-local', getRemainingTimeInMillis: () => 15000 },
+      );
+      res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+    } catch (err) {
+      console.error('admin route error:', err);
+      res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+    }
+  });
+}
+
+// User management
+adminRoute('get',    '/api/admin/users',                          '/api/admin/users');
+adminRoute('get',    '/api/admin/users/:userId',                  r => `/api/admin/users/${r.params.userId}`);
+adminRoute('patch',  '/api/admin/users/:userId/suspend',          r => `/api/admin/users/${r.params.userId}/suspend`);
+adminRoute('patch',  '/api/admin/users/:userId/unsuspend',        r => `/api/admin/users/${r.params.userId}/unsuspend`);
+adminRoute('post',   '/api/admin/users/:userId/force-logout',     r => `/api/admin/users/${r.params.userId}/force-logout`);
+adminRoute('patch',  '/api/admin/users/:userId/role',             r => `/api/admin/users/${r.params.userId}/role`);
+adminRoute('delete', '/api/admin/users/:userId',                  r => `/api/admin/users/${r.params.userId}`);
+
+// Question bank moderation
+adminRoute('get',    '/api/admin/question-bank',                  '/api/admin/question-bank');
+adminRoute('patch',  '/api/admin/question-bank/:questionId/flag', r => `/api/admin/question-bank/${r.params.questionId}/flag`);
+adminRoute('patch',  '/api/admin/question-bank/:questionId/unflag', r => `/api/admin/question-bank/${r.params.questionId}/unflag`);
+adminRoute('delete', '/api/admin/question-bank/:questionId',      r => `/api/admin/question-bank/${r.params.questionId}`);
+
+// Cost dashboard
+adminRoute('get',    '/api/admin/cost-dashboard',                 '/api/admin/cost-dashboard');
+adminRoute('get',    '/api/admin/cost-dashboard/top-expensive',   '/api/admin/cost-dashboard/top-expensive');
+
+// Config management
+adminRoute('get',    '/api/admin/config',                         '/api/admin/config');
+adminRoute('get',    '/api/admin/config/:configType',             r => `/api/admin/config/${r.params.configType}`);
+adminRoute('put',    '/api/admin/config/:configType',             r => `/api/admin/config/${r.params.configType}`);
+
+// School management
+adminRoute('post',   '/api/admin/schools',                        '/api/admin/schools');
+adminRoute('get',    '/api/admin/schools',                        '/api/admin/schools');
+adminRoute('get',    '/api/admin/schools/:schoolId',              r => `/api/admin/schools/${r.params.schoolId}`);
+adminRoute('patch',  '/api/admin/schools/:schoolId',              r => `/api/admin/schools/${r.params.schoolId}`);
+
+// Audit & compliance log
+adminRoute('get',    '/api/admin/audit-log',                      '/api/admin/audit-log');
+adminRoute('get',    '/api/admin/compliance-log',                 '/api/admin/compliance-log');
+
+// ── M07 School Admin Routes (/school/*) ─────────────────────────────────────
+
+let _schoolAdminHandler;
+const getSchoolAdminHandler = async () => {
+  if (!_schoolAdminHandler) {
+    const mod = await import('./backend/handlers/schoolAdminHandler.js');
+    _schoolAdminHandler = mod.handler;
+  }
+  return _schoolAdminHandler;
+};
+
+function schoolRoute(method, expressPath, lambdaPath) {
+  const httpMethod = method.toUpperCase();
+  const fn = method === 'delete' ? 'delete' : method;
+  app[fn](expressPath, async (req, res) => {
+    try {
+      const handler = await getSchoolAdminHandler();
+      const path = typeof lambdaPath === 'function' ? lambdaPath(req) : lambdaPath;
+      const result = await handler(
+        {
+          httpMethod,
+          path,
+          headers: req.headers,
+          body: req.body ? JSON.stringify(req.body) : null,
+          queryStringParameters: req.query && Object.keys(req.query).length ? req.query : null,
+          pathParameters: req.params || null,
+          requestContext: { requestId: randomUUID(), identity: { sourceIp: req.ip } },
+        },
+        { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-school-admin-local', getRemainingTimeInMillis: () => 15000 },
+      );
+      res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+    } catch (err) {
+      console.error('school admin route error:', err);
+      res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+    }
+  });
+}
+
+schoolRoute('get',    '/school/teachers',               '/school/teachers');
+schoolRoute('post',   '/school/teachers/invite',        '/school/teachers/invite');
+schoolRoute('delete', '/school/teachers/:userId',       r => `/school/teachers/${r.params.userId}`);
+schoolRoute('get',    '/school/students',               '/school/students');
+schoolRoute('get',    '/school/analytics',              '/school/analytics');
+schoolRoute('post',   '/school/bulk-assign',            '/school/bulk-assign');
+schoolRoute('get',    '/school/config',                 '/school/config');
+schoolRoute('patch',  '/school/config',                 '/school/config');
+
 // ── Lazy-load rewardsHandler ──────────────────────────────────────────────────
 let _rewardsHandler;
 

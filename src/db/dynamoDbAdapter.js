@@ -94,6 +94,11 @@ const TABLE_CONFIG = {
   adminpolicies:      { envVar: 'ADMIN_POLICIES_TABLE_NAME',      suffix: 'AdminPolicies',      pk: 'id'          },
   adminauditevents:   { envVar: 'ADMIN_AUDIT_EVENTS_TABLE_NAME',  suffix: 'AdminAuditEvents',   pk: 'id'          },
   adminidempotency:   { envVar: 'ADMIN_IDEMPOTENCY_TABLE_NAME',   suffix: 'AdminIdempotency',   pk: 'id'          },
+  repeatcapoverrides: { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME', suffix: 'RepeatCapOverrides', pk: 'id'         },
+  school:             { envVar: 'SCHOOL_TABLE_NAME',              suffix: 'School',             pk: 'PK', sk: 'SK' },
+  schooluserlink:     { envVar: 'SCHOOL_USER_LINK_TABLE_NAME',    suffix: 'SchoolUserLink',     pk: 'PK', sk: 'SK' },
+  auditlog:           { envVar: 'AUDIT_LOG_TABLE_NAME',           suffix: 'AuditLog',           pk: 'PK', sk: 'SK' },
+  compliancelog:      { envVar: 'COMPLIANCE_LOG_TABLE_NAME',      suffix: 'ComplianceLog',      pk: 'PK', sk: 'SK' },
   repeatcapoverrides:        { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME',          suffix: 'RepeatCapOverrides',         pk: 'id'         },
   // M05 — Teacher & Parent Roles
   assignments:               { envVar: 'ASSIGNMENTS_TABLE_NAME',                   suffix: 'Assignments',                pk: 'PK',   sk: 'SK' },
