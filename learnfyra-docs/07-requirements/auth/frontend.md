@@ -470,7 +470,7 @@ Before any AWS work begins, verify the following sequence on `http://localhost:3
 2. The OAuth callback destination: is it handled on `login.html` itself (via URL `?code=` query string detection), or on a dedicated `frontend/callback.html`? This determines the `redirect_uri` registered in Cognito and Google Cloud Console and must be decided before task M01-FE-03 begins.
 3. `window.LEARNFYRA_CONFIG` injection mechanism: embedded by the CI/CD pipeline as a generated `config.js` file included in each HTML page, or injected by a CloudFront Function? This is a DevOps decision that blocks M01-FE-03 and M01-FE-08.
 4. Should the "Sign Out" button appear on `solve.html` (guest-accessible)? Clarification needed on which pages conditionally show auth UI vs always show it.
-5. **(COPPA)** Should the age gate persist the response in sessionStorage to avoid re-asking on page reload during registration? Or should it always re-ask to prevent circumvention?
-6. **(COPPA)** Should `consent.html` support the parent creating an account via Google OAuth as part of the consent flow, or require email/password first with Google linking later?
-7. **(COPPA)** Should the Parent Dashboard be a separate page (`parent-dashboard.html`) or a section within a unified dashboard page?
-8. **(COPPA)** Should child session tokens be stored in sessionStorage (cleared on tab close) rather than localStorage for additional safety?
+5. **(COPPA)** Should the age gate persist the response in sessionStorage to avoid re-asking on page reload during registration? — **Decision: Yes, persist in sessionStorage. Store 'under13' or '13plus' in sessionStorage during registration flow.**
+6. **(COPPA)** Should `consent.html` support the parent creating an account via Google OAuth as part of the consent flow? — **Decision: Yes, support Google OAuth on consent page. One-step consent + account creation reduces friction.**
+7. **(COPPA)** Should the Parent Dashboard be a separate page or a section within a unified dashboard? — **Decision: Separate page (`parent-dashboard.html`). Cleaner separation of concerns.**
+8. **(COPPA)** Should child session tokens be stored in sessionStorage rather than localStorage? — **Decision: Yes, child tokens in sessionStorage. Cleared when tab/browser closes. More secure — prevents persistent child access without parent starting a new session.**

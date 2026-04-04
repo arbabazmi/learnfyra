@@ -1,5 +1,5 @@
 # Master Task List
-**Last Updated:** 2026-03-29 (sync pass — task tracker updated to match actual codebase state)
+**Last Updated:** 2026-04-03 (COPPA compliance tasks added)
 
 ## Status Legend
 - DONE — Completed and tested
@@ -20,6 +20,8 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | SETUP-002 | Create DynamoDB local tables (bootstrap script) | Done | `node scripts/bootstrap-local-db.js` — creates all local tables for M02/M05/M06 | Pre-Sprint 3 |
 | SETUP-003 | Verify Google OAuth `http://localhost:3000` callback works end-to-end | TODO | Confirm redirect URI configured in Google Cloud Console | Pre-Sprint 8 |
 | SETUP-004 | Seed question-bank.json with sample questions | TODO | `node scripts/seed-question-bank.js` — seeds `worksheets-local/question-bank/` for QB local adapter testing | Pre-Sprint 3 |
+| SETUP-005 | Create COPPA DynamoDB local tables (PendingConsent, ConsentLog) | TODO | Add to `bootstrap-local-db.js` — required before Sprint 12 | Pre-Sprint 12 |
+| SETUP-006 | Configure local email transport (nodemailer) for consent emails | TODO | Add to `.env`: `EMAIL_TRANSPORT=local`, `EMAIL_FROM=noreply@localhost` | Pre-Sprint 12 |
 
 ---
 
@@ -36,13 +38,22 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | M01-BE-07 | Parent-child link — POST /api/auth/link-child | DONE | | — |
 | M01-BE-08 | Local auth adapter (APP_RUNTIME=local) | DONE | | — |
 | M01-FE-01 | Login page (login.html + auth.js) | BLOCKED | Awaiting UI template | Sprint 8 |
-| M01-FE-02 | Register page with role selection | BLOCKED | Awaiting UI template | Sprint 8 |
-| M01-FE-03 | Google OAuth redirect flow (client-side PKCE) | BLOCKED | Awaiting UI template | Sprint 8 |
+| M01-FE-02 | Register page with age gate + role selection | BLOCKED | Awaiting UI template; COPPA age gate required | Sprint 8 |
+| M01-FE-03 | Google OAuth redirect flow (client-side PKCE) | BLOCKED | Awaiting UI template; 13+ only | Sprint 8 |
 | M01-FE-04 | Token storage + auto-refresh | BLOCKED | Awaiting UI template | Sprint 8 |
 | M01-FE-05 | Logout UI | BLOCKED | Awaiting UI template | Sprint 8 |
+| M01-FE-06 | Age gate component for register.html | BLOCKED | COPPA — Awaiting UI template | Sprint 8 |
+| M01-FE-07 | consent.html — Parental consent page | BLOCKED | COPPA — Awaiting UI template | Sprint 8 |
+| M01-FE-08 | parent-dashboard.html — Child account management | BLOCKED | COPPA — Awaiting UI template | Sprint 8 |
+| M01-BE-09 | consentHandler.js — child-request + consent endpoints | TODO | COPPA — PendingConsent + ConsentLog + SES email | Sprint 12 |
+| M01-BE-10 | parentHandler.js — children list, data export, delete, revoke, child-session | TODO | COPPA — Parent Dashboard backend | Sprint 12 |
+| M01-BE-11 | consentService.js + childAccountService.js + ageGate.js | TODO | COPPA — service layer for consent + child accounts | Sprint 12 |
 | M01-TEST-01 | Unit tests for authHandler | DONE | | — |
 | M01-TEST-02 | Unit tests for Lambda Authorizer | DONE | | — |
 | M01-TEST-03 | Integration test: full auth flow | DONE | | — |
+| M01-TEST-04 | Unit tests for consentHandler | TODO | COPPA — consent flow tests | Sprint 12 |
+| M01-TEST-05 | Unit tests for parentHandler | TODO | COPPA — parent dashboard tests | Sprint 12 |
+| M01-TEST-06 | Integration test: full COPPA consent flow | TODO | COPPA — age gate → consent → child account → parent dashboard | Sprint 12 |
 
 ---
 
@@ -189,6 +200,12 @@ These setup tasks MUST be complete before any sprint involving DynamoDB local be
 | CDK-009 | Domain routing (Route 53 + ACM) | DONE | | — |
 | CDK-010 | DynamoDB tables for M02-M07 | TODO | Blocked until each module designed; broken into per-module CDK tasks above | AWS sprints |
 | CDK-011 | GitHub Actions CI/CD pipelines | DONE | | — |
+| CDK-012 | CDK: PendingConsent DynamoDB table (72h TTL) | TODO | COPPA — LearnfyraPendingConsent-{env} with TTL | Sprint 12 |
+| CDK-013 | CDK: ConsentLog DynamoDB table (immutable) | TODO | COPPA — LearnfyraConsentLog-{env}, no delete policy | Sprint 12 |
+| CDK-014 | CDK: Cognito user groups (Parents, Teachers, Students-13Plus, Students-Under13) | TODO | COPPA — update Cognito construct | Sprint 12 |
+| CDK-015 | CDK: SES email configuration per environment | TODO | COPPA — consent emails, sender identity | Sprint 12 |
+| CDK-016 | CDK: consent + parent Lambda functions | TODO | COPPA — learnfyra-consent-{env}, learnfyra-parent-{env} | Sprint 12 |
+| CDK-017 | CDK: Users table schema update (ageGroup, parentId, linkedChildIds GSI) | TODO | COPPA — update existing Users table construct | Sprint 12 |
 
 ---
 

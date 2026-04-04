@@ -40,6 +40,10 @@ CloudFront Distribution
                  ├── GET  /api/solve/:id          → learnfyra-solve Lambda (128MB, 10s)
                  ├── POST /api/submit             → learnfyra-submit Lambda (256MB, 15s)
                  ├── POST /api/auth/*             → learnfyra-auth Lambda (256MB, 15s)
+                 ├── POST /api/auth/child-request → learnfyra-consent Lambda (256MB, 10s) [COPPA]
+                 ├── GET/POST /api/auth/consent/* → learnfyra-consent Lambda (256MB, 10s) [COPPA]
+                 ├── GET/POST/DELETE /api/auth/children/* → learnfyra-parent Lambda (256MB, 15s) [COPPA]
+                 ├── POST /api/auth/child-session → learnfyra-parent Lambda (256MB, 15s) [COPPA]
                  ├── GET  /api/progress/*         → learnfyra-progress Lambda (256MB, 15s)
                  ├── GET  /api/classes/*          → learnfyra-classes Lambda (128MB, 10s)
                  ├── GET  /api/dashboard/stats           → learnfyra-dashboard Lambda (256MB, 15s)
@@ -64,6 +68,8 @@ CloudFront Distribution
 | learnfyra-classes | GET/POST /api/classes/* | 128MB | 10s | Low |
 | learnfyra-dashboard | GET /api/dashboard/* | 256MB | 15s | Medium (aggregate queries) |
 | learnfyra-admin | GET/POST /api/admin/* | 512MB | 30s | High (multi-table ops) |
+| learnfyra-consent | POST /api/auth/child-request, GET/POST /api/auth/consent/* | 256MB | 10s | Medium (DynamoDB + SES) |
+| learnfyra-parent | GET/POST/DELETE /api/auth/children/*, /api/auth/child-session, /api/auth/child-data/* | 256MB | 15s | Medium (DynamoDB reads + S3) |
 | learnfyra-health | GET /api/health | 128MB | 5s | Minimal |
 
 All Lambda functions: ARM_64 (Graviton2), Node.js 18.x, esbuild bundling, X-Ray tracing on staging/prod.
@@ -98,7 +104,9 @@ Additional cold start strategies:
 | S3 worksheets bucket | PDF, DOCX, HTML, answer-key, metadata.json, solve-data.json | `worksheets/{year}/{month}/{day}/{uuid}/` |
 | S3 frontend bucket | Static HTML, CSS, JS | `index.html`, `css/`, `js/` |
 | DynamoDB QuestionBank | Reusable questions with dedupe | PK=questionId, GSI-1 by topic/type |
-| DynamoDB Users | User accounts, roles, preferences | PK=userId |
+| DynamoDB Users | User accounts, roles, preferences (ageGroup, parentId for COPPA) | PK=userId, GSI parent-index |
+| DynamoDB PendingConsent | COPPA consent requests awaiting parent verification (72h TTL) | PK=consentRequestId |
+| DynamoDB ConsentLog | Immutable COPPA consent audit trail (NEVER deleted) | PK=consentId |
 | DynamoDB WorksheetAttempt | Student solve attempts and scores | PK=studentId, SK=worksheetId#{timestamp} |
 | DynamoDB GenerationLog | AI generation audit trail, worksheet ownership | PK=worksheetId, GSI createdBy-index |
 | DynamoDB Config | Platform config, model routing | PK=configKey |
@@ -159,5 +167,10 @@ npm run dev:staging  — loads config from the staging environment Lambda + SSM,
 - S3 worksheet bucket: block all public access, access via presigned URLs only (15-minute expiry)
 - Secrets Manager: ANTHROPIC_API_KEY, LOCAL_JWT_SECRET, GOOGLE_CLIENT_SECRET per environment
 - No PII stored in worksheet content (metadata.json contains only grade/subject/topic/difficulty)
+- COPPA compliance: children under 13 require verifiable parental consent before account creation
+- Age gate enforced before any registration form fields are shown
+- PendingConsent records auto-deleted after 72h via DynamoDB TTL (no data retained without consent)
+- ConsentLog is immutable audit trail — records NEVER deleted (FTC compliance)
+- Cognito User Pool groups: Parents, Teachers, Students-13Plus, Students-Under13
 - `GET /api/worksheets/mine` enforces ownership — users can only see their own worksheets
 - `GET /api/solve/:id?mode=practice` is unauthenticated by design — practice mode exposes answers but worksheetId is a UUID v4 with no enumerable pattern

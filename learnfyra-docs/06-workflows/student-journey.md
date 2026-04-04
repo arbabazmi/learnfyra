@@ -4,6 +4,8 @@
 
 ### Student (Primary User)
 - **Age:** 6–16 (Grades 1–10)
+- **Under 13 (COPPA):** Requires parental consent before account creation. No direct signup. Parent-managed sessions only (Phase 1).
+- **13+ :** Standard self-registration via Google OAuth or email/password.
 - **Goal:** Practice skills, receive instant feedback, build study habits
 - **Frustrations:** Waiting for teacher grading, not knowing which answers were wrong
 - **Motivations:** Improving grades, understanding mistakes, preparing for tests
@@ -24,11 +26,15 @@
 
 ## Screen Inventory (25 Screens)
 
-### Authentication Screens (4)
+### Authentication Screens (8 — updated for COPPA)
 1. **Landing Page** — value proposition, "Try Free" + "Sign In" CTAs
 2. **Login Page** — email/password + "Sign in with Google"
-3. **Register Page** — role selection (student/teacher/parent), email/password
-4. **Link Child** — parent account setup, enter child's email
+3. **Register Page** — age gate FIRST, then role selection (student/teacher/parent), email/password
+4. **Age Gate** — "Are you under 13?" (COPPA) — shown before any form fields
+5. **Parent Email Entry** — under-13 flow: parent email + optional nickname (COPPA)
+6. **Consent Page** — parent reviews data practices, gives consent (COPPA)
+7. **Parent Dashboard** — manage child accounts, start sessions, view/delete data (COPPA)
+8. **Link Child** — parent account setup, enter child's email
 
 ### Worksheet Generation Screens (3)
 5. **Generate Page (main)** — grade, subject, topic, difficulty, count, format selectors
@@ -55,9 +61,12 @@
 20. **Generate for Class** — same as Generate Page but with classId attached
 21. **Assign Worksheet** — search existing worksheets, set due date
 
-### Parent Dashboard Screens (2)
+### Parent Dashboard Screens (5 — updated for COPPA)
 22. **Parent Home** — child's progress summary, weak areas, streak
 23. **Child Attempt History** — child's past worksheets
+24. **Parent COPPA Dashboard** — manage linked children (view, start session, download data, delete)
+25. **Consent Confirmation** — confirmation after giving parental consent
+26. **Child Data Export** — downloadable JSON of all child data
 
 ### Admin Screens (2 — Phase 2 Angular redesign)
 24. **Admin Dashboard** — platform health, recent errors, model status
@@ -103,6 +112,54 @@ Student Home updated:
   - Attempt saved to history
   - Progress aggregates updated
   - Streak incremented
+```
+
+### Scenario D: Under-13 Student Registration (COPPA Parent-Gated)
+```
+Landing Page
+  ↓ clicks "Try Free" or "Sign Up"
+Register Page → Age Gate: "Are you under 13?"
+  ↓ clicks "Yes, I am under 13"
+Parent Email Entry (only parent email + optional nickname shown)
+  ↓ enters parent's email, clicks Submit
+  ↓ POST /api/auth/child-request → PendingConsent record created
+  ↓ consent email sent to parent
+Confirmation Screen: "Ask your parent to check their email!"
+  ❌ NO account created
+  ❌ NO Cognito identity
+  ❌ NO JWT token
+
+  [Meanwhile: Parent receives email with consent link]
+
+Parent clicks consent link → Consent Page
+  ↓ sees: what data is collected, COPPA rights, Privacy Policy link
+  ↓ creates account (or logs in if existing parent)
+  ↓ clicks "I Consent"
+  ↓ POST /api/auth/consent/:token
+  ↓ ConsentLog written, child account created under parent
+  ↓ redirected to Parent Dashboard
+Parent Dashboard
+  ↓ clicks "Start [Child]'s Session"
+  ↓ scoped child JWT issued
+  ↓ child can now use platform
+Student Home (child session — restricted permissions)
+```
+
+### Scenario E: Parent Managing Child Account (COPPA)
+```
+Login Page → Parent Home
+  ↓ clicks "Manage Children"
+Parent COPPA Dashboard
+  ↓ sees list of linked children
+  │
+  ├── clicks "Start Session" → child JWT issued → index.html
+  ├── clicks "View Data" → child progress summary displayed
+  ├── clicks "Download Data" → JSON export downloaded
+  └── clicks "Delete Account" → confirmation dialog
+       ↓ confirms deletion
+       ↓ child account + all data deleted
+       ↓ ConsentLog updated (revokedAt)
+       ↓ child removed from parent's list
 ```
 
 ### Scenario C: Teacher Workflow

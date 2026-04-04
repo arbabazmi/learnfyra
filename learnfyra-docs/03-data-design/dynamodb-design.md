@@ -1,21 +1,25 @@
 # DynamoDB Table Design
 
-**Updated: feat/my-worksheets-tracking (2026-04-03)**
+**Updated: docs/coppa-auth-architecture (2026-04-03)**
 - Added `createdBy-index` GSI to `LearnfyraGenerationLog`
 - Added `createdBy` attribute to `LearnfyraGenerationLog`
+- Added COPPA tables: `LearnfyraPendingConsent`, `LearnfyraConsentLog`
+- Updated `LearnfyraUsers` with ageGroup, parentId, linkedChildIds, consentId fields + parent-index GSI
 
 ## Table Overview
 
 | Table | PK | SK | GSIs | Purpose |
 |---|---|---|---|---|
 | LearnfyraQuestionBank-{env} | questionId | — | GSI-1 (lookupKey+typeDifficulty), dedupeHash-index | Reusable questions |
-| LearnfyraUsers-{env} | userId | — | email-index | User accounts, roles, progress aggregates |
+| LearnfyraUsers-{env} | userId | — | email-index, parent-index | User accounts, roles, progress aggregates |
 | LearnfyraWorksheetAttempt-{env} | userId | sortKey (worksheetId#{timestamp}) | — | Student solve attempts |
 | LearnfyraClasses-{env} | classId | — | teacherId-index, joinCode-index | Class definitions |
 | LearnfyraClassMemberships-{env} | classId | studentId | studentId-index | Class enrollment |
 | LearnfyraCertificates-{env} | certificateId | — | userId-index | Completion certificates |
 | LearnfyraGenerationLog-{env} | worksheetId | — | createdBy-index | AI generation audit trail |
 | LearnfyraConfig-{env} | configKey | — | — | Platform config, model routing |
+| LearnfyraPendingConsent-{env} | consentRequestId | — | — | COPPA: pending parent consent (72h TTL) |
+| LearnfyraConsentLog-{env} | consentId | — | parentId-index, childId-index | COPPA: immutable consent audit trail |
 
 All tables: `BillingMode: PAY_PER_REQUEST`. Point-in-time recovery enabled on prod.
 
@@ -79,11 +83,15 @@ Used by `questionBank/adapter.js` `questionExists(dedupeHash)` before saving a n
 | userId | S | PK | UUID v4 |
 | email | S | Yes | Unique, GSI partition key |
 | role | S | Yes | student / teacher / parent / admin / suspended |
-| name | S | Yes | Display name |
+| ageGroup | S | Yes | under13 / 13plus / adult (COPPA) |
+| name | S | Yes | Display name (nickname only for under-13) |
+| parentId | S | No | For under-13 students: parent's userId (COPPA) |
+| linkedChildIds | SS | No | For parent records: list of child userIds (COPPA) |
+| consentId | S | No | For under-13 students: reference to ConsentLog entry (COPPA) |
 | createdAt | S | Yes | ISO-8601 |
 | lastLoginAt | S | No | ISO-8601 |
 | googleSub | S | No | Google OAuth subject ID |
-| linkedStudentId | S | No | Parent records only |
+| linkedStudentId | S | No | Parent records only (legacy — use linkedChildIds for COPPA) |
 | linkedParentIds | SS | No | Student records only |
 | classIds | SS | No | Student's enrolled class IDs |
 | deletedAt | S | No | Soft-delete timestamp |
@@ -107,6 +115,14 @@ Used by `questionBank/adapter.js` `questionExists(dedupeHash)` before saving a n
 | PK | email |
 
 Used during authentication to look up userId by email.
+
+### GSI: parent-index (COPPA)
+
+| | Attribute |
+|---|---|
+| PK | parentId |
+
+Used to list all children linked to a parent account. Supports `GET /api/auth/children` and cascading deletion on consent revocation. Sparse index — only under-13 student records have `parentId`.
 
 ---
 
@@ -288,6 +304,67 @@ See `02-modules/admin.md` for full list of config keys.
 
 ---
 
+## LearnfyraPendingConsent (COPPA)
+
+Stores consent requests while awaiting parent verification. Auto-deleted after 72 hours via DynamoDB TTL.
+
+### Primary Schema
+
+| Attribute | Type | Required | Notes |
+|---|---|---|---|
+| consentRequestId | S | PK | UUID v4 |
+| parentEmail | S | Yes | Email to send consent request to |
+| childNickname | S | No | Optional nickname provided by child |
+| consentToken | S | Yes | Unique single-use token for consent email link |
+| status | S | Yes | pending / consented / expired |
+| createdAt | S | Yes | ISO-8601 |
+| expiresAt | N | Yes | Unix timestamp for DynamoDB TTL (72h from creation) |
+| ipAddress | S | Yes | IP address of the child's request (audit) |
+
+**TTL:** `expiresAt` — DynamoDB auto-deletes expired records. No manual cleanup needed.
+
+**No GSIs:** PendingConsent is looked up by `consentRequestId` (PK) only. Rate limiting on `parentEmail` is done via a Scan with filter (low volume, max 3 per email per day).
+
+---
+
+## LearnfyraConsentLog (COPPA)
+
+Immutable audit trail of all parental consent actions. Records are NEVER deleted — this is a regulatory requirement for FTC COPPA compliance.
+
+### Primary Schema
+
+| Attribute | Type | Required | Notes |
+|---|---|---|---|
+| consentId | S | PK | UUID v4 |
+| parentId | S | Yes | Parent userId who gave consent |
+| childId | S | Yes | Child userId created after consent |
+| consentMethod | S | Yes | email_plus / credit_card / gov_id |
+| consentGivenAt | S | Yes | ISO-8601 timestamp |
+| ipAddress | S | Yes | IP address at time of consent |
+| policyVersion | S | Yes | Version of privacy policy accepted (e.g., "v1.0") |
+| revokedAt | S | No | ISO-8601 timestamp (NULL if active) |
+| revokedReason | S | No | Reason for revocation (NULL if active) |
+
+**Critical:** `RemovalPolicy.RETAIN` on ALL environments (not just prod). ConsentLog records are NEVER deleted, even after consent revocation — only the `revokedAt` and `revokedReason` fields are updated.
+
+### GSI: parentId-index
+
+| | Attribute |
+|---|---|
+| PK | parentId |
+
+Used to list all consent records for a parent (Parent Dashboard).
+
+### GSI: childId-index
+
+| | Attribute |
+|---|---|
+| PK | childId |
+
+Used to look up consent status for a specific child account.
+
+---
+
 ## S3 Key Structure
 
 ```
@@ -309,6 +386,8 @@ learnfyra-{env}-s3-frontend/
   solve.html
   login.html
   register.html
+  consent.html
+  parent-dashboard.html
   css/styles.css
   css/solve.css
   css/auth.css

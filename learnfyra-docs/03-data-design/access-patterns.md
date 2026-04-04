@@ -1,7 +1,9 @@
 # DynamoDB Access Patterns
 
-**Updated: feat/my-worksheets-tracking (2026-04-03)**
+**Updated: docs/coppa-auth-architecture (2026-04-03)**
 - Added `createdBy-index` access patterns to `LearnfyraGenerationLog`
+- Added COPPA tables: `LearnfyraPendingConsent`, `LearnfyraConsentLog`
+- Updated `LearnfyraUsers` with parent-index access patterns
 
 This document maps every application query to its DynamoDB table access pattern, operation type, and any GSI used.
 
@@ -39,6 +41,8 @@ This document maps every application query to its DynamoDB table access pattern,
 | Update precomputed aggregates after attempt | UpdateItem | PK=userId | — |
 | List users (admin pagination) | Scan with filter | — | None |
 | Soft-delete user | UpdateItem | PK=userId, set deletedAt | — |
+| List children for parent (COPPA) | Query | parent-index PK=parentId | parent-index |
+| Hard-delete child on consent revocation (COPPA) | DeleteItem | PK=userId | — |
 
 **email-index query example:**
 ```javascript
@@ -139,6 +143,30 @@ Note: This table uses DynamoDB TTL (`ttl` attribute) for automatic expiry after 
 ```
 
 **Sparse index note:** `createdBy` is only set for authenticated generations. Guest worksheets (no Authorization header) have a null `createdBy` and do not appear in this GSI.
+
+## LearnfyraPendingConsent (COPPA)
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Create consent request | PutItem | PK=consentRequestId | — |
+| Lookup consent request by token | GetItem | PK=consentRequestId | None |
+| Rate limit check (max 3 per parentEmail/day) | Scan + FilterExpression on parentEmail + createdAt | — | None (low volume) |
+| Update status to consented | UpdateItem | PK=consentRequestId, set status=consented | — |
+| Auto-expire after 72h | DynamoDB TTL on expiresAt | — | — |
+
+**Note:** No manual deletion needed. DynamoDB TTL handles cleanup. No GSI needed — consent requests are always looked up by `consentRequestId` (PK).
+
+## LearnfyraConsentLog (COPPA)
+
+| Access Pattern | Operation | Key(s) | GSI |
+|---|---|---|---|
+| Record consent given | PutItem | PK=consentId | — |
+| List all consents by parent | Query | parentId-index PK=parentId | parentId-index |
+| Lookup consent for child | Query | childId-index PK=childId | childId-index |
+| Update consent as revoked | UpdateItem | PK=consentId, set revokedAt + revokedReason | — |
+| Delete consent record | ❌ NEVER — records are immutable | — | — |
+
+**Critical:** ConsentLog is append-only + update-only. No DeleteItem is ever performed on this table. This is a regulatory requirement for FTC COPPA compliance auditing.
 
 ## LearnfyraConfig
 

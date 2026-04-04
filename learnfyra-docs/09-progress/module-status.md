@@ -1,6 +1,6 @@
 # Module Status
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-03
 
 ---
 
@@ -21,7 +21,8 @@ These four setup tasks gate all sprint work. SETUP-001 and SETUP-002 are require
 
 | Module | Backend | Frontend | Tests | CDK | Status |
 |---|---|---|---|---|---|
-| M01 Auth | DONE | BLOCKED (UI template) | DONE | DONE | Backend complete; frontend awaiting UI template |
+| M01 Auth | DONE (pre-COPPA) | BLOCKED (UI template) | DONE (pre-COPPA) | DONE (pre-COPPA) | Backend complete; COPPA consent/parent handlers TODO (Sprint 12); frontend awaiting UI template |
+| M01-COPPA | TODO | BLOCKED (UI template) | TODO | TODO | Age gate, consent flow, parent dashboard — Sprint 12 |
 | M02 Question Bank | TODO | N/A | TODO | TODO | Ready to start — Sprint 3 |
 | M03 Worksheet Generator | DONE (no bank) | DONE | DONE | DONE | Bank-first pending M02 |
 | M04 Solve & Submit | TODO | BLOCKED (UI template) | TODO | DONE | Ready to start — Sprint 1 |
@@ -43,12 +44,25 @@ These four setup tasks gate all sprint work. SETUP-001 and SETUP-002 are require
 
 **Frontend Status: BLOCKED — Awaiting UI template from product owner**
 - login.html: not built — blocked on UI template
-- register.html: not built — blocked on UI template
+- register.html: not built — blocked on UI template (now includes COPPA age gate)
+- consent.html: not built — COPPA parental consent page (blocked on UI template)
+- parent-dashboard.html: not built — COPPA parent child management (blocked on UI template)
 - auth.js (PKCE, token storage, auto-refresh): not built — blocked on UI template
 - Local dev note: `server.js` will inject `window.LEARNFYRA_CONFIG = { apiBase: 'http://localhost:3000', cognitoAuthorizeUrl: '', clientId: 'local', redirectUri: 'http://localhost:3000' }` for local development. Google OAuth button will be hidden when `cognitoAuthorizeUrl` is empty.
-- Blocked: UI template not received. Do not start M01-FE-01 through M01-FE-05 until template is received.
+- Blocked: UI template not received. Do not start M01-FE-01 through M01-FE-08 until template is received.
 
-**Assigned Sprint:** Sprint 8 (frontend only)
+**COPPA Backend Status: TODO — Sprint 12**
+- consentHandler.js: not built — handles child-request + consent endpoints
+- parentHandler.js: not built — handles children list, data export, delete, revoke, child-session
+- consentService.js: not built — PendingConsent + ConsentLog table operations
+- childAccountService.js: not built — child account creation, linking, deletion
+- ageGate.js: not built — age verification logic
+- consent-email.html: not built — SES email template for parent consent
+- New DynamoDB tables: PendingConsent (72h TTL), ConsentLog (immutable audit)
+- New Cognito groups: Parents, Teachers, Students-13Plus, Students-Under13
+- SES integration for consent emails (AWS) / nodemailer (local)
+
+**Assigned Sprint:** Sprint 8 (frontend), Sprint 12 (COPPA backend)
 
 **Known Issues:** None
 
@@ -202,6 +216,11 @@ M01 auth backend is complete. Admin-only JWT can be signed locally with `LOCAL_J
 | DynamoDB tables (M02-M07) | TODO | TODO | TODO |
 | Lambda solve/submit functions | TODO | TODO | TODO |
 | Lambda auth/progress/class/admin | TODO | TODO | TODO |
+| DynamoDB PendingConsent table (COPPA) | TODO | TODO | TODO |
+| DynamoDB ConsentLog table (COPPA) | TODO | TODO | TODO |
+| Cognito user groups (COPPA) | TODO | TODO | TODO |
+| SES consent email config (COPPA) | TODO | TODO | TODO |
+| Lambda consent/parent functions (COPPA) | TODO | TODO | TODO |
 
 ---
 
@@ -251,3 +270,4 @@ worksheetId validated as UUID v4 before any file/S3 access. 1143 tests passing (
 - Domain routing: all three environments (dev/staging/prod) live on custom domains
 - Rebrand: edusheet-* resources migrated to learnfyra-* naming
 - BA update (2026-03-28): All 5 requirement specs updated with local-first constraints, sprint plan rewritten, master task list updated with Sprint column and SETUP tasks, module status updated with BLOCKED status for all frontend modules awaiting UI template
+- COPPA compliance (2026-04-03): Full COPPA-compliant auth architecture documented — age gate, parent-gated child registration, verifiable parental consent (Email Plus), parent dashboard, 9 new API endpoints, 3 new DynamoDB tables, SES integration. 13 new requirements (REQ-AUTH-016-028), 6 new backend tasks (M01-BE-09-11, M01-TEST-04-06), 3 new frontend tasks (M01-FE-06-08), 6 new CDK tasks (CDK-012-017). Assigned to Sprint 12.
