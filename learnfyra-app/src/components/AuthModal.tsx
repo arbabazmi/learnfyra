@@ -37,6 +37,7 @@ import {
   CheckCircle,
   Calendar,
 } from 'lucide-react';
+import { AgeGate } from '@/components/auth/AgeGate';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { googleOAuth, isLocal, mailhogUrl } from '@/lib/env';
@@ -54,7 +55,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type ModalStep = 'role' | 'onboarding' | 'signin' | 'email-entry' | 'email-signin' | 'email-signup' | 'forgot-password';
+type ModalStep = 'role' | 'onboarding' | 'signin' | 'email-entry' | 'email-signin' | 'age-gate' | 'email-signup' | 'forgot-password';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -317,7 +318,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     if (step === 'forgot-password') {
       setResetSent(false);
       goBack('email-signin');
-    } else if (step === 'email-signup' || step === 'email-signin') {
+    } else if (step === 'email-signup') {
+      goBack('age-gate');
+    } else if (step === 'age-gate' || step === 'email-signin') {
       goBack('email-entry');
     } else if (step === 'email-entry') {
       goBack('signin');
@@ -362,6 +365,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     setTouched({});
     // Go to sign-in by default — user can switch to sign-up
     goForward('email-signin');
+  };
+
+  // ── Age gate callback ────────────────────────────────────────────────
+
+  const handleAgeConfirmed = (_group: '13plus' | 'under13') => {
+    // AgeGate handles under-13 navigation internally (to /auth/consent-pending).
+    // This callback is only reached for 13+ users — proceed to standard sign-up.
+    goForward('email-signup');
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -647,7 +658,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                 <p className="text-center text-xs text-muted-foreground">
                   Don't have an account?{' '}
                   <button
-                    onClick={() => { setTouched({}); setApiError(''); goForward('email-signup'); }}
+                    onClick={() => { setTouched({}); setApiError(''); goForward('age-gate'); }}
                     className="text-primary font-bold hover:underline"
                   >
                     Create one
@@ -710,7 +721,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                   <span>
                     No account?{' '}
                     <button
-                      onClick={() => { setPassword(''); setApiError(''); setTouched({}); goForward('email-signup'); }}
+                      onClick={() => { setPassword(''); setApiError(''); setTouched({}); goForward('age-gate'); }}
                       className="text-primary font-bold hover:underline"
                     >
                       Create one
@@ -718,6 +729,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                   </span>
                 </div>
               </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════
+                Step 5b: Age Gate (COPPA) — shown before sign-up
+               ══════════════════════════════════════════════════ */}
+            {step === 'age-gate' && (
+              <AgeGate
+                onAgeConfirmed={handleAgeConfirmed}
+                onBack={handleBack}
+              />
             )}
 
             {/* ══════════════════════════════════════════════════

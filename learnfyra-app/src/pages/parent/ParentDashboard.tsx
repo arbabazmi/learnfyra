@@ -6,7 +6,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   Plus,
   Activity,
@@ -19,6 +19,7 @@ import {
   Loader2,
   AlertCircle,
   GraduationCap,
+  Play,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { usePageMeta } from '@/lib/pageMeta';
 import { apiUrl } from '@/lib/env';
 import { getAuthToken } from '@/lib/auth';
+import { startChildSession } from '@/services/api/parentService';
 import type { ChildSummary } from '@/types/parent';
 
 // ── Tab definitions ────────────────────────────────────────────────────────
@@ -63,11 +65,38 @@ interface PrivacyPanelProps {
 }
 
 const PrivacyPanel: React.FC<PrivacyPanelProps> = ({ child }) => {
+  const navigate = useNavigate();
   const [isDownloading, setIsDownloading] = React.useState(false);
   const [isRevoking, setIsRevoking] = React.useState(false);
+  const [isStartingSession, setIsStartingSession] = React.useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = React.useState(false);
   const [actionSuccess, setActionSuccess] = React.useState('');
   const [actionError, setActionError] = React.useState('');
+
+  const handleStartSession = async () => {
+    setIsStartingSession(true);
+    setActionError('');
+    try {
+      const result = await startChildSession(child.studentId);
+      // COPPA: Child tokens stored in sessionStorage (NOT localStorage) — cleared when tab closes
+      sessionStorage.setItem('learnfyra_child_token', result.childAccessToken);
+      sessionStorage.setItem(
+        'learnfyra_child_session',
+        JSON.stringify({
+          childUserId: result.childUserId,
+          childName: result.childName,
+          role: result.role,
+          ageGroup: result.ageGroup,
+          parentId: result.parentId,
+        }),
+      );
+      navigate('/dashboard');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to start session. Please try again.');
+    } finally {
+      setIsStartingSession(false);
+    }
+  };
 
   // Approximate consent status from ChildSummary.linkedAt (real data comes from API)
   const consentGrantedAt = child.linkedAt ?? null;
@@ -154,6 +183,26 @@ const PrivacyPanel: React.FC<PrivacyPanelProps> = ({ child }) => {
               )}
             </div>
           </div>
+
+          <Button
+            variant="primary"
+            size="sm"
+            className="shrink-0"
+            onClick={handleStartSession}
+            disabled={isStartingSession || !consentActive}
+          >
+            {isStartingSession ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <Play className="size-3.5" />
+                Start Session
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

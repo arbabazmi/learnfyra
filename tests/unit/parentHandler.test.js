@@ -736,3 +736,231 @@ describe('parentHandler — GET /api/student/assignments', () => {
     expect(result.statusCode).toBe(403);
   });
 });
+
+// ─── GET /api/parent/children/:studentId/export ──────────────────────────────
+
+describe('parentHandler — GET /api/parent/children/:studentId/export', () => {
+  beforeEach(() => {
+    mockVerifyToken.mockReturnValue(parentDecoded);
+  });
+
+  it('returns 200 with full data bundle for a linked child', async () => {
+    mockVerifyParentChildLink.mockResolvedValue({ parentId: VALID_PARENT_ID, childId: VALID_CHILD_ID, status: 'active' });
+    mockGetItem.mockResolvedValue({ displayName: 'Test Student', grade: 4, passwordHash: 'hash-should-be-stripped' });
+    mockQueryByField.mockImplementation(async (table) => {
+      if (table === 'attempts')      return [{ attemptId: 'a1' }];
+      if (table === 'worksheets')    return [];
+      if (table === 'certificates')  return [];
+      if (table === 'scores')        return [];
+      return [];
+    });
+
+    const result = await handler(
+      makeEvent('GET', `/api/parent/children/${VALID_CHILD_ID}/export`, null, 'parent-token',
+        { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body).toHaveProperty('exportedAt');
+    expect(body).toHaveProperty('studentId', VALID_CHILD_ID);
+    expect(body.user).toBeDefined();
+    expect(body.user).not.toHaveProperty('passwordHash');
+    expect(Array.isArray(body.attempts)).toBe(true);
+  });
+
+  it('returns 401 when no Authorization header', async () => {
+    const result = await handler(
+      makeEvent('GET', `/api/parent/children/${VALID_CHILD_ID}/export`, null, null),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(401);
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+
+  it('returns 403 when caller role is not parent', async () => {
+    mockVerifyToken.mockReturnValue({ sub: VALID_STUDENT_ID, role: 'student', email: 'student@test.com' });
+
+    const result = await handler(
+      makeEvent('GET', `/api/parent/children/${VALID_CHILD_ID}/export`, null, 'student-token',
+        { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
+  });
+
+  it('returns 403 CHILD_NOT_LINKED when parent is not linked to that child', async () => {
+    mockVerifyParentChildLink.mockRejectedValue(makeChildNotLinkedError());
+
+    const result = await handler(
+      makeEvent('GET', `/api/parent/children/${VALID_CHILD_ID}/export`, null, 'parent-token',
+        { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
+    const body = JSON.parse(result.body);
+    expect(body.error).toBe('CHILD_NOT_LINKED');
+  });
+
+  it('returns 400 when studentId is not a valid UUID', async () => {
+    const result = await handler(
+      makeEvent('GET', '/api/parent/children/not-a-uuid/export', null, 'parent-token',
+        { studentId: 'not-a-uuid' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('includes CORS headers on export response', async () => {
+    mockVerifyParentChildLink.mockResolvedValue({ parentId: VALID_PARENT_ID, childId: VALID_CHILD_ID, status: 'active' });
+    mockGetItem.mockResolvedValue({ displayName: 'Test Student', grade: 4 });
+    mockQueryByField.mockResolvedValue([]);
+
+    const result = await handler(
+      makeEvent('GET', `/api/parent/children/${VALID_CHILD_ID}/export`, null, 'parent-token',
+        { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+});
+
+// ─── POST /api/parent/children/:studentId/revoke-consent ─────────────────────
+
+// Mock revokeConsent from consentStore — must be declared before the mock module setup above,
+// so we use a module-level mock added after the file-level mocks via jest.unstable_mockModule.
+// Since that mock is file-scoped, we capture its fn reference here.
+
+const mockRevokeConsent = jest.fn();
+
+jest.unstable_mockModule('../../src/consent/consentStore.js', () => ({
+  revokeConsent: mockRevokeConsent,
+  createConsentRequest: jest.fn(),
+  getConsentByToken: jest.fn(),
+  grantConsent: jest.fn(),
+}));
+
+// Re-import the handler so the new mock is applied.
+// In ESM, a second import of the same specifier returns the cached module,
+// so we need to use the already-imported handler from above — the mock for
+// consentStore is hoisted before the first import by jest.unstable_mockModule.
+
+describe('parentHandler — POST /api/parent/children/:studentId/revoke-consent', () => {
+  beforeEach(() => {
+    mockVerifyToken.mockReturnValue(parentDecoded);
+    mockRevokeConsent.mockResolvedValue({ consentId: 'consent-abc', status: 'revoked' });
+    mockUpdateItem.mockResolvedValue({});
+  });
+
+  it('returns 200 and suspends child account on valid revoke', async () => {
+    mockVerifyParentChildLink.mockResolvedValue({ parentId: VALID_PARENT_ID, childId: VALID_CHILD_ID, status: 'active' });
+
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`,
+        { reason: 'No longer permitted' }, 'parent-token', { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockRevokeConsent).toHaveBeenCalledWith(
+      VALID_CHILD_ID,
+      expect.objectContaining({ reason: 'No longer permitted', revokedBy: VALID_PARENT_ID }),
+    );
+    expect(mockUpdateItem).toHaveBeenCalledWith(
+      'users',
+      VALID_CHILD_ID,
+      expect.objectContaining({ accountStatus: 'suspended' }),
+    );
+  });
+
+  it('succeeds with no reason field — reason is null', async () => {
+    mockVerifyParentChildLink.mockResolvedValue({ parentId: VALID_PARENT_ID, childId: VALID_CHILD_ID, status: 'active' });
+
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`,
+        {}, 'parent-token', { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(mockRevokeConsent).toHaveBeenCalledWith(
+      VALID_CHILD_ID,
+      expect.objectContaining({ reason: null }),
+    );
+  });
+
+  it('returns 401 when no Authorization header', async () => {
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`, {}),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('returns 403 when caller role is not parent', async () => {
+    mockVerifyToken.mockReturnValue({ sub: VALID_STUDENT_ID, role: 'student', email: 'student@test.com' });
+
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`,
+        {}, 'student-token', { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
+  });
+
+  it('returns 403 CHILD_NOT_LINKED when parent is not linked to that child', async () => {
+    mockVerifyParentChildLink.mockRejectedValue(makeChildNotLinkedError());
+
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`,
+        {}, 'parent-token', { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(403);
+    const body = JSON.parse(result.body);
+    expect(body.error).toBe('CHILD_NOT_LINKED');
+  });
+
+  it('returns 400 when studentId is not a valid UUID', async () => {
+    const result = await handler(
+      makeEvent('POST', '/api/parent/children/bad-id/revoke-consent',
+        {}, 'parent-token', { studentId: 'bad-id' }),
+      mockContext,
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('includes CORS headers on 200 response', async () => {
+    mockVerifyParentChildLink.mockResolvedValue({ parentId: VALID_PARENT_ID, childId: VALID_CHILD_ID, status: 'active' });
+
+    const result = await handler(
+      makeEvent('POST', `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`,
+        {}, 'parent-token', { studentId: VALID_CHILD_ID }),
+      mockContext,
+    );
+    expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+  });
+});
+
+// ─── Auth guard: 401 on all authenticated routes ──────────────────────────────
+
+describe('parentHandler — 401 on missing auth token', () => {
+  const unauthCases = [
+    ['GET',    '/api/parent/children'],
+    ['POST',   '/api/parent/link'],
+    ['DELETE', `/api/parent/children/${VALID_CHILD_ID}`],
+    ['GET',    `/api/parent/children/${VALID_CHILD_ID}/progress`],
+    ['GET',    `/api/parent/children/${VALID_CHILD_ID}/assignments`],
+    ['GET',    `/api/parent/children/${VALID_CHILD_ID}/export`],
+    ['POST',   `/api/parent/children/${VALID_CHILD_ID}/revoke-consent`],
+  ];
+
+  for (const [method, path] of unauthCases) {
+    it(`returns 401 with CORS headers for ${method} ${path} when no token`, async () => {
+      const result = await handler(makeEvent(method, path, null, null), mockContext);
+      expect(result.statusCode).toBe(401);
+      expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
+    });
+  }
+});

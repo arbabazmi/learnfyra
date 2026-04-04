@@ -3,19 +3,21 @@
  * @description Unit tests for COPPA/CCPA account deletion helpers.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 
 const mockQueryByField = jest.fn();
-const mockDeleteItem = jest.fn();
+const mockDeleteItem   = jest.fn();
+const mockGetItem      = jest.fn();
 
 jest.unstable_mockModule('../../src/db/index.js', () => ({
   getDbAdapter: jest.fn(() => ({
     queryByField: mockQueryByField,
-    deleteItem: mockDeleteItem,
+    deleteItem:   mockDeleteItem,
+    getItem:      mockGetItem,
   })),
 }));
 
-const { cascadeDeleteUser } = await import('../../src/account/accountDeletion.js');
+const { cascadeDeleteUser, logDeletionEvent } = await import('../../src/account/accountDeletion.js');
 
 describe('cascadeDeleteUser()', () => {
   beforeEach(() => {
@@ -72,5 +74,86 @@ describe('cascadeDeleteUser()', () => {
     expect(deletedTables).toContain('users');
     expect(queriedTables).not.toContain('consentrecords');
     expect(deletedTables).not.toContain('consentrecords');
+  });
+
+  it('consentrecords are never queried or deleted (COPPA 312.10 audit retention)', async () => {
+    await cascadeDeleteUser('user-audit-check');
+
+    const allQueried = mockQueryByField.mock.calls.map(([table]) => table);
+    const allDeleted = mockDeleteItem.mock.calls.map(([table]) => table);
+
+    expect(allQueried).not.toContain('consentrecords');
+    expect(allDeleted).not.toContain('consentrecords');
+  });
+
+  it('handles ResourceNotFoundException gracefully when a table is missing', async () => {
+    const notFoundError = Object.assign(new Error('Table not found'), { name: 'ResourceNotFoundException' });
+
+    mockQueryByField.mockImplementation(async (table) => {
+      if (table === 'worksheetattempts') throw notFoundError;
+      if (table === 'memberships') throw notFoundError;
+      return [];
+    });
+
+    await expect(cascadeDeleteUser('user-missing-tables')).resolves.toBeDefined();
+
+    const result = await cascadeDeleteUser('user-missing-tables');
+    expect(result.deletedCounts.worksheetAttempts).toBe(0);
+    expect(result.deletedCounts.memberships).toBe(0);
+  });
+
+  it('throws when userId is missing', async () => {
+    await expect(cascadeDeleteUser('')).rejects.toThrow('userId is required');
+    await expect(cascadeDeleteUser(null)).rejects.toThrow('userId is required');
+    await expect(cascadeDeleteUser(undefined)).rejects.toThrow('userId is required');
+  });
+});
+
+// ─── logDeletionEvent ─────────────────────────────────────────────────────────
+
+describe('logDeletionEvent()', () => {
+  let consoleSpy;
+
+  beforeEach(() => {
+    consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+  });
+
+  it('logs a structured JSON audit event to stdout', () => {
+    logDeletionEvent('user-123', { deletedCounts: { userRecord: 1 } });
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const logged = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(logged.event).toBe('USER_DATA_DELETED');
+    expect(logged.userId).toBe('user-123');
+  });
+
+  it('always sets consentRecordsRetained=true in the audit log', () => {
+    logDeletionEvent('user-456', {});
+
+    const logged = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(logged.consentRecordsRetained).toBe(true);
+  });
+
+  it('includes COPPA and CCPA compliance tags', () => {
+    logDeletionEvent('user-789', {});
+
+    const logged = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(logged.compliance).toContain('COPPA');
+    expect(logged.compliance).toContain('CCPA');
+  });
+
+  it('is called by cascadeDeleteUser caller pattern — callable with deletedCounts from cascade result', async () => {
+    mockQueryByField.mockResolvedValue([]);
+    const result = await cascadeDeleteUser('user-log-test');
+    // Simulate the typical caller pattern: log after cascade
+    logDeletionEvent(result.userId, { deletedCounts: result.deletedCounts });
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const logged = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(logged.userId).toBe('user-log-test');
   });
 });
