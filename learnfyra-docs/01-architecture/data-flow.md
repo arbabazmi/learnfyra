@@ -109,7 +109,7 @@ learnfyra-submit Lambda
             {worksheetId, totalScore, totalPoints, percentage, timeTaken, timed, results[]}
 ```
 
-## Authentication Flow
+## Authentication Flow (13+ Users — Standard)
 
 ```
 Browser                          Cognito                        Lambda Authorizer
@@ -126,6 +126,84 @@ Browser                          Cognito                        Lambda Authorize
    │                                                          IAM policy  │
    │                                                          Allow/Deny  │
    │◄── protected resource ─────────────────────────────────────────────│
+```
+
+## COPPA Consent Flow (Under-13 Registration)
+
+```
+Child Browser                    learnfyra-consent Lambda          SES / Parent Email
+     │                               │                                    │
+     │  1. Age Gate: "Under 13"      │                                    │
+     │                               │                                    │
+     │  POST /api/auth/child-request │                                    │
+     │  {parentEmail, childNickname} │                                    │
+     │──────────────────────────────►│                                    │
+     │                               │                                    │
+     │                               ├── Create PendingConsent record     │
+     │                               │   (72h TTL, consentToken=UUID)     │
+     │                               │                                    │
+     │                               ├── Send consent email ─────────────►│
+     │                               │   (link with consentToken)         │
+     │                               │                                    │
+     │◄── 202 "Ask your parent" ────│                                    │
+     │                               │                                    │
+     │    ❌ NO account created       │                                    │
+     │    ❌ NO Cognito identity      │                                    │
+     │    ❌ NO JWT issued            │                                    │
+
+Parent Browser                   learnfyra-consent Lambda          DynamoDB
+     │                               │                                    │
+     │  Parent clicks email link     │                                    │
+     │                               │                                    │
+     │  GET /api/auth/consent/:token │                                    │
+     │──────────────────────────────►│                                    │
+     │                               ├── Lookup PendingConsent ──────────►│
+     │                               │   (validate token, check expiry)   │
+     │◄── Consent page data ────────│                                    │
+     │   (child nickname, data       │                                    │
+     │    practices, parent rights)  │                                    │
+     │                               │                                    │
+     │  POST /api/auth/consent/:token│                                    │
+     │  {consent: true, parentAccount}                                    │
+     │──────────────────────────────►│                                    │
+     │                               ├── Create/verify parent account     │
+     │                               ├── Write ConsentLog (immutable) ───►│
+     │                               ├── Create child Users record ──────►│
+     │                               │   (role=student, ageGroup=under13, │
+     │                               │    parentId, email=NULL)           │
+     │                               ├── Delete PendingConsent record ───►│
+     │                               │                                    │
+     │◄── 201 {parentToken, childId}│                                    │
+     │   Parent redirected to        │                                    │
+     │   Parent Dashboard            │                                    │
+```
+
+## Parent Child Management Flow
+
+```
+Parent Browser                   learnfyra-parent Lambda           DynamoDB / S3
+     │                               │                                    │
+     │  GET /api/auth/children       │                                    │
+     │──────────────────────────────►│                                    │
+     │                               ├── Query Users by parentId ────────►│
+     │◄── [{childId, name, ...}] ───│                                    │
+     │                               │                                    │
+     │  POST /api/auth/child-session │                                    │
+     │  {childId}                    │                                    │
+     │──────────────────────────────►│                                    │
+     │                               ├── Verify parent owns child         │
+     │                               ├── Issue scoped child JWT           │
+     │◄── {childAccessToken} ───────│   (ageGroup=under13, restricted)   │
+     │   Redirect to index.html      │                                    │
+     │                               │                                    │
+     │  DELETE /api/auth/children/:id│                                    │
+     │──────────────────────────────►│                                    │
+     │                               ├── Delete child Users record ──────►│
+     │                               ├── Delete child S3 data ───────────►│
+     │                               ├── Delete child Cognito identity    │
+     │                               ├── Update ConsentLog (revokedAt) ──►│
+     │                               ├── Remove childId from parent ─────►│
+     │◄── 200 "Deleted" ───────────│                                    │
 ```
 
 ## Question Bank Population Flow

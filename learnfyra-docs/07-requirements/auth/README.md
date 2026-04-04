@@ -356,7 +356,7 @@ Then the record is updated with revokedAt and revokedReason fields but is NEVER 
 - Q: Should we support magic link (email) login in addition to password login? — Deferred to Phase 2
 - Q: Should parent-child confirmation be email or in-app? — Decision: email for Phase 1 (simpler)
 - Q: Max parent accounts per student? — Decision: 2 parents per student in Phase 1
-- Q: Should child sessions have a configurable daily time limit? — Proposed: 4 hours default, parent-configurable
-- Q: Phase 2 child login: individual child login codes or parent-managed only? — Deferred to Phase 2
-- Q: Should VPC be upgraded to credit card verification in Phase 2? — Recommended by FTC for stronger compliance
+- Q: Should child sessions have a configurable daily time limit? — **Decision: Yes, 4 hours default, parent-configurable (1-8 hours range). Session auto-expires when limit reached.**
+- Q: Phase 2 child login: individual child login codes or parent-managed only? — **Decision: Decide later in Phase 2 based on Phase 1 usage patterns. Phase 1 is parent-managed sessions only.**
+- Q: Should VPC be upgraded to credit card verification in Phase 2? — **Decision: Yes, add credit card verification ($0.50 charge) in Phase 2 for stronger FTC compliance.**
 - Q: FERPA implications for teacher-managed student data? — Needs legal review before class management feature
