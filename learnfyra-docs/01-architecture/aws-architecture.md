@@ -24,6 +24,8 @@
 | learnfyra-classes-{env} | Node.js 18.x | ARM_64 | 128MB | 10s | all |
 | learnfyra-dashboard-{env} | Node.js 18.x | ARM_64 | 256MB | 15s | all |
 | learnfyra-admin-{env} | Node.js 18.x | ARM_64 | 512MB | 30s | all |
+| learnfyra-consent-{env} | Node.js 18.x | ARM_64 | 256MB | 10s | all |
+| learnfyra-parent-{env} | Node.js 18.x | ARM_64 | 256MB | 15s | all |
 | learnfyra-health-{env} | Node.js 18.x | ARM_64 | 128MB | 5s | all |
 
 X-Ray tracing: enabled on staging + prod. Disabled on dev to reduce cost.
@@ -48,8 +50,11 @@ Dev/staging buckets: `RemovalPolicy.DESTROY`, `autoDeleteObjects=true`.
 | LearnfyraWorksheetAttempt-{env} | PAY_PER_REQUEST | Solve attempts and scores |
 | LearnfyraGenerationLog-{env} | PAY_PER_REQUEST | AI generation audit |
 | LearnfyraConfig-{env} | PAY_PER_REQUEST | Platform config, model routing |
+| LearnfyraPendingConsent-{env} | PAY_PER_REQUEST | COPPA: pending parent consent requests (72h TTL auto-delete) |
+| LearnfyraConsentLog-{env} | PAY_PER_REQUEST | COPPA: immutable consent audit trail (NEVER deleted) |
 
 Prod tables: `RemovalPolicy.RETAIN`, point-in-time recovery enabled.
+ConsentLog table: `RemovalPolicy.RETAIN` on ALL environments (FTC audit requirement).
 
 ### CloudFront
 
@@ -62,11 +67,13 @@ Prod tables: `RemovalPolicy.RETAIN`, point-in-time recovery enabled.
 ### Cognito
 
 - User Pool per environment: `learnfyra-{env}-user-pool`
-- Hosted UI enabled for Google OAuth
+- Hosted UI enabled for Google OAuth (13+ users only — COPPA)
 - Google OAuth client IDs: separate per environment (dev/staging/prod)
 - App client: public client, PKCE flow, no client secret
 - Token validity: access=1h, refresh=30d, id=1h
-- User attributes: email (required), name, custom:role
+- User attributes: email (required for 13+, NULL for under-13), name, custom:role, custom:ageGroup, custom:parentId
+- User groups: Parents, Teachers, Students-13Plus, Students-Under13
+- COPPA: Students-Under13 accounts created ONLY via backend after parental consent verified
 
 ### Secrets Manager
 
@@ -75,6 +82,7 @@ Prod tables: `RemovalPolicy.RETAIN`, point-in-time recovery enabled.
 | learnfyra/{env}/anthropic-api-key | ANTHROPIC_API_KEY |
 | learnfyra/{env}/auth-config | GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, LOCAL_JWT_SECRET |
 | learnfyra/{env}/app-config | ALLOWED_ORIGIN, WORKSHEET_BUCKET_NAME |
+| learnfyra/{env}/ses-config | SES_SENDER_EMAIL, SES_REGION (for COPPA consent emails) |
 
 Secrets rotation: manual for API keys, automated 90-day rotation for JWT secret.
 
@@ -177,6 +185,8 @@ All AWS resources follow these naming patterns (lowercase, hyphens only):
 | learnfyra-solve | GetObject (worksheets) | — | — |
 | learnfyra-submit | GetObject (worksheets) | PutItem (WorksheetAttempt) | — |
 | learnfyra-auth | — | GetItem/PutItem (Users) | auth-config |
+| learnfyra-consent | — | PutItem/GetItem/UpdateItem (PendingConsent, ConsentLog, Users) + SES SendEmail | auth-config, ses-config |
+| learnfyra-parent | GetObject (worksheets — child data export) | GetItem/Query/DeleteItem (Users, ConsentLog, WorksheetAttempt) | auth-config |
 | learnfyra-authorizer | — | GetItem (Users) | auth-config |
 | learnfyra-progress | — | Query (WorksheetAttempt) | — |
 | learnfyra-admin | — | Full CRUD (all tables) | all |
@@ -194,7 +204,8 @@ infra/
     cdn.ts                  — CloudFront, custom domain, ACM cert
     secrets.ts              — Secrets Manager secrets
     monitoring.ts           — CloudWatch alarms, dashboard, SNS
-    auth.ts                 — Cognito User Pool, Hosted UI
+    auth.ts                 — Cognito User Pool, Hosted UI, user groups
+    consent.ts              — COPPA: PendingConsent + ConsentLog DynamoDB tables, SES config
   test/
     learnfyra.test.ts       — CDK assertion tests
 ```

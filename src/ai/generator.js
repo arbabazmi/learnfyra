@@ -525,6 +525,12 @@ export async function generateWorksheet(options) {
         ...aiWorksheet,
         generationMode:  'ai-only',
         provenanceLevel: Array(aiWorksheet.questions.length).fill('ai'),
+        aiDisclosure: {
+          generated: true,
+          model:     process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+          provider:  'Anthropic',
+          label:     'Questions generated with AI assistance',
+        },
       };
     }
   }
@@ -552,6 +558,12 @@ export async function generateWorksheet(options) {
       questions,
       generationMode:  'bank-only',
       provenanceLevel: Array(questions.length).fill('bank'),
+      aiDisclosure: {
+        generated: true,
+        model:     process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+        provider:  'Anthropic',
+        label:     'Questions generated with AI assistance',
+      },
     };
   }
 
@@ -588,5 +600,11 @@ export async function generateWorksheet(options) {
     questions:       mergedQuestions,
     generationMode:  'mixed',
     provenanceLevel,
+    aiDisclosure: {
+      generated: true,
+      model:     process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+      provider:  'Anthropic',
+      label:     'Questions generated with AI assistance',
+    },
   };
 }

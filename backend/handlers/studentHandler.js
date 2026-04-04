@@ -182,7 +182,52 @@ async function handleJoinClass(decoded, body) {
 }
 
 /**
- * Lambda handler — GET /api/student/profile and POST /api/student/join-class
+ * POST /api/user/role/upgrade
+ * Upgrades the authenticated user's role (student → teacher or student → parent).
+ * Downgrades are rejected with 403.
+ *
+ * @param {Object} decoded - Verified JWT payload
+ * @param {Object} body - Parsed request body
+ * @returns {Promise<{ statusCode: number, headers: Object, body: string }>}
+ */
+async function handleRoleUpgrade(decoded, body) {
+  const { targetRole } = body || {};
+  const VALID_UPGRADES = ['teacher', 'parent'];
+
+  if (!targetRole || !VALID_UPGRADES.includes(targetRole)) {
+    return errorResponse(400, `targetRole must be one of: ${VALID_UPGRADES.join(', ')}.`);
+  }
+
+  const ROLE_ORDER = { student: 1, parent: 2, teacher: 3 };
+  const currentOrder = ROLE_ORDER[decoded.role] ?? 0;
+  const targetOrder = ROLE_ORDER[targetRole] ?? 0;
+
+  if (targetOrder <= currentOrder) {
+    return errorResponse(403, `Cannot downgrade or lateral-move role from "${decoded.role}" to "${targetRole}".`);
+  }
+
+  const db = getDbAdapter();
+  const user = await db.getItem('users', decoded.sub);
+  if (!user) {
+    return errorResponse(404, 'User not found.');
+  }
+
+  const updated = await db.updateItem('users', decoded.sub, { role: targetRole });
+  if (!updated) {
+    return errorResponse(404, 'User not found.');
+  }
+
+  const { passwordHash: _ph, ...publicUser } = updated;
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ ...publicUser, previousRole: decoded.role }),
+  };
+}
+
+/**
+ * Lambda handler — GET /api/student/profile, POST /api/student/join-class,
+ *                  POST /api/user/role/upgrade
  *
  * @param {Object} event - API Gateway event or Express-shaped mock event
  * @param {Object} [context] - Lambda context (optional in local dev)
@@ -226,6 +271,17 @@ export const handler = async (event, context) => {
       }
 
       return await handleJoinClass(decoded, body);
+    }
+
+    // POST /api/user/role/upgrade
+    if (path === '/api/user/role/upgrade' && method === 'POST') {
+      let body;
+      try {
+        body = JSON.parse(event.body || '{}');
+      } catch {
+        return errorResponse(400, 'Invalid JSON in request body.');
+      }
+      return await handleRoleUpgrade(decoded, body);
     }
 
     return errorResponse(404, 'Route not found.');

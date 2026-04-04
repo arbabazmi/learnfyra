@@ -688,6 +688,66 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/request-consent ───────────────────────────────────────────
+app.post('/api/auth/request-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/request-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth request-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/verify-consent ────────────────────────────────────────────
+app.post('/api/auth/verify-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/verify-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth verify-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/deny-consent ───────────────────────────────────────────────
+app.post('/api/auth/deny-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/deny-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth deny-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PATCH /api/auth/verify-age ────────────────────────────────────────────────
+app.patch('/api/auth/verify-age', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'PATCH', path: '/api/auth/verify-age', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth verify-age route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── POST /api/auth/oauth/:provider ────────────────────────────────────────────
 app.post('/api/auth/oauth/:provider', async (req, res) => {
   try {
@@ -1518,6 +1578,560 @@ app.get('/api/qb/questions/:id', async (req, res) => {
   } catch (err) {
     console.error('question bank get-by-id route error:', err);
     res.set(corsHeaders).status(500).json({ code: 'QB_INTERNAL', error: 'Internal server error.' });
+  }
+});
+
+// ── M05 — Lazy-load new handlers ─────────────────────────────────────────────
+let _assignmentHandler;
+let _reviewQueueHandler;
+let _parentHandler;
+
+const getAssignmentHandler = async () => {
+  if (!_assignmentHandler) {
+    const mod = await import('./backend/handlers/assignmentHandler.js');
+    _assignmentHandler = mod.handler;
+  }
+  return _assignmentHandler;
+};
+
+const getReviewQueueHandler = async () => {
+  if (!_reviewQueueHandler) {
+    const mod = await import('./backend/handlers/reviewQueueHandler.js');
+    _reviewQueueHandler = mod.handler;
+  }
+  return _reviewQueueHandler;
+};
+
+const getParentHandler = async () => {
+  if (!_parentHandler) {
+    const mod = await import('./backend/handlers/parentHandler.js');
+    _parentHandler = mod.handler;
+  }
+  return _parentHandler;
+};
+
+// ── M05 Teacher — Class Management ───────────────────────────────────────────
+app.post('/api/classes', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/classes', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/classes', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/classes', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/classes/:classId', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.patch('/api/classes/:classId', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'PATCH', path: `/api/classes/${req.params.classId}`, headers: req.headers, body: JSON.stringify(req.body), pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.delete('/api/classes/:classId/archive', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: `/api/classes/${req.params.classId}/archive`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes archive route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/classes/:classId/invite', async (req, res) => {
+  try {
+    const fn = await getClassHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: `/api/classes/${req.params.classId}/invite`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('classes invite route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Teacher — Roster Management ──────────────────────────────────────────
+app.get('/api/classes/:classId/students', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/students`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class students route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.delete('/api/classes/:classId/students/:studentId', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: `/api/classes/${req.params.classId}/students/${req.params.studentId}`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId, studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class remove-student route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/classes/:classId/students/:studentId/parent-invite', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: `/api/classes/${req.params.classId}/students/${req.params.studentId}/parent-invite`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId, studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class parent-invite route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Teacher — Assignment Management ──────────────────────────────────────
+app.post('/api/assignments', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/assignments', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('assignments route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/assignments/:assignmentId', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/assignments/${req.params.assignmentId}`, headers: req.headers, body: null, pathParameters: { assignmentId: req.params.assignmentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('assignment detail route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/classes/:classId/assignments', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/assignments`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('class assignments route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.patch('/api/assignments/:assignmentId', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'PATCH', path: `/api/assignments/${req.params.assignmentId}`, headers: req.headers, body: JSON.stringify(req.body), pathParameters: { assignmentId: req.params.assignmentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('assignment patch route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.delete('/api/assignments/:assignmentId/close', async (req, res) => {
+  try {
+    const fn = await getAssignmentHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: `/api/assignments/${req.params.assignmentId}/close`, headers: req.headers, body: null, pathParameters: { assignmentId: req.params.assignmentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('assignment close route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Teacher — Review Queue ────────────────────────────────────────────────
+app.get('/api/classes/:classId/review-queue', async (req, res) => {
+  try {
+    const fn = await getReviewQueueHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/review-queue`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('review-queue route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/review-queue/:reviewId/resolve', async (req, res) => {
+  try {
+    const fn = await getReviewQueueHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: `/api/review-queue/${req.params.reviewId}/resolve`, headers: req.headers, body: JSON.stringify(req.body), pathParameters: { reviewId: req.params.reviewId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('review-queue resolve route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Teacher — Analytics ───────────────────────────────────────────────────
+app.get('/api/classes/:classId/analytics/heatmap', async (req, res) => {
+  try {
+    const fn = await getAnalyticsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/analytics/heatmap`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('analytics heatmap route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/classes/:classId/analytics', async (req, res) => {
+  try {
+    const fn = await getAnalyticsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/analytics`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('analytics route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/classes/:classId/students/:studentId/progress', async (req, res) => {
+  try {
+    const fn = await getAnalyticsHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/classes/${req.params.classId}/students/${req.params.studentId}/progress`, headers: req.headers, body: null, pathParameters: { classId: req.params.classId, studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student progress route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Parent routes ─────────────────────────────────────────────────────────
+app.post('/api/parent/link', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/parent/link', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent link route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/parent/children', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/parent/children', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent children route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.delete('/api/parent/children/:studentId', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: `/api/parent/children/${req.params.studentId}`, headers: req.headers, body: null, pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent unlink route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/parent/children/:studentId/progress', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/parent/children/${req.params.studentId}/progress`, headers: req.headers, body: null, pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent child-progress route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/parent/children/:studentId/assignments', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/parent/children/${req.params.studentId}/assignments`, headers: req.headers, body: null, pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent child-assignments route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── GET /api/parent/children/:studentId/export ───────────────────────────────
+app.get('/api/parent/children/:studentId/export', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/parent/children/${req.params.studentId}/export`, headers: req.headers, body: null, pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent export route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/parent/children/:studentId/revoke-consent ──────────────────────
+app.post('/api/parent/children/:studentId/revoke-consent', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: `/api/parent/children/${req.params.studentId}/revoke-consent`, headers: req.headers, body: JSON.stringify(req.body), pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent revoke-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/child-session ──────────────────────────────────────────────
+app.post('/api/auth/child-session', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/child-session', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('child-session route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Student — Class Participation ────────────────────────────────────────
+app.post('/api/student/classes/join', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/student/classes/join', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student join-class route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/student/parent-invite', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/student/parent-invite', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student parent-invite route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/student/assignments', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: '/api/student/assignments', headers: req.headers, body: null },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student assignments route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.get('/api/student/assignments/:assignmentId', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/student/assignments/${req.params.assignmentId}`, headers: req.headers, body: null, pathParameters: { assignmentId: req.params.assignmentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('student assignment detail route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── M05 Auth — Role Upgrade ───────────────────────────────────────────────────
+app.post('/api/user/role/upgrade', async (req, res) => {
+  try {
+    const fn = await getStudentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/user/role/upgrade', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('role upgrade route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Account Lifecycle (COPPA/CCPA deletion) ───────────────────────────────────
+let _accountHandler;
+
+/**
+ * Returns the accountHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getAccountHandler = async () => {
+  if (!_accountHandler) {
+    const mod = await import('./backend/handlers/accountHandler.js');
+    _accountHandler = mod.handler;
+  }
+  return _accountHandler;
+};
+
+// DELETE /api/account — request self-deletion (7-day grace period)
+app.delete('/api/account', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: '/api/account', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account delete route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/account/cancel-deletion — cancel a pending deletion
+app.post('/api/account/cancel-deletion', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/account/cancel-deletion', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account cancel-deletion route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// DELETE /api/account/child/:childUserId — parent deletes child account immediately
+app.delete('/api/account/child/:childUserId', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      {
+        httpMethod: 'DELETE',
+        path: `/api/account/child/${req.params.childUserId}`,
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        pathParameters: { childUserId: req.params.childUserId },
+      },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account child-delete route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });
 

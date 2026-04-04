@@ -15,6 +15,7 @@ on:
 permissions:
   id-token: write   # required for OIDC token request
   contents: read
+  actions: read     # required to query Actions run status via API
 
 jobs:
   verify-dev-promotion:
@@ -40,9 +41,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEV_RUN_ID: ${{ github.event.inputs.dev_run_id }}
         run: |
-          RESPONSE=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${DEV_RUN_ID}")
+          API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${DEV_RUN_ID}"
+          HTTP_STATUS=$(curl -sS -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "$API_URL")
+
+          RESPONSE=$(cat response.json)
           NAME=$(echo "$RESPONSE" | jq -r '.name // empty')
           CONCLUSION=$(echo "$RESPONSE" | jq -r '.conclusion // empty')
+          MESSAGE=$(echo "$RESPONSE" | jq -r '.message // empty')
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Failed to query referenced dev deploy run. HTTP $HTTP_STATUS. ${MESSAGE}"
+            exit 1
+          fi
 
           if [ "$NAME" != "Full Deploy — Dev" ]; then
             echo "Referenced run is not from Full Deploy — Dev. Found: $NAME"

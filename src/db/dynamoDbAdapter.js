@@ -99,6 +99,15 @@ const TABLE_CONFIG = {
   schooluserlink:     { envVar: 'SCHOOL_USER_LINK_TABLE_NAME',    suffix: 'SchoolUserLink',     pk: 'PK', sk: 'SK' },
   auditlog:           { envVar: 'AUDIT_LOG_TABLE_NAME',           suffix: 'AuditLog',           pk: 'PK', sk: 'SK' },
   compliancelog:      { envVar: 'COMPLIANCE_LOG_TABLE_NAME',      suffix: 'ComplianceLog',      pk: 'PK', sk: 'SK' },
+  repeatcapoverrides:        { envVar: 'REPEAT_CAP_OVERRIDES_TABLE_NAME',          suffix: 'RepeatCapOverrides',         pk: 'id'         },
+  // M05 — Teacher & Parent Roles
+  assignments:               { envVar: 'ASSIGNMENTS_TABLE_NAME',                   suffix: 'Assignments',                pk: 'PK',   sk: 'SK' },
+  studentassignmentstatus:   { envVar: 'STUDENT_ASSIGNMENT_STATUS_TABLE_NAME',     suffix: 'StudentAssignmentStatus',    pk: 'PK',   sk: 'SK' },
+  parentchildlinks:          { envVar: 'PARENT_CHILD_LINKS_TABLE_NAME',            suffix: 'ParentChildLinks',           pk: 'PK',   sk: 'SK' },
+  parentinvitecodes:         { envVar: 'PARENT_INVITE_CODES_TABLE_NAME',           suffix: 'ParentInviteCodes',          pk: 'PK',   sk: 'SK' },
+  reviewqueueitems:          { envVar: 'REVIEW_QUEUE_ITEMS_TABLE_NAME',            suffix: 'ReviewQueueItems',           pk: 'PK',   sk: 'SK' },
+  // COPPA consent records — immutable audit trail, retained 3 years
+  consentrecords:            { envVar: 'CONSENT_RECORDS_TABLE_NAME',               suffix: 'ConsentRecords',              pk: 'consentId' },
 };
 
 /**

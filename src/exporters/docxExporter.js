@@ -151,6 +151,13 @@ export async function exportDOCX(worksheet, options) {
             alignment: AlignmentType.CENTER,
             spacing: { before: 400 },
           }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Questions generated with AI assistance | Learnfyra', font: 'Arial', size: 14, color: '999999' }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 80 },
+          }),
         ],
       },
     ],
@@ -198,6 +205,13 @@ export async function exportAnswerKeyDOCX(worksheet, options) {
             spacing: { after: 300 },
           }),
           ...answerParagraphs,
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Questions generated with AI assistance | Learnfyra', font: 'Arial', size: 14, color: '999999' }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 400 },
+          }),
         ],
       },
     ],

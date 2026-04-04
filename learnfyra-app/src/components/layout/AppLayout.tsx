@@ -18,6 +18,14 @@ import {
   Bell,
   GraduationCap,
   UserPlus,
+  School,
+  Users,
+  ClipboardList,
+  BookOpen,
+  UserCheck,
+  Heart,
+  PlusCircle,
+  Link2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/ui/Logo';
@@ -33,13 +41,33 @@ interface NavItem {
   badge?: string;
 }
 
-function buildNavItems(worksheetCount?: number): NavItem[] {
-  return [
+function buildNavItems(worksheetCount?: number, role?: string): NavItem[] {
+  const common: NavItem[] = [
     { label: 'Dashboard',   href: '/dashboard',    icon: LayoutDashboard },
     { label: 'Worksheets',  href: '/worksheet',    icon: FileText, badge: worksheetCount ? String(worksheetCount) : undefined },
     { label: 'Reports',     href: '/reports',      icon: BarChart3 },
     { label: 'Achievements',href: '/achievements', icon: Award },
   ];
+
+  const teacherItems: NavItem[] = [
+    { label: 'Teacher Hub',     href: '/teacher/dashboard', icon: School },
+    { label: 'Create Class',    href: '/teacher/class/new', icon: PlusCircle },
+  ];
+
+  const parentItems: NavItem[] = [
+    { label: 'Parent Hub',      href: '/parent/dashboard',  icon: Heart },
+    { label: 'Link a Child',    href: '/parent/link',       icon: Link2 },
+  ];
+
+  const studentItems: NavItem[] = [
+    { label: 'Join a Class',    href: '/student/join-class',    icon: UserPlus },
+    { label: 'Invite Parent',   href: '/student/invite-parent', icon: Heart },
+  ];
+
+  if (role === 'teacher') return [...common, ...teacherItems];
+  if (role === 'parent')  return [...common, ...parentItems];
+  if (role === 'student') return [...common, ...studentItems];
+  return common;
 }
 
 const bottomItems: NavItem[] = [
@@ -86,7 +114,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, pageTitle }) => {
       .catch(() => {});
   }, [auth.isGuest]);
 
-  const navItems = buildNavItems(worksheetCount);
+  const userRole = auth.user?.role;
+  const navItems = buildNavItems(worksheetCount, userRole);
 
   const handleSignOut = () => {
     auth.signOut();

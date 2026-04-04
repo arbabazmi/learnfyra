@@ -35,7 +35,9 @@ import {
   Loader2,
   KeyRound,
   CheckCircle,
+  Calendar,
 } from 'lucide-react';
+import { AgeGate } from '@/components/auth/AgeGate';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { googleOAuth, isLocal, mailhogUrl } from '@/lib/env';
@@ -53,7 +55,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type ModalStep = 'role' | 'onboarding' | 'signin' | 'email-entry' | 'email-signin' | 'email-signup' | 'forgot-password';
+type ModalStep = 'role' | 'onboarding' | 'signin' | 'email-entry' | 'email-signin' | 'age-gate' | 'email-signup' | 'forgot-password';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -232,6 +234,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [displayName, setDisplayName] = React.useState('');
   const [signupRole, setSignupRole] = React.useState<UserRole>(getSelectedRole() || 'student');
+
+  // DOB state for signup
+  const [dobMonth, setDobMonth] = React.useState('');
+  const [dobDay, setDobDay] = React.useState('');
+  const [dobYear, setDobYear] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [apiError, setApiError] = React.useState('');
 
@@ -251,6 +258,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
       setConfirmPassword('');
       setDisplayName('');
       setSignupRole(getSelectedRole() || 'student');
+      setDobMonth('');
+      setDobDay('');
+      setDobYear('');
       setIsLoading(false);
       setApiError('');
       setTouched({});
@@ -308,7 +318,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     if (step === 'forgot-password') {
       setResetSent(false);
       goBack('email-signin');
-    } else if (step === 'email-signup' || step === 'email-signin') {
+    } else if (step === 'email-signup') {
+      goBack('age-gate');
+    } else if (step === 'age-gate' || step === 'email-signin') {
       goBack('email-entry');
     } else if (step === 'email-entry') {
       goBack('signin');
@@ -355,6 +367,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
     goForward('email-signin');
   };
 
+  // ── Age gate callback ────────────────────────────────────────────────
+
+  const handleAgeConfirmed = (_group: '13plus' | 'under13') => {
+    // AgeGate handles under-13 navigation internally (to /auth/consent-pending).
+    // This callback is only reached for 13+ users — proceed to standard sign-up.
+    goForward('email-signup');
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
@@ -376,10 +396,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!displayName || !email || !isPasswordValid(password) || password !== confirmPassword) return;
+    if (!dobMonth || !dobDay || !dobYear) return;
     setIsLoading(true);
     setApiError('');
     try {
-      await signUp(displayName, email, password, signupRole);
+      const dateOfBirth = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+      const result = await signUp(displayName, email, password, signupRole, dateOfBirth);
+      // Under-13 COPPA flow: backend signals requiresConsent
+      if ((result as unknown as { requiresConsent?: boolean }).requiresConsent) {
+        onClose();
+        navigate('/auth/consent-pending', { replace: true });
+        return;
+      }
       auth.refresh();
       onClose();
       navigate('/dashboard', { replace: true });
@@ -401,6 +429,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
   const passwordError = touched.password && password.length > 0 && password.length < 8 ? 'Password must be at least 8 characters' : '';
   const confirmError = touched.confirm && confirmPassword && password !== confirmPassword ? 'Passwords do not match' : '';
   const nameError = touched.name && !displayName.trim() ? 'Full name is required' : '';
+  const dobError = touched.dob && (!dobMonth || !dobDay || !dobYear) ? 'Date of birth is required' : '';
+
+  const isDobComplete = dobMonth !== '' && dobDay !== '' && dobYear !== '';
+
+  // Generate year range: current year down to current year - 120
+  const currentYear = new Date().getFullYear();
+  const dobYears = Array.from({ length: 116 }, (_, i) => currentYear - 5 - i);
+
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
   if (!isOpen) return null;
 
@@ -618,7 +658,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                 <p className="text-center text-xs text-muted-foreground">
                   Don't have an account?{' '}
                   <button
-                    onClick={() => { setTouched({}); setApiError(''); goForward('email-signup'); }}
+                    onClick={() => { setTouched({}); setApiError(''); goForward('age-gate'); }}
                     className="text-primary font-bold hover:underline"
                   >
                     Create one
@@ -681,7 +721,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                   <span>
                     No account?{' '}
                     <button
-                      onClick={() => { setPassword(''); setApiError(''); setTouched({}); goForward('email-signup'); }}
+                      onClick={() => { setPassword(''); setApiError(''); setTouched({}); goForward('age-gate'); }}
                       className="text-primary font-bold hover:underline"
                     >
                       Create one
@@ -689,6 +729,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                   </span>
                 </div>
               </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════
+                Step 5b: Age Gate (COPPA) — shown before sign-up
+               ══════════════════════════════════════════════════ */}
+            {step === 'age-gate' && (
+              <AgeGate
+                onAgeConfirmed={handleAgeConfirmed}
+                onBack={handleBack}
+              />
             )}
 
             {/* ══════════════════════════════════════════════════
@@ -711,6 +761,59 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                 )}
 
                 <form onSubmit={handleSignUp} className="space-y-3">
+                  {/* Date of Birth */}
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="size-3.5" />
+                        Date of Birth
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mb-2">Required for age verification</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Month */}
+                      <select
+                        value={dobMonth}
+                        onChange={(e) => setDobMonth(e.target.value)}
+                        onBlur={() => touch('dob')}
+                        className={`${inputCls} px-2 text-xs ${dobError ? inputErrorCls : ''}`}
+                        aria-label="Birth month"
+                      >
+                        <option value="">Month</option>
+                        {MONTHS.map((m, i) => (
+                          <option key={m} value={String(i + 1)}>{m}</option>
+                        ))}
+                      </select>
+                      {/* Day */}
+                      <select
+                        value={dobDay}
+                        onChange={(e) => setDobDay(e.target.value)}
+                        onBlur={() => touch('dob')}
+                        className={`${inputCls} px-2 text-xs ${dobError ? inputErrorCls : ''}`}
+                        aria-label="Birth day"
+                      >
+                        <option value="">Day</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                          <option key={d} value={String(d)}>{d}</option>
+                        ))}
+                      </select>
+                      {/* Year */}
+                      <select
+                        value={dobYear}
+                        onChange={(e) => setDobYear(e.target.value)}
+                        onBlur={() => touch('dob')}
+                        className={`${inputCls} px-2 text-xs ${dobError ? inputErrorCls : ''}`}
+                        aria-label="Birth year"
+                      >
+                        <option value="">Year</option>
+                        {dobYears.map((y) => (
+                          <option key={y} value={String(y)}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <FieldError message={dobError} />
+                  </div>
+
                   {/* Full Name */}
                   <div>
                     <div className="relative">
@@ -792,7 +895,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialStep = 'r
                     size="lg"
                     className="w-full gap-2 mt-1"
                     type="submit"
-                    disabled={!displayName.trim() || !isEmailValid(email) || !isPasswordValid(password) || password !== confirmPassword || isLoading}
+                    disabled={!displayName.trim() || !isEmailValid(email) || !isPasswordValid(password) || password !== confirmPassword || !isDobComplete || isLoading}
                     loading={isLoading}
                   >
                     Create Account

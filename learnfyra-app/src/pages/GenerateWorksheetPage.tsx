@@ -17,6 +17,7 @@ import {
   FileDown,
   Printer,
   KeyRound,
+  AlertTriangle,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -27,7 +28,7 @@ import { printWorksheet, downloadAsPDF } from '@/modules/solve/worksheetExport';
 import { mapSolveDataToWorksheet } from '@/modules/solve/apiMapper';
 import type { Subject } from '@/modules/solve/types';
 import { apiUrl } from '@/lib/env';
-import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { getAuthToken, GUEST_STORAGE_KEYS, isChildUser } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
 import { LimitReachedModal } from '@/components/auth/LimitReachedModal';
@@ -96,6 +97,16 @@ function estimateMinutes(questionCount: number, difficulty: DifficultyValue): nu
   return Math.round(questionCount * MINUTES_PER_Q[difficulty]);
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface FallbackState {
+  mode: 'partial' | 'none';
+  reason: string;
+  requestedCount?: number;
+  servedCount?: number;
+  suggestedTopics: string[];
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type GenerationState = 'idle' | 'generating' | 'success';
@@ -118,11 +129,21 @@ const GenerateWorksheetPage: React.FC = () => {
     QUESTION_TYPES.map((t) => t.value),
   );
 
+  // ── Child user — hide PII fields (COPPA)
+  const isChild = isChildUser();
+
+  // ── Optional PII fields (hidden for child users per COPPA)
+  const [studentName, setStudentName]   = React.useState('');
+  const [teacherName, setTeacherName]   = React.useState('');
+  const [worksheetClassName, setWorksheetClassName] = React.useState('');
+  const [period, setPeriod]             = React.useState('');
+
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
   const [generatedSlug, setGeneratedSlug] = React.useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
+  const [fallbackState, setFallbackState] = React.useState<FallbackState | null>(null);
   const navigate = useNavigate();
 
   usePageMeta({
@@ -184,6 +205,7 @@ const GenerateWorksheetPage: React.FC = () => {
     generatingRef.current = true;
     setGenState('generating');
     setGenError('');
+    setFallbackState(null);
 
     try {
       const res = await fetch(`${apiUrl}/api/generate`, {
@@ -203,6 +225,11 @@ const GenerateWorksheetPage: React.FC = () => {
           generationMode: 'auto',
           provenanceLevel: 'summary',
           worksheetDate: new Date().toISOString().split('T')[0],
+          // PII fields are omitted entirely for child users (COPPA)
+          ...(!isChild && studentName.trim()       && { studentName: studentName.trim() }),
+          ...(!isChild && teacherName.trim()       && { teacherName: teacherName.trim() }),
+          ...(!isChild && worksheetClassName.trim() && { className: worksheetClassName.trim() }),
+          ...(!isChild && period.trim()            && { period: period.trim() }),
         }),
       });
 
@@ -210,6 +237,17 @@ const GenerateWorksheetPage: React.FC = () => {
 
       if (res.status === 403 && data?.code === 'GUEST_LIMIT_REACHED') {
         setShowLimitModal(true);
+        setGenState('idle');
+        return;
+      }
+
+      if (res.status === 400 && data?.code === 'WG_NO_QUESTIONS_AVAILABLE') {
+        // Tier 3: Total fallback — no questions available
+        setFallbackState({
+          mode: 'none',
+          reason: data.metadata?.fallbackReason || data.error,
+          suggestedTopics: data.metadata?.similarTopics || [],
+        });
         setGenState('idle');
         return;
       }
@@ -230,6 +268,17 @@ const GenerateWorksheetPage: React.FC = () => {
 
       setGeneratedId(wsId);
       setGeneratedSlug(data.metadata?.slug || null);
+
+      // Tier 2: Partial worksheet — store fallback state before marking success
+      if (data.metadata?.fallbackMode === 'partial') {
+        setFallbackState({
+          mode: 'partial',
+          reason: data.metadata?.fallbackReason || 'Some questions were served from our question bank.',
+          requestedCount: data.metadata?.requestedCount || questionCount,
+          servedCount: data.metadata?.questionCount || 0,
+          suggestedTopics: data.metadata?.similarTopics || [],
+        });
+      }
 
       // Fetch worksheet data via API and save to localStorage for solve page
       try {
@@ -260,6 +309,10 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Shared select class
   const selectClass =
     'w-full h-11 pl-4 pr-9 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer';
+
+  // ── Shared text input class (no arrow/appearance styles)
+  const inputFieldClass =
+    'w-full h-11 px-4 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -324,11 +377,26 @@ const GenerateWorksheetPage: React.FC = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Your worksheet has been generated with{' '}
                 <span className="font-bold text-foreground">
-                  {questionCount} questions
+                  {fallbackState?.servedCount ?? questionCount} questions
                 </span>{' '}
                 — {subject}, {topic}, Grade {grade}.
               </p>
             </div>
+
+            {/* Tier 2: Partial worksheet warning banner */}
+            {fallbackState?.mode === 'partial' && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">
+                    Partial Worksheet — {fallbackState.servedCount} of {fallbackState.requestedCount} questions
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    Our AI service was temporarily unavailable. We've included all available pre-made questions for this topic. You can still solve and download this worksheet.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Primary CTA — solve online */}
             <div className="flex flex-wrap justify-center gap-3">
@@ -403,7 +471,7 @@ const GenerateWorksheetPage: React.FC = () => {
             {/* Secondary links */}
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Button variant="ghost" size="md" asChild>
-                <Link to="/worksheet/new" onClick={() => { setGenState('idle'); setGeneratedId(null); }}>
+                <Link to="/worksheet/new" onClick={() => { setGenState('idle'); setGeneratedId(null); setFallbackState(null); }}>
                   Generate Another
                 </Link>
               </Button>
@@ -693,6 +761,79 @@ const GenerateWorksheetPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Section: Student Details (hidden for child users per COPPA) */}
+                {!isChild && (
+                  <>
+                    <div className="border-t border-border" />
+                    <div className="space-y-3">
+                      <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest">
+                        Student Details
+                      </h3>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Optional — printed on the worksheet header.
+                      </p>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label htmlFor="studentName-input" className="text-xs font-bold text-foreground">
+                            Student Name
+                          </label>
+                          <input
+                            id="studentName-input"
+                            type="text"
+                            value={studentName}
+                            onChange={(e) => setStudentName(e.target.value)}
+                            placeholder="e.g. Alex Johnson"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="teacherName-input" className="text-xs font-bold text-foreground">
+                            Teacher Name
+                          </label>
+                          <input
+                            id="teacherName-input"
+                            type="text"
+                            value={teacherName}
+                            onChange={(e) => setTeacherName(e.target.value)}
+                            placeholder="e.g. Ms. Rivera"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="className-input" className="text-xs font-bold text-foreground">
+                            Class Name
+                          </label>
+                          <input
+                            id="className-input"
+                            type="text"
+                            value={worksheetClassName}
+                            onChange={(e) => setWorksheetClassName(e.target.value)}
+                            placeholder="e.g. Math 4B"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="period-input" className="text-xs font-bold text-foreground">
+                            Period
+                          </label>
+                          <input
+                            id="period-input"
+                            type="text"
+                            value={period}
+                            onChange={(e) => setPeriod(e.target.value)}
+                            placeholder="e.g. Period 3"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {/* Generate button — or login CTA for restricted guest roles */}
                 {isGuestRestricted ? (
                   <Button
@@ -726,6 +867,53 @@ const GenerateWorksheetPage: React.FC = () => {
                 {genError && (
                   <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive font-semibold">
                     {genError}
+                  </div>
+                )}
+
+                {/* Tier 3: No questions available — friendly fallback card */}
+                {fallbackState?.mode === 'none' && (
+                  <div className="mt-4 p-5 rounded-2xl bg-amber-50 border border-amber-200 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="size-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-900">
+                          No Questions Available
+                        </h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          We couldn&apos;t generate questions for this topic right now. Our AI service is temporarily unavailable and we don&apos;t have pre-made questions for this specific topic yet.
+                        </p>
+                      </div>
+                    </div>
+
+                    {fallbackState.suggestedTopics.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-widest">
+                          Try these similar topics instead
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {fallbackState.suggestedTopics.map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                setTopic(t);
+                                setFallbackState(null);
+                                setGenError('');
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-sm font-semibold text-amber-800 hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer"
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-amber-600">
+                      Our team has been notified and is working on it.
+                    </p>
                   </div>
                 )}
 

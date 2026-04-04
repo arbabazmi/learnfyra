@@ -515,33 +515,76 @@ describe('assembleWorksheet — second-pass validation guard', () => {
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 
-describe('assembleWorksheet — error handling', () => {
+describe('assembleWorksheet — error handling / fallback', () => {
 
-  it('throws when Claude returns an empty response', async () => {
+  it('falls back to Tier 3 (none) when Claude returns an empty response and bank is empty', async () => {
     mockListQuestions.mockReturnValue([]);
     mockMessagesCreate.mockResolvedValue({
       stop_reason: 'end_turn',
       content: [{ text: '' }],
     });
-    await expect(assembleWorksheet(baseOptions)).rejects.toThrow('empty response');
+    const result = await assembleWorksheet(baseOptions);
+    expect(result.worksheet.fallbackMode).toBe('none');
+    expect(result.worksheet.questions).toHaveLength(0);
+    expect(result.worksheet.fallbackReason).toMatch(/empty response/i);
+    expect(result.bankStats.fallbackUsed).toBe(true);
   });
 
-  it('throws when Claude response is truncated (max_tokens)', async () => {
+  it('falls back to Tier 3 (none) when Claude response is truncated (max_tokens) and bank is empty', async () => {
     mockListQuestions.mockReturnValue([]);
     mockMessagesCreate.mockResolvedValue({
       stop_reason: 'max_tokens',
       content: [{ text: '{"questions":[' }],
     });
-    await expect(assembleWorksheet(baseOptions)).rejects.toThrow('max_tokens');
+    const result = await assembleWorksheet(baseOptions);
+    expect(result.worksheet.fallbackMode).toBe('none');
+    expect(result.worksheet.questions).toHaveLength(0);
+    expect(result.worksheet.fallbackReason).toMatch(/max_tokens|truncated/i);
   });
 
-  it('throws when Claude returns wrong question count', async () => {
+  it('falls back to Tier 3 (none) when Claude returns wrong question count and bank is empty', async () => {
     mockListQuestions.mockReturnValue([]);
     // Return only 3 questions when 5 are needed
     mockMessagesCreate.mockResolvedValue(claudeResponse(3));
-    await expect(assembleWorksheet({ ...baseOptions, questionCount: 5 })).rejects.toThrow(
-      /Expected exactly 5/
+    const result = await assembleWorksheet({ ...baseOptions, questionCount: 5 });
+    expect(result.worksheet.fallbackMode).toBe('none');
+    expect(result.worksheet.questions).toHaveLength(0);
+    expect(result.worksheet.requestedCount).toBe(5);
+  });
+
+  it('falls back to Tier 2 (partial) when Claude fails but bank has questions', async () => {
+    const banked = Array.from({ length: 3 }, (_, i) =>
+      makeQuestion({ questionId: `qid-tier2-${i}`, question: `Bank Q ${i + 1}` })
     );
+    mockListQuestions.mockReturnValue(banked);
+    mockMessagesCreate.mockRejectedValue(new Error('API rate limited'));
+    const result = await assembleWorksheet({ ...baseOptions, questionCount: 5 });
+    expect(result.worksheet.fallbackMode).toBe('partial');
+    expect(result.worksheet.questions).toHaveLength(3);
+    expect(result.worksheet.actualCount).toBe(3);
+    expect(result.worksheet.requestedCount).toBe(5);
+    expect(result.bankStats.fallbackUsed).toBe(true);
+    expect(result.bankStats.generated).toBe(0);
+  });
+
+  it('falls back to Tier 2 with 1 bank question (boundary) when Claude throws', async () => {
+    const banked = [makeQuestion({ questionId: 'qid-single', question: 'Only bank Q' })];
+    mockListQuestions.mockReturnValue(banked);
+    mockMessagesCreate.mockRejectedValue(new Error('Claude refused'));
+    const result = await assembleWorksheet({ ...baseOptions, questionCount: 10 });
+    expect(result.worksheet.fallbackMode).toBe('partial');
+    expect(result.worksheet.questions).toHaveLength(1);
+    expect(result.worksheet.actualCount).toBe(1);
+    expect(result.worksheet.fallbackReason).toMatch(/refused/i);
+  });
+
+  it('returns fallbackMode null when AI succeeds normally', async () => {
+    mockListQuestions.mockReturnValue([]);
+    mockMessagesCreate.mockResolvedValue(claudeResponse(5));
+    const result = await assembleWorksheet(baseOptions);
+    expect(result.worksheet.fallbackMode).toBeNull();
+    expect(result.worksheet.questions).toHaveLength(5);
+    expect(result.bankStats.fallbackUsed).toBe(false);
   });
 
 });

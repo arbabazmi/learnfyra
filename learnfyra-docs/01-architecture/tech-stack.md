@@ -42,17 +42,18 @@
 
 | Service | Usage |
 |---|---|
-| Lambda | All compute (12 functions) |
+| Lambda | All compute (14 functions — includes COPPA consent + parent handlers) |
 | API Gateway | REST API, throttling, request validation |
 | CloudFront | CDN, HTTPS termination, WAF |
 | S3 | Worksheet files (PDF/DOCX/HTML/JSON) + static frontend |
-| DynamoDB | Question bank, users, attempts, config |
+| DynamoDB | Question bank, users, attempts, config, COPPA consent (PendingConsent + ConsentLog) |
 | Cognito | Auth — User Pool + Hosted UI + Google OAuth |
 | Secrets Manager | API keys, OAuth secrets, JWT secrets |
 | CloudWatch | Logs, metrics, alarms, dashboards |
 | ACM | TLS certificates (us-east-1 for CloudFront) |
 | Route 53 | DNS hosting for learnfyra.com |
 | SNS | Ops alert notifications |
+| SES | COPPA consent emails to parents (sender verification per env) |
 | X-Ray | Lambda distributed tracing (staging + prod) |
 
 ## Design Tokens

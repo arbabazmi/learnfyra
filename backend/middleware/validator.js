@@ -1,6 +1,7 @@
 ﻿/**
  * @file backend/middleware/validator.js
  * @description Validates incoming API Gateway event bodies for worksheet generation
+ * and authentication (including COPPA dateOfBirth validation).
  */
 
 const VALID_SUBJECTS = ['Math', 'ELA', 'Science', 'Social Studies', 'Health'];
@@ -151,4 +152,83 @@ export function validateGenerateBody(body) {
     studentId,
     parentId,
   };
+}
+
+/**
+ * Strips personally identifiable fields from a generate request body when the
+ * requesting user is a child (ageGroup === 'child').
+ * Modifies the body object in place and also returns it for chaining.
+ *
+ * Fields removed: studentName, teacherName, className, period
+ *
+ * @param {Object} body           - The parsed generate request body
+ * @param {string} userAgeGroup   - The ageGroup value from the authenticated user record
+ * @returns {Object} The (mutated) body object
+ */
+export function stripChildPII(body, userAgeGroup) {
+  if (userAgeGroup === 'child') {
+    delete body.studentName;
+    delete body.teacherName;
+    delete body.className;
+    delete body.period;
+  }
+  return body;
+}
+
+/**
+ * Validates a dateOfBirth string for COPPA registration.
+ * Rules: required string, YYYY-MM-DD format, valid calendar date, age 5-120, not future.
+ *
+ * Throws a descriptive Error with a user-facing message on any violation.
+ * @param {unknown} value - Raw input value from the request body
+ * @returns {string} The validated YYYY-MM-DD string
+ * @throws {Error} If the value is missing, malformed, or out of the allowed age range
+ */
+export function validateRegistrationDateOfBirth(value) {
+  if (value == null || value === '') {
+    throw new Error('dateOfBirth is required.');
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error('dateOfBirth must be a string in YYYY-MM-DD format.');
+  }
+
+  const trimmed = value.trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error('dateOfBirth must be in YYYY-MM-DD format.');
+  }
+
+  const [year, month, day] = trimmed.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error('dateOfBirth is not a valid calendar date.');
+  }
+
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  if (parsed > todayUTC) {
+    throw new Error('dateOfBirth cannot be in the future.');
+  }
+
+  // Calculate age (birthday-aware)
+  let age = todayUTC.getUTCFullYear() - year;
+  const birthdayThisYear = new Date(Date.UTC(todayUTC.getUTCFullYear(), month - 1, day));
+  if (todayUTC < birthdayThisYear) age--;
+
+  if (age < 5) {
+    throw new Error('dateOfBirth results in an age below the minimum allowed (5).');
+  }
+
+  if (age > 120) {
+    throw new Error('dateOfBirth results in an age above the maximum allowed (120).');
+  }
+
+  return trimmed;
 }

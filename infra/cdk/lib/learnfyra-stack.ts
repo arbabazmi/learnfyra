@@ -443,7 +443,7 @@ export class LearnfyraStack extends cdk.Stack {
     // ── API Gateway ────────────────────────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
       logGroupName: `/aws/apigateway/learnfyra-${appEnv}-access-logs`,
-      retention: logs.RetentionDays.ONE_MONTH,
+      retention: logs.RetentionDays.THREE_YEARS,
       removalPolicy,
     });
 
@@ -668,7 +668,7 @@ export class LearnfyraStack extends cdk.Stack {
         MAX_RETRIES: isProd ? '0' : '1',
         ANTHROPIC_REQUEST_TIMEOUT_MS: '22000',
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-generate — worksheet generation`,
     });
@@ -691,7 +691,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-download — presigned URL generation`,
     });
@@ -715,7 +715,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-auth — auth route handler`,
     });
@@ -733,7 +733,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-api-authorizer — API Gateway JWT authorizer`,
     });
@@ -752,7 +752,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-solve — worksheet solve retrieval`,
     });
@@ -771,7 +771,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         WORKSHEET_BUCKET_NAME: worksheetBucket.bucketName,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-submit — worksheet answer scoring`,
     });
@@ -789,7 +789,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-progress — student progress routes`,
     });
@@ -807,7 +807,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-analytics — class analytics routes`,
     });
@@ -825,7 +825,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-class — class management routes`,
     });
@@ -843,7 +843,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-rewards — student/class rewards routes`,
     });
@@ -861,7 +861,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-student — student profile and membership routes`,
     });
@@ -879,7 +879,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-admin — admin question-bank routes`,
     });
@@ -897,7 +897,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-dashboard — dashboard stats, recent worksheets, subject progress`,
     });
@@ -915,7 +915,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-certificates — student certificate list and download`,
     });
@@ -933,7 +933,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-guest-fixture — guest role preview fixtures`,
     });
@@ -951,7 +951,7 @@ export class LearnfyraStack extends cdk.Stack {
       environment: {
         NODE_ENV: appEnv,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
     });
@@ -970,7 +970,7 @@ export class LearnfyraStack extends cdk.Stack {
         NODE_ENV: appEnv,
         FEEDBACK_TABLE_NAME: feedbackTable.tableName,
       },
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logRetention: logs.RetentionDays.THREE_YEARS,
       tracing: tracingMode,
       description: `learnfyra-${appEnv}-lambda-feedback — user feedback collection`,
     });
