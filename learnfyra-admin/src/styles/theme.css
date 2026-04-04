@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+:root {
+  --font-size: 16px;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  /* Brand — same as main app */
+  --primary: #3D9AE8;
+  --primary-foreground: #ffffff;
+  --primary-hover: #2d87d4;
+  --primary-light: #EFF6FF;
+  --primary-dark: #1a6db5;
+
+  --secondary: #6DB84B;
+  --secondary-foreground: #ffffff;
+  --secondary-hover: #5ca33e;
+  --secondary-light: #F0FDF4;
+
+  --accent: #F5C534;
+  --accent-foreground: #0f172a;
+  --accent-light: #FEFCE8;
+
+  /* Neutrals */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --surface: #f8fafc;
+  --surface-2: #f1f5f9;
+
+  /* Semantic */
+  --success: #22c55e;
+  --success-light: #f0fdf4;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Structural */
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --input: transparent;
+  --input-background: #ffffff;
+  --ring: #3D9AE8;
+  --radius: 0.5rem;
+
+  /* Sidebar */
+  --sidebar-bg: #0f172a;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #3D9AE8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-muted: #1e293b;
+  --sidebar-muted-foreground: #94a3b8;
+  --sidebar-border: #1e293b;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-width: 260px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-light: var(--secondary-light);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-light: var(--accent-light);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+  --radius: var(--radius);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --sidebar-width: var(--sidebar-width);
+}
+
+@layer base {
+  *, *::before, *::after {
+    border-color: var(--border);
+  }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
