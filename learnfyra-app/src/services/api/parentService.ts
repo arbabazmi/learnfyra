@@ -92,3 +92,25 @@ export async function getChildAssignments(
   const data = await handleResponse<{ assignments: ChildAssignment[] }>(res);
   return data.assignments;
 }
+
+// ── Child session endpoint ──────────────────────────────────────────────────
+
+export interface ChildSessionResult {
+  childAccessToken: string;
+  childUserId: string;
+  childName: string;
+  role: string;
+  ageGroup: string;
+  parentId: string;
+  expiresIn: number;
+  permissions: string[];
+}
+
+export async function startChildSession(childId: string): Promise<ChildSessionResult> {
+  const res = await fetch(`${apiUrl}/api/auth/child-session`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ childId }),
+  });
+  return handleResponse<ChildSessionResult>(res);
+}

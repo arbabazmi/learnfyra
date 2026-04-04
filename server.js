@@ -1871,6 +1871,21 @@ app.post('/api/parent/children/:studentId/revoke-consent', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/child-session ──────────────────────────────────────────────
+app.post('/api/auth/child-session', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/child-session', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('child-session route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── M05 Student — Class Participation ────────────────────────────────────────
 app.post('/api/student/classes/join', async (req, res) => {
   try {

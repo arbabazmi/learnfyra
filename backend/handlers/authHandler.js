@@ -28,6 +28,7 @@ import {
   getConsentByToken,
   grantConsent,
   revokeConsent,
+  getConsentsByParent,
 } from '../../src/consent/consentStore.js';
 import { sendConsentEmail } from '../../src/notifications/consentEmailService.js';
 
@@ -616,6 +617,10 @@ async function handleGuest(body) {
   };
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
+}
+
 /**
  * POST /api/auth/request-consent
  * Initiates a parental consent request for a child account.
@@ -638,8 +643,24 @@ async function handleRequestConsent(body) {
   }
 
   const parentEmail = rawParentEmail.toLowerCase().trim();
-  if (!parentEmail) {
-    return errorResponse(400, 'parentEmail must be a valid email address.');
+  if (!parentEmail || !isValidEmail(parentEmail)) {
+    return {
+      statusCode: 400,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: 'INVALID_EMAIL', message: 'A valid parent email address is required.' }),
+    };
+  }
+
+  // Rate limit: max 3 consent requests per parentEmail per 24 hours
+  const recentConsents = await getConsentsByParent(parentEmail);
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recentCount = recentConsents.filter(c => new Date(c.createdAt || c.requestedAt).getTime() > oneDayAgo).length;
+  if (recentCount >= 3) {
+    return {
+      statusCode: 429,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: 'RATE_LIMITED', message: 'Too many consent requests for this email. Please try again tomorrow.' }),
+    };
   }
 
   const db = getDbAdapter();

@@ -22,6 +22,7 @@ import { validateToken, requireRole } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { verifyParentChildLink } from '../../src/utils/rbac.js';
 import { revokeConsent } from '../../src/consent/consentStore.js';
+import { signToken } from '../../src/auth/tokenUtils.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -685,6 +686,67 @@ async function handleRevokeConsent(decoded, studentId, body) {
 }
 
 // ---------------------------------------------------------------------------
+// Auth routes
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/auth/child-session
+ * Issues a scoped JWT for a linked child so a parent can start a solve session
+ * on the child's behalf. Verifies active ParentChildLink before issuing the token.
+ */
+async function handleChildSession(decoded, body) {
+  const { childId } = body || {};
+  if (!childId || typeof childId !== 'string') {
+    return errorResponse(400, 'VALIDATION_ERROR', 'childId is required.');
+  }
+  if (!UUID_REGEX.test(childId)) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'childId must be a valid UUID.');
+  }
+
+  const db = getDbAdapter();
+  const parentId = decoded.sub;
+
+  // Verify an active ParentChildLink exists (403, not 404)
+  const allLinks = await db.queryByField('parentchildlinks', 'parentId', parentId);
+  const link = allLinks.find(l => l.childId === childId && l.status === 'active');
+  if (!link) {
+    return errorResponse(403, 'FORBIDDEN', 'You are not linked to this child or the link is inactive.');
+  }
+
+  // Fetch child user record to get displayName
+  const child = await db.getItem('users', childId);
+  if (!child) {
+    return errorResponse(404, 'CHILD_NOT_FOUND', 'Child account not found.');
+  }
+
+  const childAccessToken = signToken(
+    {
+      sub: childId,
+      role: 'student',
+      ageGroup: 'under13',
+      parentId,
+      permissions: ['solve_worksheet', 'view_own_scores'],
+    },
+    '4h',
+  );
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      childAccessToken,
+      childUserId: childId,
+      childName: child.displayName || null,
+      role: 'student',
+      ageGroup: 'under13',
+      parentId,
+      expiresIn: 14400,
+      permissions: ['solve_worksheet', 'view_own_scores'],
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Lambda handler
 // ---------------------------------------------------------------------------
 
@@ -760,6 +822,12 @@ export const handler = async (event, context) => {
       requireRole(decoded, ['parent']);
       const studentId = params.studentId || revokeConsentMatch[1];
       return await handleRevokeConsent(decoded, studentId, body);
+    }
+
+    // ── Auth routes ────────────────────────────────────────────────────────
+    if (path === '/api/auth/child-session' && method === 'POST') {
+      requireRole(decoded, ['parent']);
+      return await handleChildSession(decoded, body);
     }
 
     // ── Student routes ─────────────────────────────────────────────────────
