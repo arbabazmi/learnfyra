@@ -132,7 +132,15 @@
       "Bash(xargs -I{} gh run view {} --log-failed)",
       "Bash(xargs -I{} gh run rerun {} --failed)",
       "Bash(xargs -I{} gh run watch {} --exit-status)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(wc -l C:/arbab-github/learnfyra/.claude/worktrees/zealous-ride/src/admin/*.js)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhYzUwM2Q1ZC04NTE1LTQ2ZTYtYThhMC02NTUxMDJlZmY4NmEiLCJlbWFpbCI6InRlc3RhZG1pbkBsZWFybmZ5cmEuY29tIiwicm9sZSI6InRlYWNoZXIiLCJpYXQiOjE3NzUyODY0OTcsImV4cCI6MTc3NTg5MTI5N30.OVO3zyghdQ0bd9OA3ebtJLIHPvZR_gPR4DerZiffR5I\" __NEW_LINE_eeed75807b5e1028__ echo \"=== Test 1: Teacher role on admin endpoint \\(expect 403\\) ===\" curl -s http://localhost:3000/api/admin/users -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhYzUwM2Q1ZC04NTE1LTQ2ZTYtYThhMC02NTUxMDJlZmY4NmEiLCJlbWFpbCI6InRlc3RhZG1pbkBsZWFybmZ5cmEuY29tIiwicm9sZSI6InRlYWNoZXIiLCJpYXQiOjE3NzUyODY0OTcsImV4cCI6MTc3NTg5MTI5N30.OVO3zyghdQ0bd9OA3ebtJLIHPvZR_gPR4DerZiffR5I\")",
+      "Bash(node -e \":*)",
+      "Bash(ADMIN_TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZmJlZDY4Yi02MjM1LTQ1YTktOTYyMC0yNjU1ZWY1Yjk3ZmIiLCJlbWFpbCI6ImFkbWluQHRlc3QubG9jYWwiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzUzMTU1NTQsImV4cCI6MTc3NTkyMDM1NH0.nCgHvprWFcsRDzvFUXGWzXjXRE23VlM3A3hWqh-Vo2A\" AUTH=\"Authorization: Bearer $ADMIN_TOKEN\" STUDENT_ID=\"2e525342-e637-4c51-9bf3-1221eb9a13f6\" __NEW_LINE_f859993d421eba28__ echo \"=== Unsuspend with reason ===\" curl -s -X PATCH \"http://localhost:3099/api/admin/users/$STUDENT_ID/unsuspend\" -H \"$AUTH\" -H \"Content-Type: application/json\" -d '{\"\"\"\"reason\"\"\"\":\"\"\"\"Account review completed, reinstating user\"\"\"\"}' __NEW_LINE_f859993d421eba28__ echo \"\" echo \"=== Change role with reason ===\" curl -s -X PATCH \"http://localhost:3099/api/admin/users/$STUDENT_ID/role\" -H \"$AUTH\" -H \"Content-Type: application/json\" -d '{\"\"\"\"role\"\"\"\":\"\"\"\"teacher\"\"\"\",\"\"\"\"reason\"\"\"\":\"\"\"\"User promoted to teacher role\"\"\"\"}' __NEW_LINE_f859993d421eba28__ echo \"\" echo \"=== Create school ===\" curl -s -X POST \"http://localhost:3099/api/admin/schools\" -H \"$AUTH\" -H \"Content-Type: application/json\" -d '{\"\"\"\"schoolName\"\"\"\":\"\"\"\"Test Academy\"\"\"\",\"\"\"\"minGrade\"\"\"\":1,\"\"\"\"maxGrade\"\"\"\":5,\"\"\"\"activeSubjects\"\"\"\":[\"\"\"\"Math\"\"\"\",\"\"\"\"ELA\"\"\"\",\"\"\"\"Science\"\"\"\"]}' __NEW_LINE_f859993d421eba28__ echo \"\" echo \"=== List schools ===\" curl -s \"http://localhost:3099/api/admin/schools\" -H \"$AUTH\" __NEW_LINE_f859993d421eba28__ echo \"\" echo \"=== Question bank list ===\" curl -s \"http://localhost:3099/api/admin/question-bank\" -H \"$AUTH\")",
+      "Bash(ADMIN_TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZmJlZDY4Yi02MjM1LTQ1YTktOTYyMC0yNjU1ZWY1Yjk3ZmIiLCJlbWFpbCI6ImFkbWluQHRlc3QubG9jYWwiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzUzMTU1NTQsImV4cCI6MTc3NTkyMDM1NH0.nCgHvprWFcsRDzvFUXGWzXjXRE23VlM3A3hWqh-Vo2A\")",
+      "Bash(AUTH=\"Authorization: Bearer $ADMIN_TOKEN\")",
+      "Bash(__NEW_LINE_889f08dfb8c1c1ef__ echo:*)"
     ]
   }
 }
