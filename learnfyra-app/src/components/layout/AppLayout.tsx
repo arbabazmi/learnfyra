@@ -60,7 +60,8 @@ function buildNavItems(worksheetCount?: number, role?: string): NavItem[] {
   ];
 
   const studentItems: NavItem[] = [
-    { label: 'Join a Class',    href: '/student/join-class', icon: UserPlus },
+    { label: 'Join a Class',    href: '/student/join-class',    icon: UserPlus },
+    { label: 'Invite Parent',   href: '/student/invite-parent', icon: Heart },
   ];
 
   if (role === 'teacher') return [...common, ...teacherItems];

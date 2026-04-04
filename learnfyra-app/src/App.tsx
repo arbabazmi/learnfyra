@@ -39,6 +39,7 @@ import ClassCreatePage       from './pages/teacher/ClassCreatePage';
 import ParentDashboard       from './pages/parent/ParentDashboard';
 import LinkChildPage         from './pages/parent/LinkChildPage';
 import JoinClassPage         from './pages/student/JoinClassPage';
+import InviteParentPage      from './pages/student/InviteParentPage';
 
 /** Redirect old /worksheet/:id to /solve/:id */
 function WorksheetRedirect() {
@@ -79,7 +80,8 @@ export default function App() {
       <Route path="/parent/link"        element={<LinkChildPage />} />
 
       {/* ── Student ─────────────────────────────────────── */}
-      <Route path="/student/join-class" element={<JoinClassPage />} />
+      <Route path="/student/join-class"    element={<JoinClassPage />} />
+      <Route path="/student/invite-parent" element={<InviteParentPage />} />
 
       {/* ── Dev tools ──────────────────────────────────── */}
       <Route path="/tests" element={<TestRunnerPage />} />
