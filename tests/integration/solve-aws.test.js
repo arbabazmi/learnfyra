@@ -95,9 +95,10 @@ const mockContext = { callbackWaitsForEmptyEventLoop: true };
 // importing the full authHandler (which has deep fs transitive dependencies).
 
 let guestToken;
+let guestSeq = 0;
 
 function issueGuestToken() {
-  const guestId = `guest-test-${Date.now()}`;
+  const guestId = `guest-test-${Date.now()}-${++guestSeq}`;
   return {
     token: signToken({ sub: guestId, email: '', role: 'guest' }, '2h'),
     guestId,
