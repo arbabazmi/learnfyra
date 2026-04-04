@@ -70,13 +70,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (data: LoginRequest) => {
     const res = await api.login(data);
     const adminRoles: AdminRole[] = ['super_admin', 'admin', 'school_admin'];
-    if (!adminRoles.includes(res.user.role as AdminRole)) {
+    if (!adminRoles.includes(res.role as AdminRole)) {
       throw { error: 'Admin access required', code: 'INSUFFICIENT_ROLE' };
     }
+    const authUser: AuthUser = {
+      userId: res.userId,
+      email: res.email,
+      displayName: res.displayName,
+      role: res.role,
+    };
     setToken(res.token);
-    setUser(res.user);
+    setUser(authUser);
     localStorage.setItem('admin_token', res.token);
-    localStorage.setItem('admin_user', JSON.stringify(res.user));
+    localStorage.setItem('admin_user', JSON.stringify(authUser));
   }, []);
 
   /**

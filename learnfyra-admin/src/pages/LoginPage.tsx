@@ -66,9 +66,11 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo + heading */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center size-12 rounded-xl bg-primary text-primary-foreground font-bold text-lg mx-auto mb-4">
-            L
-          </div>
+          <img
+            src="/admin-console/images/Logos/colored-logo.png"
+            alt="Learnfyra"
+            className="h-14 mx-auto mb-4"
+          />
           <h1 className="text-2xl font-bold">Learnfyra Admin</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Sign in to access the admin console

@@ -52,7 +52,7 @@ export default function UsersListPage() {
           onClick={() => navigate(`/users/${user.userId}`)}
           className="text-sm font-medium text-primary hover:underline text-left"
         >
-          {user.name || '—'}
+          {user.displayName || '—'}
         </button>
       ),
     },

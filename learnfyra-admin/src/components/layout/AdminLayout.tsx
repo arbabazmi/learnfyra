@@ -104,7 +104,7 @@ export function AdminLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const closeSidebar = () => setSidebarOpen(false);
@@ -113,9 +113,11 @@ export function AdminLayout() {
     <>
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-          L
-        </div>
+        <img
+          src="/admin-console/images/Logos/transparent-logo.png"
+          alt="Learnfyra"
+          className="h-8"
+        />
         <div>
           <p className="text-sm font-semibold text-sidebar-foreground">Learnfyra</p>
           <p className="text-xs text-sidebar-muted-foreground">Admin Console</p>
@@ -140,11 +142,11 @@ export function AdminLayout() {
             className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm hover:bg-sidebar-muted transition-colors"
           >
             <div className="flex items-center justify-center size-8 rounded-full bg-sidebar-accent text-sidebar-accent-foreground text-xs font-semibold">
-              {user?.name?.charAt(0)?.toUpperCase() ?? 'A'}
+              {user?.displayName?.charAt(0)?.toUpperCase() ?? 'A'}
             </div>
             <div className="flex-1 text-left min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.name ?? 'Admin'}
+                {user?.displayName ?? 'Admin'}
               </p>
               <p className="text-xs text-sidebar-muted-foreground truncate">{user?.email}</p>
             </div>

@@ -164,7 +164,7 @@ export default function UserDetailPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">{user.name || 'Unnamed User'}</h2>
+          <h2 className="text-2xl font-bold">{user.displayName || 'Unnamed User'}</h2>
           <p className="text-muted-foreground text-sm">{user.email}</p>
         </div>
         <div className="flex flex-wrap gap-2">

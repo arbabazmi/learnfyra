@@ -11,7 +11,7 @@ export type AdminRole = 'super_admin' | 'admin' | 'school_admin';
 export interface AuthUser {
   userId: string;
   email: string;
-  name: string;
+  displayName: string;
   role: UserRole;
   schoolId?: string;
 }
@@ -22,15 +22,18 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  userId: string;
+  email: string;
+  role: UserRole;
+  displayName: string;
   token: string;
-  user: AuthUser;
 }
 
 // ── Users ──────────────────────────────────────────────────────
 export interface User {
   userId: string;
   email: string;
-  name: string;
+  displayName: string;
   role: UserRole;
   suspended: boolean;
   createdAt: string;

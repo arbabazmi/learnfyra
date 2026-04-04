@@ -44,7 +44,7 @@ class ApiClient {
   private clearAuth(): void {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
-    window.location.href = '/login';
+    window.location.href = '/admin-console/login';
   }
 
   /**
