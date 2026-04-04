@@ -20,7 +20,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
-import { validateGenerateBody } from '../middleware/validator.js';
+import { validateGenerateBody, stripChildPII } from '../middleware/validator.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -499,6 +499,12 @@ export const handler = async (event, context) => {
         code: 'WG_INVALID_REQUEST',
         stage,
       });
+    }
+
+    // F10 — Data minimization: strip PII fields before validation when the
+    // authenticated user is a child (ageGroup === 'child').
+    if (decoded.ageGroup === 'child') {
+      stripChildPII(body, 'child');
     }
 
     let validated;

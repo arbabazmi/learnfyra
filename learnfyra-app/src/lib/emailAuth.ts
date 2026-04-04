@@ -138,19 +138,51 @@ export async function resetPassword(token: string, newPassword: string): Promise
   return resetPasswordWithToken(token, '', newPassword);
 }
 
-/** Register a new account. Stores token on success. */
+/** Extended registration response that may include COPPA consent flag. */
+export interface RegisterResponse extends AuthResponse {
+  requiresConsent?: boolean;
+  maskedParentEmail?: string;
+}
+
+/** Register a new account. Stores token on success.
+ *  If the server returns requiresConsent=true (under-13 COPPA), the token is NOT
+ *  stored — the caller must redirect to /auth/consent-pending.
+ */
 export async function signUp(
   displayName: string,
   email: string,
   password: string,
   role: string,
-): Promise<AuthResponse> {
-  const data = await authFetch('/api/auth/register', { email, password, role, displayName });
-  setAuth(data.token, {
-    userId: data.userId,
-    email: data.email,
-    role: data.role,
-    displayName: data.displayName,
+  dateOfBirth?: string,
+): Promise<RegisterResponse> {
+  const body: Record<string, string> = { email, password, role, displayName };
+  if (dateOfBirth) body.dateOfBirth = dateOfBirth;
+
+  const res = await fetch(`${apiUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  return data;
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    const err: AuthError = { error: data.error || 'Something went wrong.', status: res.status };
+    throw err;
+  }
+
+  const result = data as RegisterResponse;
+
+  // Under-13: consent required — do NOT store the token yet
+  if (result.requiresConsent) {
+    return result;
+  }
+
+  setAuth(result.token, {
+    userId: result.userId,
+    email: result.email,
+    role: result.role,
+    displayName: result.displayName,
+  });
+  return result;
 }

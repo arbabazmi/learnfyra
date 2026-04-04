@@ -28,7 +28,7 @@ import { printWorksheet, downloadAsPDF } from '@/modules/solve/worksheetExport';
 import { mapSolveDataToWorksheet } from '@/modules/solve/apiMapper';
 import type { Subject } from '@/modules/solve/types';
 import { apiUrl } from '@/lib/env';
-import { getAuthToken, GUEST_STORAGE_KEYS } from '@/lib/auth';
+import { getAuthToken, GUEST_STORAGE_KEYS, isChildUser } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { TOPICS_BY_GRADE_SUBJECT, SUBJECTS } from '@/data/curriculumTopics';
 import { LimitReachedModal } from '@/components/auth/LimitReachedModal';
@@ -129,6 +129,15 @@ const GenerateWorksheetPage: React.FC = () => {
     QUESTION_TYPES.map((t) => t.value),
   );
 
+  // ── Child user — hide PII fields (COPPA)
+  const isChild = isChildUser();
+
+  // ── Optional PII fields (hidden for child users per COPPA)
+  const [studentName, setStudentName]   = React.useState('');
+  const [teacherName, setTeacherName]   = React.useState('');
+  const [worksheetClassName, setWorksheetClassName] = React.useState('');
+  const [period, setPeriod]             = React.useState('');
+
   // ── Generation state
   const [genState, setGenState] = React.useState<GenerationState>('idle');
   const [generatedId, setGeneratedId] = React.useState<string | null>(null);
@@ -216,6 +225,11 @@ const GenerateWorksheetPage: React.FC = () => {
           generationMode: 'auto',
           provenanceLevel: 'summary',
           worksheetDate: new Date().toISOString().split('T')[0],
+          // PII fields are omitted entirely for child users (COPPA)
+          ...(!isChild && studentName.trim()       && { studentName: studentName.trim() }),
+          ...(!isChild && teacherName.trim()       && { teacherName: teacherName.trim() }),
+          ...(!isChild && worksheetClassName.trim() && { className: worksheetClassName.trim() }),
+          ...(!isChild && period.trim()            && { period: period.trim() }),
         }),
       });
 
@@ -295,6 +309,10 @@ const GenerateWorksheetPage: React.FC = () => {
   // ── Shared select class
   const selectClass =
     'w-full h-11 pl-4 pr-9 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer';
+
+  // ── Shared text input class (no arrow/appearance styles)
+  const inputFieldClass =
+    'w-full h-11 px-4 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -742,6 +760,79 @@ const GenerateWorksheetPage: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* Section: Student Details (hidden for child users per COPPA) */}
+                {!isChild && (
+                  <>
+                    <div className="border-t border-border" />
+                    <div className="space-y-3">
+                      <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest">
+                        Student Details
+                      </h3>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Optional — printed on the worksheet header.
+                      </p>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label htmlFor="studentName-input" className="text-xs font-bold text-foreground">
+                            Student Name
+                          </label>
+                          <input
+                            id="studentName-input"
+                            type="text"
+                            value={studentName}
+                            onChange={(e) => setStudentName(e.target.value)}
+                            placeholder="e.g. Alex Johnson"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="teacherName-input" className="text-xs font-bold text-foreground">
+                            Teacher Name
+                          </label>
+                          <input
+                            id="teacherName-input"
+                            type="text"
+                            value={teacherName}
+                            onChange={(e) => setTeacherName(e.target.value)}
+                            placeholder="e.g. Ms. Rivera"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="className-input" className="text-xs font-bold text-foreground">
+                            Class Name
+                          </label>
+                          <input
+                            id="className-input"
+                            type="text"
+                            value={worksheetClassName}
+                            onChange={(e) => setWorksheetClassName(e.target.value)}
+                            placeholder="e.g. Math 4B"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="period-input" className="text-xs font-bold text-foreground">
+                            Period
+                          </label>
+                          <input
+                            id="period-input"
+                            type="text"
+                            value={period}
+                            onChange={(e) => setPeriod(e.target.value)}
+                            placeholder="e.g. Period 3"
+                            autoComplete="off"
+                            className={inputFieldClass}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Generate button — or login CTA for restricted guest roles */}
                 {isGuestRestricted ? (

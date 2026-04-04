@@ -4,7 +4,7 @@
  * @agent QA
  */
 
-import { describe, it, expect, afterAll } from '@jest/globals';
+import { describe, it, expect, afterAll, jest } from '@jest/globals';
 import { existsSync, statSync, unlinkSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
@@ -17,6 +17,8 @@ const sampleWorksheet = JSON.parse(
 
 const testOutputDir = join(__dirname, '../__tmp__');
 const generatedFiles = [];
+
+jest.setTimeout(120000);
 
 const options = {
   grade: 3,
@@ -37,7 +39,7 @@ describe('pdfExporter', () => {
     generatedFiles.push(filePath);
 
     expect(existsSync(filePath)).toBe(true);
-  }, 30000); // Puppeteer can be slow
+  }, 60000); // Puppeteer can be slow on cold start
 
   it('worksheet PDF has non-zero size', async () => {
     const filePath = await exportPDF(sampleWorksheet, options);
@@ -45,7 +47,7 @@ describe('pdfExporter', () => {
     const stats = statSync(filePath);
 
     expect(stats.size).toBeGreaterThan(0);
-  }, 30000);
+  }, 60000);
 
   it('worksheet PDF has valid PDF magic bytes (%PDF-)', async () => {
     const filePath = await exportPDF(sampleWorksheet, options);
@@ -54,7 +56,7 @@ describe('pdfExporter', () => {
     const header = buffer.slice(0, 5).toString('ascii');
 
     expect(header).toBe('%PDF-');
-  }, 30000);
+  }, 60000);
 
   it('creates a separate answer key PDF file', async () => {
     const filePath = await exportAnswerKeyPDF(sampleWorksheet, options);
@@ -62,7 +64,7 @@ describe('pdfExporter', () => {
 
     expect(existsSync(filePath)).toBe(true);
     expect(filePath).toContain('ANSWER_KEY');
-  }, 30000);
+  }, 60000);
 
   it('answer key PDF is a different file from the worksheet', async () => {
     const worksheetPath = await exportPDF(sampleWorksheet, options);
@@ -70,6 +72,6 @@ describe('pdfExporter', () => {
     generatedFiles.push(worksheetPath, keyPath);
 
     expect(worksheetPath).not.toBe(keyPath);
-  }, 60000);
+  }, 120000);
 
 });

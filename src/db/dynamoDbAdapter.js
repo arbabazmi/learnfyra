@@ -101,6 +101,8 @@ const TABLE_CONFIG = {
   parentchildlinks:          { envVar: 'PARENT_CHILD_LINKS_TABLE_NAME',            suffix: 'ParentChildLinks',           pk: 'PK',   sk: 'SK' },
   parentinvitecodes:         { envVar: 'PARENT_INVITE_CODES_TABLE_NAME',           suffix: 'ParentInviteCodes',          pk: 'PK',   sk: 'SK' },
   reviewqueueitems:          { envVar: 'REVIEW_QUEUE_ITEMS_TABLE_NAME',            suffix: 'ReviewQueueItems',           pk: 'PK',   sk: 'SK' },
+  // COPPA consent records — immutable audit trail, retained 3 years
+  consentrecords:            { envVar: 'CONSENT_RECORDS_TABLE_NAME',               suffix: 'ConsentRecords',              pk: 'consentId' },
 };
 
 /**

@@ -178,16 +178,25 @@ describe('generateQuestionBatch()', () => {
   describe('bounded concurrency', () => {
 
     it('generates multiple questions concurrently', async () => {
+      let activeRuns = 0;
+      let peakConcurrency = 0;
+
       mockRunPipeline.mockImplementation(
-        () => new Promise((r) => setTimeout(() => r(makeQuestion(1)), 5))
+        () => new Promise((resolve) => {
+          activeRuns += 1;
+          peakConcurrency = Math.max(peakConcurrency, activeRuns);
+
+          setTimeout(() => {
+            activeRuns -= 1;
+            resolve(makeQuestion(1));
+          }, 5);
+        })
       );
 
-      const start = Date.now();
       await generateQuestionBatch({ ...baseParams, count: 3 });
-      const elapsed = Date.now() - start;
 
-      // With 3 concurrent workers (max concurrency = 3), should be ~5ms not ~15ms
-      expect(elapsed).toBeLessThan(50);
+      expect(mockRunPipeline).toHaveBeenCalledTimes(3);
+      expect(peakConcurrency).toBeGreaterThan(1);
     });
 
   });

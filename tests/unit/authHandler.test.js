@@ -145,6 +145,7 @@ describe('authHandler — POST /api/auth/register happy path', () => {
     password: 'Password1!',
     role: 'student',
     displayName: 'Test Student',
+    dateOfBirth: '2000-01-01',
   };
 
   const mockUser = {
@@ -189,6 +190,11 @@ describe('authHandler — POST /api/auth/register happy path', () => {
       password: 'Password1!',
       role: 'student',
       displayName: 'Test Student',
+      dateOfBirth: '2000-01-01',
+      ageGroup: 'adult',
+      accountStatus: 'active',
+      consentStatus: 'not_required',
+      parentEmail: null,
     });
   });
 
@@ -237,6 +243,7 @@ describe('authHandler — POST /api/auth/register validation errors', () => {
         password: 'x',
         role: 'admin',
         displayName: 'X',
+        dateOfBirth: '2000-01-01',
       }),
       mockContext,
     );
@@ -250,6 +257,7 @@ describe('authHandler — POST /api/auth/register validation errors', () => {
         password: 'x',
         role: 'superuser',
         displayName: 'X',
+        dateOfBirth: '2000-01-01',
       }),
       mockContext,
     );
@@ -284,6 +292,7 @@ describe('authHandler — POST /api/auth/register duplicate email', () => {
         password: 'x',
         role: 'student',
         displayName: 'X',
+        dateOfBirth: '2000-01-01',
       }),
       mockContext,
     );
@@ -297,6 +306,7 @@ describe('authHandler — POST /api/auth/register duplicate email', () => {
         password: 'x',
         role: 'student',
         displayName: 'X',
+        dateOfBirth: '2000-01-01',
       }),
       mockContext,
     );
@@ -311,6 +321,7 @@ describe('authHandler — POST /api/auth/register duplicate email', () => {
         password: 'x',
         role: 'student',
         displayName: 'X',
+        dateOfBirth: '2000-01-01',
       }),
       mockContext,
     );

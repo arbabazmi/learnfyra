@@ -13,10 +13,24 @@
  *   /reports           Performance reports (authenticated)
  *   /achievements      Badges & streaks (authenticated)
  *   /settings          User settings (authenticated)
+ *   /about             About Us (public)
+ *   /privacy           Privacy Policy (public — COPPA + CCPA)
+ *   /terms             Terms of Service (public)
+ *   /do-not-sell       Do Not Sell My Personal Information (public — CCPA)
  *   *                  404 Not Found
  */
 
-import { Routes, Route, Navigate, useParams } from 'react-router';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router';
+
+/** Scrolls to the top of the page on every route change. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+  return null;
+}
+import * as React from 'react';
 import Landing               from './pages/Landing';
 import AuthCallbackPage      from './pages/AuthCallbackPage';
 import ForgotPasswordPage    from './pages/ForgotPasswordPage';
@@ -40,6 +54,13 @@ import ParentDashboard       from './pages/parent/ParentDashboard';
 import LinkChildPage         from './pages/parent/LinkChildPage';
 import JoinClassPage         from './pages/student/JoinClassPage';
 import InviteParentPage      from './pages/student/InviteParentPage';
+import AboutPage             from './pages/AboutPage';
+import DoNotSellPage         from './pages/legal/DoNotSellPage';
+import PrivacyPolicyPage     from './pages/legal/PrivacyPolicyPage';
+import TermsOfServicePage    from './pages/legal/TermsOfServicePage';
+import AgeVerificationPage   from './pages/AgeVerificationPage';
+import ConsentPendingPage    from './pages/ConsentPendingPage';
+import ParentalConsentPage   from './pages/ParentalConsentPage';
 
 /** Redirect old /worksheet/:id to /solve/:id */
 function WorksheetRedirect() {
@@ -50,17 +71,27 @@ function WorksheetRedirect() {
 export default function App() {
   return (
     <>
+    <ScrollToTop />
     <GuestBanner />
     <RolePickerModal />
     <Routes>
       {/* ── Public ──────────────────────────────────────── */}
       <Route path="/"              element={<Landing />} />
       <Route path="/solve/:worksheetId" element={<SolvePage />} />
-      <Route path="/auth/callback"          element={<AuthCallbackPage />} />
-      <Route path="/auth/forgot-password"  element={<ForgotPasswordPage />} />
-      <Route path="/auth/reset-password"   element={<ResetPasswordPage />} />
-      <Route path="/auth/verify-reset-code" element={<VerifyResetCodePage />} />
+      <Route path="/auth/callback"              element={<AuthCallbackPage />} />
+      <Route path="/auth/forgot-password"      element={<ForgotPasswordPage />} />
+      <Route path="/auth/reset-password"       element={<ResetPasswordPage />} />
+      <Route path="/auth/verify-reset-code"    element={<VerifyResetCodePage />} />
+      <Route path="/auth/age-verification"     element={<AgeVerificationPage />} />
+      <Route path="/auth/consent-pending"      element={<ConsentPendingPage />} />
+      <Route path="/auth/parental-consent"     element={<ParentalConsentPage />} />
       <Route path="/login"         element={<Navigate to="/" replace />} />
+      <Route path="/about"         element={<AboutPage />} />
+
+      {/* ── Legal ───────────────────────────────────────── */}
+      <Route path="/privacy"       element={<PrivacyPolicyPage />} />
+      <Route path="/terms"         element={<TermsOfServicePage />} />
+      <Route path="/do-not-sell"   element={<DoNotSellPage />} />
 
       {/* ── Authenticated app ───────────────────────────── */}
       <Route path="/dashboard"        element={<DashboardPage />} />
