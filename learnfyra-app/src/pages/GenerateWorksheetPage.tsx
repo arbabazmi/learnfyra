@@ -310,6 +310,10 @@ const GenerateWorksheetPage: React.FC = () => {
   const selectClass =
     'w-full h-11 pl-4 pr-9 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer';
 
+  // ── Shared text input class (no arrow/appearance styles)
+  const inputFieldClass =
+    'w-full h-11 px-4 rounded-xl border border-border bg-surface text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all';
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -780,7 +784,7 @@ const GenerateWorksheetPage: React.FC = () => {
                             onChange={(e) => setStudentName(e.target.value)}
                             placeholder="e.g. Alex Johnson"
                             autoComplete="off"
-                            className={selectClass.replace('pl-4 pr-9', 'px-4').replace('appearance-none', '')}
+                            className={inputFieldClass}
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -794,7 +798,7 @@ const GenerateWorksheetPage: React.FC = () => {
                             onChange={(e) => setTeacherName(e.target.value)}
                             placeholder="e.g. Ms. Rivera"
                             autoComplete="off"
-                            className={selectClass.replace('pl-4 pr-9', 'px-4').replace('appearance-none', '')}
+                            className={inputFieldClass}
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -808,7 +812,7 @@ const GenerateWorksheetPage: React.FC = () => {
                             onChange={(e) => setWorksheetClassName(e.target.value)}
                             placeholder="e.g. Math 4B"
                             autoComplete="off"
-                            className={selectClass.replace('pl-4 pr-9', 'px-4').replace('appearance-none', '')}
+                            className={inputFieldClass}
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -822,7 +826,7 @@ const GenerateWorksheetPage: React.FC = () => {
                             onChange={(e) => setPeriod(e.target.value)}
                             placeholder="e.g. Period 3"
                             autoComplete="off"
-                            className={selectClass.replace('pl-4 pr-9', 'px-4').replace('appearance-none', '')}
+                            className={inputFieldClass}
                           />
                         </div>
                       </div>
