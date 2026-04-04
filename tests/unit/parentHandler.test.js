@@ -23,6 +23,7 @@ const mockGetItem        = jest.fn();
 const mockQueryByField   = jest.fn();
 const mockUpdateItem     = jest.fn();
 const mockVerifyParentChildLink = jest.fn();
+const mockRevokeConsent  = jest.fn();
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -43,6 +44,16 @@ jest.unstable_mockModule('../../src/db/index.js', () => ({
 jest.unstable_mockModule('../../src/utils/rbac.js', () => ({
   verifyParentChildLink: mockVerifyParentChildLink,
   verifyTeacherOwnsClass: jest.fn(),
+}));
+
+// Mock consentStore — must be before handler import so ESM picks up the mock
+jest.unstable_mockModule('../../src/consent/consentStore.js', () => ({
+  revokeConsent: mockRevokeConsent,
+  createConsentRequest: jest.fn(),
+  getConsentByToken: jest.fn(),
+  grantConsent: jest.fn(),
+  getConsentsByParent: jest.fn().mockResolvedValue([]),
+  getConsentsByChild: jest.fn().mockResolvedValue([]),
 }));
 
 // ─── Dynamic import ───────────────────────────────────────────────────────────
@@ -828,23 +839,7 @@ describe('parentHandler — GET /api/parent/children/:studentId/export', () => {
 
 // ─── POST /api/parent/children/:studentId/revoke-consent ─────────────────────
 
-// Mock revokeConsent from consentStore — must be declared before the mock module setup above,
-// so we use a module-level mock added after the file-level mocks via jest.unstable_mockModule.
-// Since that mock is file-scoped, we capture its fn reference here.
-
-const mockRevokeConsent = jest.fn();
-
-jest.unstable_mockModule('../../src/consent/consentStore.js', () => ({
-  revokeConsent: mockRevokeConsent,
-  createConsentRequest: jest.fn(),
-  getConsentByToken: jest.fn(),
-  grantConsent: jest.fn(),
-}));
-
-// Re-import the handler so the new mock is applied.
-// In ESM, a second import of the same specifier returns the cached module,
-// so we need to use the already-imported handler from above — the mock for
-// consentStore is hoisted before the first import by jest.unstable_mockModule.
+// revokeConsent mock is declared at file top and registered before handler import.
 
 describe('parentHandler — POST /api/parent/children/:studentId/revoke-consent', () => {
   beforeEach(() => {
