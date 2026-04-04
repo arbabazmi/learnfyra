@@ -13,6 +13,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
       "cwd": "learnfyra-app"
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5174"],
+      "port": 5174,
+      "cwd": "learnfyra-admin"
     }
   ]
 }
