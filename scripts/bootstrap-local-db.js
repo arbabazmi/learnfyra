@@ -63,23 +63,33 @@ const TABLE_DEFINITIONS = [
     BillingMode: 'PAY_PER_REQUEST'
   },
   {
+    // M05: Updated to use composite PK/SK (PK=CLASS#{classId}, SK=METADATA),
+    // TeacherIndex (GSI-1), and InviteCodeIndex (GSI-2) per Section 2.1.
     TableName: `LearnfyraClasses-${ENV}`,
-    KeySchema: [{ AttributeName: 'classId', KeyType: 'HASH' }],
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
     AttributeDefinitions: [
-      { AttributeName: 'classId', AttributeType: 'S' },
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
       { AttributeName: 'teacherId', AttributeType: 'S' },
-      { AttributeName: 'joinCode', AttributeType: 'S' }
+      { AttributeName: 'createdAt', AttributeType: 'S' },
+      { AttributeName: 'inviteCode', AttributeType: 'S' }
     ],
     GlobalSecondaryIndexes: [
       {
-        IndexName: 'teacherId-index',
-        KeySchema: [{ AttributeName: 'teacherId', KeyType: 'HASH' }],
+        IndexName: 'TeacherIndex',
+        KeySchema: [
+          { AttributeName: 'teacherId', KeyType: 'HASH' },
+          { AttributeName: 'createdAt', KeyType: 'RANGE' }
+        ],
         Projection: { ProjectionType: 'ALL' }
       },
       {
-        IndexName: 'joinCode-index',                  // ADR-014
-        KeySchema: [{ AttributeName: 'joinCode', KeyType: 'HASH' }],
-        Projection: { ProjectionType: 'KEYS_ONLY' }
+        IndexName: 'InviteCodeIndex',
+        KeySchema: [{ AttributeName: 'inviteCode', KeyType: 'HASH' }],
+        Projection: { ProjectionType: 'ALL' }
       }
     ],
     BillingMode: 'PAY_PER_REQUEST'
@@ -155,6 +165,158 @@ const TABLE_DEFINITIONS = [
       KeySchema: [{ AttributeName: 'email', KeyType: 'HASH' }],
       Projection: { ProjectionType: 'ALL' }
     }],
+    BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  // ─── M05: Teacher & Parent Roles ─────────────────────────────────────────
+
+  {
+    // Assignments: PK=ASSIGNMENT#{assignmentId}, SK=METADATA
+    // GSI-1 ClassIndex: query assignments by class, sorted newest-first.
+    // GSI-2 ClassDueDateIndex: query assignments by class, sorted by due date.
+    TableName: `LearnfyraAssignments-${ENV}`,
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
+      { AttributeName: 'classId', AttributeType: 'S' },
+      { AttributeName: 'createdAt', AttributeType: 'S' },
+      { AttributeName: 'dueDate', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'ClassIndex',
+        KeySchema: [
+          { AttributeName: 'classId', KeyType: 'HASH' },
+          { AttributeName: 'createdAt', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      },
+      {
+        IndexName: 'ClassDueDateIndex',
+        KeySchema: [
+          { AttributeName: 'classId', KeyType: 'HASH' },
+          { AttributeName: 'dueDate', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
+    BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  {
+    // StudentAssignmentStatus: PK=ASSIGNMENT#{assignmentId}, SK=STUDENT#{studentId}
+    // GSI-1 StudentIndex: query all assignments for a student.
+    // GSI-2 ClassAssignmentIndex: query all student statuses per class for analytics.
+    TableName: `LearnfyraStudentAssignmentStatus-${ENV}`,
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
+      { AttributeName: 'studentId', AttributeType: 'S' },
+      { AttributeName: 'classId', AttributeType: 'S' },
+      { AttributeName: 'assignmentId', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'StudentIndex',
+        KeySchema: [
+          { AttributeName: 'studentId', KeyType: 'HASH' },
+          { AttributeName: 'assignmentId', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      },
+      {
+        IndexName: 'ClassAssignmentIndex',
+        KeySchema: [
+          { AttributeName: 'classId', KeyType: 'HASH' },
+          { AttributeName: 'assignmentId', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
+    BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  {
+    // ParentChildLinks: PK=USER#{parentId}, SK=CHILD#{childId}
+    // GSI-1 ChildToParentIndex (InvertedIndex): find all parents linked to a child.
+    // childPK and parentSK are denormalized attributes stored on the record for GSI use.
+    TableName: `LearnfyraParentChildLinks-${ENV}`,
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
+      { AttributeName: 'childPK', AttributeType: 'S' },
+      { AttributeName: 'parentSK', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'ChildToParentIndex',
+        KeySchema: [
+          { AttributeName: 'childPK', KeyType: 'HASH' },
+          { AttributeName: 'parentSK', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
+    BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  {
+    // ParentInviteCodes: PK=INVITE#{code}, SK=METADATA
+    // No GSIs — all access is by exact PK lookup.
+    // TTL attribute 'ttl' (Unix epoch) enables automatic expiry cleanup via DynamoDB TTL.
+    TableName: `LearnfyraParentInviteCodes-${ENV}`,
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' }
+    ],
+    TimeToLiveSpecification: {
+      AttributeName: 'ttl',
+      Enabled: true
+    },
+    BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  {
+    // ReviewQueueItems: PK=REVIEW#{reviewId}, SK=METADATA
+    // GSI-1 ClassPendingIndex: query all review items for a class sorted by createdAt.
+    // Handler filters on status = "pending" after the GSI query.
+    TableName: `LearnfyraReviewQueueItems-${ENV}`,
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' }
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
+      { AttributeName: 'classId', AttributeType: 'S' },
+      { AttributeName: 'createdAt', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'ClassPendingIndex',
+        KeySchema: [
+          { AttributeName: 'classId', KeyType: 'HASH' },
+          { AttributeName: 'createdAt', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
     BillingMode: 'PAY_PER_REQUEST'
   }
 ];
