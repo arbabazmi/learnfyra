@@ -20,6 +20,13 @@
       "runtimeArgs": ["vite", "--port", "5174"],
       "port": 5174,
       "cwd": "learnfyra-admin"
+    },
+    {
+      "name": "docs-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "learnfyra-docs", "-c-1"],
+      "port": 8080,
+      "autoPort": true
     }
   ]
 }
