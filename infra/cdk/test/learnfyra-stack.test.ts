@@ -94,7 +94,7 @@ describe('LearnfyraStack (dev)', () => {
   test('enables API Gateway access logging to dedicated log group', () => {
     template.hasResourceProperties('AWS::Logs::LogGroup', {
       LogGroupName: '/aws/apigateway/learnfyra-dev-access-logs',
-      RetentionInDays: 30,
+      RetentionInDays: 1096,
     });
     template.hasResourceProperties('AWS::ApiGateway::Stage', {
       AccessLogSetting: Match.objectLike({
@@ -250,7 +250,7 @@ describe('LearnfyraStack (dev)', () => {
   test('sets log retention policy for Lambda log groups', () => {
     template.resourceCountIs('Custom::LogRetention', 17);
     template.hasResourceProperties('Custom::LogRetention', {
-      RetentionInDays: 30,
+      RetentionInDays: 1096,
     });
   });
 
