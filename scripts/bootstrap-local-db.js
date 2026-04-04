@@ -318,6 +318,53 @@ const TABLE_DEFINITIONS = [
       }
     ],
     BillingMode: 'PAY_PER_REQUEST'
+  },
+
+  // ─── COPPA Consent Records ────────────────────────────────────────────────
+  {
+    // ConsentRecords: PK=consentId (UUID)
+    // GSI-1 ChildIndex:  query all consent records for a child user (childUserId → requestedAt).
+    // GSI-2 ParentIndex: query all consent records by parent email (parentEmail → requestedAt).
+    // GSI-3 TokenIndex:  look up a record by the one-time consentToken sent in the parent email.
+    // TTL attribute 'expiresAt' (Unix epoch) enables automatic expiry of pending records (48 h).
+    // retainUntil (Unix epoch) marks the 3-year audit retention boundary — not used as a TTL.
+    TableName: `LearnfyraConsentRecords-${ENV}`,
+    KeySchema: [{ AttributeName: 'consentId', KeyType: 'HASH' }],
+    AttributeDefinitions: [
+      { AttributeName: 'consentId',   AttributeType: 'S' },
+      { AttributeName: 'childUserId', AttributeType: 'S' },
+      { AttributeName: 'parentEmail', AttributeType: 'S' },
+      { AttributeName: 'consentToken', AttributeType: 'S' },
+      { AttributeName: 'requestedAt', AttributeType: 'S' }
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'ChildIndex',
+        KeySchema: [
+          { AttributeName: 'childUserId', KeyType: 'HASH' },
+          { AttributeName: 'requestedAt', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      },
+      {
+        IndexName: 'ParentIndex',
+        KeySchema: [
+          { AttributeName: 'parentEmail', KeyType: 'HASH' },
+          { AttributeName: 'requestedAt', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      },
+      {
+        IndexName: 'TokenIndex',
+        KeySchema: [{ AttributeName: 'consentToken', KeyType: 'HASH' }],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
+    TimeToLiveSpecification: {
+      AttributeName: 'expiresAt',
+      Enabled: true
+    },
+    BillingMode: 'PAY_PER_REQUEST'
   }
 ];
 

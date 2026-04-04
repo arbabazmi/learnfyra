@@ -14,6 +14,10 @@ import {
   Monitor,
   AlertTriangle,
   CheckCircle,
+  X,
+  Mail,
+  Loader2,
+  UndoDot,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -273,6 +277,14 @@ const SettingsPage: React.FC = () => {
   // ── Appearance state ─────────────────────────────────────────────────────
   const [theme, setTheme] = React.useState('light');
 
+  // ── Delete account state ──────────────────────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+  const [confirmEmail, setConfirmEmail] = React.useState('');
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState('');
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [isCancellingDelete, setIsCancellingDelete] = React.useState(false);
+
   // ── Toast state ──────────────────────────────────────────────────────────
   const [toastVisible, setToastVisible] = React.useState(false);
   const [toastError, setToastError] = React.useState(false);
@@ -330,6 +342,62 @@ const SettingsPage: React.FC = () => {
     e.preventDefault();
     // TODO: PATCH /api/preferences
     showToast('Preferences saved successfully');
+  };
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getAuthToken();
+    if (!token) { setDeleteError('You must be signed in.'); return; }
+    if (!confirmEmail.trim()) { setDeleteError('Please enter your email to confirm.'); return; }
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch(`${apiUrl}/api/account`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ confirmEmail: confirmEmail.trim() }),
+      });
+      if (res.ok) {
+        setShowDeleteModal(false);
+        setDeletePending(true);
+        setConfirmEmail('');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError((data as { error?: string }).error || 'Deletion failed. Please try again.');
+      }
+    } catch {
+      setDeleteError('Network error. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDeletion = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    setIsCancellingDelete(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/account/cancel-deletion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        setDeletePending(false);
+        showToast('Account deletion cancelled successfully.');
+      } else {
+        showToast('Could not cancel deletion. Please contact support.', true);
+      }
+    } catch {
+      showToast('Network error. Please try again.', true);
+    } finally {
+      setIsCancellingDelete(false);
+    }
   };
 
   return (
@@ -704,7 +772,9 @@ const SettingsPage: React.FC = () => {
                   size="sm"
                   className="shrink-0"
                   onClick={() => {
-                    // TODO: show confirmation modal before calling DELETE /api/account
+                    setConfirmEmail('');
+                    setDeleteError('');
+                    setShowDeleteModal(true);
                   }}
                 >
                   <Trash2 className="size-3.5" />
@@ -719,6 +789,159 @@ const SettingsPage: React.FC = () => {
 
       {/* ── Save toast ────────────────────────────────────────────── */}
       <SaveToast visible={toastVisible} isError={toastError} message={toastMessage} />
+
+      {/* ── Pending deletion banner ───────────────────────────────── */}
+      {deletePending && (
+        <div
+          className="fixed bottom-0 inset-x-0 z-40 flex items-center justify-between gap-4 bg-destructive text-white px-6 py-3.5 shadow-lg flex-wrap"
+          role="alert"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="size-4 shrink-0" />
+            <p className="text-sm font-semibold">
+              Your account is scheduled for deletion in 7 days. You can cancel this at any time.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-white/40 text-white hover:bg-white/10"
+            onClick={handleCancelDeletion}
+            disabled={isCancellingDelete}
+          >
+            {isCancellingDelete ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Cancelling...
+              </>
+            ) : (
+              <>
+                <UndoDot className="size-3.5" />
+                Cancel Deletion
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* ── Delete account confirmation modal ────────────────────── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowDeleteModal(false)}
+            aria-hidden="true"
+          />
+          {/* Modal */}
+          <div
+            className="relative z-10 bg-white rounded-2xl border border-border shadow-xl w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete account confirmation"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+
+            <div className="p-6 space-y-5">
+              {/* Header */}
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                  <Trash2 className="size-5 text-destructive" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-foreground">Delete Account</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This will permanently delete your account and all data.
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+                <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-destructive">
+                    You have a 7-day cooling-off period.
+                  </p>
+                  <p className="text-xs text-destructive/80">
+                    Your account will be scheduled for deletion. You can cancel within 7 days from your settings page. After 7 days, all data is permanently erased.
+                  </p>
+                </div>
+              </div>
+
+              {/* Error */}
+              {deleteError && (
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+                  <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive font-semibold">{deleteError}</p>
+                </div>
+              )}
+
+              {/* Confirmation form */}
+              <form onSubmit={handleDeleteAccount} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="confirmEmailInput"
+                    className="block text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5"
+                  >
+                    Confirm your email to proceed
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                    <input
+                      id="confirmEmailInput"
+                      type="email"
+                      value={confirmEmail}
+                      onChange={(e) => setConfirmEmail(e.target.value)}
+                      placeholder={email || 'your@email.com'}
+                      autoComplete="email"
+                      className={cn(inputCls, 'pl-10')}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    size="md"
+                    className="flex-1 gap-2"
+                    disabled={!confirmEmail.trim() || isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="size-4" />
+                        Delete My Account
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };

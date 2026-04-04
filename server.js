@@ -688,6 +688,66 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/request-consent ───────────────────────────────────────────
+app.post('/api/auth/request-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/request-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth request-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/verify-consent ────────────────────────────────────────────
+app.post('/api/auth/verify-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/verify-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth verify-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/auth/deny-consent ───────────────────────────────────────────────
+app.post('/api/auth/deny-consent', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/auth/deny-consent', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth deny-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── PATCH /api/auth/verify-age ────────────────────────────────────────────────
+app.patch('/api/auth/verify-age', async (req, res) => {
+  try {
+    const fn = await getAuthHandler();
+    const result = await fn(
+      { httpMethod: 'PATCH', path: '/api/auth/verify-age', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('auth verify-age route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── POST /api/auth/oauth/:provider ────────────────────────────────────────────
 app.post('/api/auth/oauth/:provider', async (req, res) => {
   try {
@@ -1781,6 +1841,36 @@ app.get('/api/parent/children/:studentId/assignments', async (req, res) => {
   }
 });
 
+// ── GET /api/parent/children/:studentId/export ───────────────────────────────
+app.get('/api/parent/children/:studentId/export', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'GET', path: `/api/parent/children/${req.params.studentId}/export`, headers: req.headers, body: null, pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent export route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── POST /api/parent/children/:studentId/revoke-consent ──────────────────────
+app.post('/api/parent/children/:studentId/revoke-consent', async (req, res) => {
+  try {
+    const fn = await getParentHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: `/api/parent/children/${req.params.studentId}/revoke-consent`, headers: req.headers, body: JSON.stringify(req.body), pathParameters: { studentId: req.params.studentId } },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('parent revoke-consent route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── M05 Student — Class Participation ────────────────────────────────────────
 app.post('/api/student/classes/join', async (req, res) => {
   try {
@@ -1849,6 +1939,72 @@ app.post('/api/user/role/upgrade', async (req, res) => {
     res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('role upgrade route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Account Lifecycle (COPPA/CCPA deletion) ───────────────────────────────────
+let _accountHandler;
+
+/**
+ * Returns the accountHandler function, importing it on first call.
+ * @returns {Promise<Function>}
+ */
+const getAccountHandler = async () => {
+  if (!_accountHandler) {
+    const mod = await import('./backend/handlers/accountHandler.js');
+    _accountHandler = mod.handler;
+  }
+  return _accountHandler;
+};
+
+// DELETE /api/account — request self-deletion (7-day grace period)
+app.delete('/api/account', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      { httpMethod: 'DELETE', path: '/api/account', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account delete route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/account/cancel-deletion — cancel a pending deletion
+app.post('/api/account/cancel-deletion', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      { httpMethod: 'POST', path: '/api/account/cancel-deletion', headers: req.headers, body: JSON.stringify(req.body) },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account cancel-deletion route error:', err);
+    res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// DELETE /api/account/child/:childUserId — parent deletes child account immediately
+app.delete('/api/account/child/:childUserId', async (req, res) => {
+  try {
+    const fn = await getAccountHandler();
+    const result = await fn(
+      {
+        httpMethod: 'DELETE',
+        path: `/api/account/child/${req.params.childUserId}`,
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        pathParameters: { childUserId: req.params.childUserId },
+      },
+      {},
+    );
+    res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('account child-delete route error:', err);
     res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
   }
 });

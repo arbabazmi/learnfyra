@@ -131,3 +131,17 @@ export function setSelectedRole(role: UserRole): void {
 export function getSelectedRole(): UserRole | null {
   return localStorage.getItem(KEYS.role) as UserRole | null;
 }
+
+// ── Age group helpers (COPPA) ─────────────────────────────────────────────
+
+/**
+ * Returns true when the authenticated user's JWT contains ageGroup = 'child'.
+ * The backend injects this claim after age verification.
+ * Falls back to false when the claim is absent (adults / guests / unverified).
+ */
+export function isChildUser(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  const claims = parseJwt(token);
+  return (claims?.ageGroup as string | undefined) === 'child';
+}

@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { validateToken, requireRole } from '../middleware/authMiddleware.js';
 import { getDbAdapter } from '../../src/db/index.js';
 import { verifyParentChildLink } from '../../src/utils/rbac.js';
+import { revokeConsent } from '../../src/consent/consentStore.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
@@ -591,6 +592,99 @@ async function handleGetStudentAssignment(decoded, assignmentId) {
 }
 
 // ---------------------------------------------------------------------------
+// Privacy Dashboard extensions
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/parent/children/:studentId/export
+ * Exports all data held for a linked child as a JSON bundle.
+ * Does NOT include consent records or data belonging to other parents.
+ */
+async function handleExportChildData(decoded, studentId) {
+  if (!studentId || !UUID_REGEX.test(studentId)) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'studentId must be a valid UUID.');
+  }
+
+  const db = getDbAdapter();
+
+  // RBAC: 403, not 404
+  try {
+    await verifyParentChildLink(db, decoded.sub, studentId);
+  } catch (err) {
+    return errorResponse(err.statusCode, err.errorCode, err.message);
+  }
+
+  // Gather all child data in parallel (non-fatal if a table returns empty)
+  const [user, attempts, worksheets, certificates, scores] = await Promise.all([
+    db.getItem('users', studentId).catch(() => null),
+    db.queryByField('attempts', 'studentId', studentId).catch(() => []),
+    db.queryByField('worksheets', 'createdBy', studentId).catch(() => []),
+    db.queryByField('certificates', 'studentId', studentId).catch(() => []),
+    db.queryByField('scores', 'studentId', studentId).catch(() => []),
+  ]);
+
+  // Strip password hash and sensitive fields from user record
+  const safeUser = user ? (() => {
+    const { passwordHash: _ph, ...rest } = user;
+    return rest;
+  })() : null;
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      studentId,
+      user: safeUser,
+      attempts,
+      worksheets,
+      certificates,
+      scores,
+    }),
+  };
+}
+
+/**
+ * POST /api/parent/children/:studentId/revoke-consent
+ * Revokes parental consent and suspends the child account.
+ * Body: { reason?: string }
+ */
+async function handleRevokeConsent(decoded, studentId, body) {
+  if (!studentId || !UUID_REGEX.test(studentId)) {
+    return errorResponse(400, 'VALIDATION_ERROR', 'studentId must be a valid UUID.');
+  }
+
+  const db = getDbAdapter();
+
+  // RBAC: 403, not 404
+  try {
+    await verifyParentChildLink(db, decoded.sub, studentId);
+  } catch (err) {
+    return errorResponse(err.statusCode, err.errorCode, err.message);
+  }
+
+  const reason = (body && typeof body.reason === 'string') ? body.reason.trim().slice(0, 500) : null;
+
+  // Revoke the active consent record
+  await revokeConsent(studentId, {
+    reason,
+    revokedBy: decoded.sub,
+  });
+
+  // Suspend the child account
+  await db.updateItem('users', studentId, {
+    accountStatus: 'suspended',
+    suspendedAt: new Date().toISOString(),
+  });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({ message: 'Consent revoked. Account deactivated.' }),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Lambda handler
 // ---------------------------------------------------------------------------
 
@@ -652,6 +746,20 @@ export const handler = async (event, context) => {
       requireRole(decoded, ['parent']);
       const studentId = params.studentId || childAssignmentsMatch[1];
       return await handleGetChildAssignments(decoded, studentId);
+    }
+
+    const childExportMatch = path.match(/^\/api\/parent\/children\/([^/]+)\/export$/);
+    if (childExportMatch && method === 'GET') {
+      requireRole(decoded, ['parent']);
+      const studentId = params.studentId || childExportMatch[1];
+      return await handleExportChildData(decoded, studentId);
+    }
+
+    const revokeConsentMatch = path.match(/^\/api\/parent\/children\/([^/]+)\/revoke-consent$/);
+    if (revokeConsentMatch && method === 'POST') {
+      requireRole(decoded, ['parent']);
+      const studentId = params.studentId || revokeConsentMatch[1];
+      return await handleRevokeConsent(decoded, studentId, body);
     }
 
     // ── Student routes ─────────────────────────────────────────────────────

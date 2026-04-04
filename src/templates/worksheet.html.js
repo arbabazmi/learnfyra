@@ -298,6 +298,11 @@ export function buildWorksheetHTML(worksheet, options = {}) {
     <span>&copy; ${year} &mdash; For Educational Use Only</span>
   </footer>
 
+  <!-- ── AI disclosure (California AB 2013) ── -->
+  <footer class="ai-disclosure" style="margin-top: 2rem; padding: 0.5rem; text-align: center; font-size: 0.75rem; color: #666; border-top: 1px solid #eee;">
+    <small>Questions generated with AI assistance | Learnfyra</small>
+  </footer>
+
 </body>
 </html>`;
 }
@@ -375,6 +380,11 @@ export function buildAnswerKeyHTML(worksheet) {
     <span>Learnfyra &mdash; Answer Key</span>
     <span class="footer-center">${escapeHtml(worksheet.title)}</span>
     <span>&copy; ${year} &mdash; Teacher Use Only</span>
+  </footer>
+
+  <!-- ── AI disclosure (California AB 2013) ── -->
+  <footer class="ai-disclosure" style="margin-top: 2rem; padding: 0.5rem; text-align: center; font-size: 0.75rem; color: #666; border-top: 1px solid #eee;">
+    <small>Questions generated with AI assistance | Learnfyra</small>
   </footer>
 
 </body>

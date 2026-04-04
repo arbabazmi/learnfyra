@@ -39,6 +39,7 @@ const columns: FooterColumn[] = [
       { label: 'Contact Us', href: '/contact' },
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms of Service', href: '/terms' },
+      { label: 'Do Not Sell My Personal Information', href: '/do-not-sell' },
     ],
   },
 ];
@@ -132,6 +133,10 @@ const Footer: React.FC = () => {
             <span className="text-border">|</span>
             <Link to="/terms" className="hover:text-primary transition-colors">
               Terms
+            </Link>
+            <span className="text-border">|</span>
+            <Link to="/do-not-sell" className="hover:text-primary transition-colors">
+              Do Not Sell
             </Link>
             <span className="text-border">|</span>
             <Link to="/accessibility" className="hover:text-primary transition-colors">
