@@ -1,0 +1,29 @@
+# Learnfyra — Profanity word list
+# One token per line. Case-insensitive matching is applied at runtime.
+# Common substitutions handled by profanityFilter.js (@ for a, 3 for e, etc.)
+# Do NOT commit full slur lists here — those live in slurs.txt
+ass
+asshole
+bastard
+bitch
+bullshit
+crap
+cunt
+damn
+dick
+douche
+dumbass
+fuck
+fucking
+hell
+jackass
+jerk
+motherfucker
+piss
+prick
+pussy
+shit
+shitty
+slut
+whore
+wtf

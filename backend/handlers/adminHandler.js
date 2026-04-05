@@ -794,6 +794,60 @@ async function handleUpsertRepeatCapOverride(event, decoded, body) {
   });
 }
 
+/**
+ * DELETE /api/admin/repeat-cap/override/:scope/:scopeId
+ * DELETE /api/admin/policies/repeat-cap/overrides/:scope/:scopeId
+ * Removes an existing repeat-cap scope override. Returns 404 if not found.
+ * RBAC: Super Admin / Platform Admin only (enforced by the caller — requireRole).
+ *
+ * @param {Object} event
+ * @param {Object} decoded
+ * @param {string} scope   - student | parent | teacher
+ * @param {string} scopeId - User ID for the scope
+ * @returns {Promise<Object>} Lambda response
+ */
+async function handleDeleteRepeatCapOverride(event, decoded, scope, scopeId) {
+  const VALID_SCOPES = new Set(['student', 'parent', 'teacher']);
+  if (!VALID_SCOPES.has(scope)) {
+    return errorResponse(400, 'scope must be one of: student, parent, teacher.', 'ADMIN_INVALID_REQUEST');
+  }
+  if (typeof scopeId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(scopeId.trim())) {
+    return errorResponse(400, 'scopeId must be 1-128 characters and use only letters, numbers, underscores, or hyphens.', 'ADMIN_INVALID_REQUEST');
+  }
+
+  const db = getDbAdapter();
+  const overrideId = `${scope}:${scopeId.trim()}`;
+  const existing = await db.getItem('repeatCapOverrides', overrideId);
+  if (!existing) {
+    return errorResponse(404, 'Repeat-cap override not found.', 'ADMIN_NOT_FOUND');
+  }
+
+  await db.deleteItem('repeatCapOverrides', overrideId);
+
+  const now = new Date().toISOString();
+  await writeAuditEvent(
+    db,
+    decoded,
+    'delete-repeat-cap-override',
+    `repeatCapOverrides.${overrideId}`,
+    existing,
+    null,
+    `Override deleted by ${decoded.sub}`,
+    event,
+  );
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      message: 'Repeat-cap override deleted.',
+      scope,
+      scopeId: scopeId.trim(),
+      deletedAt: now,
+    }),
+  };
+}
+
 async function handleListAuditEvents(queryStringParameters) {
   const db = getDbAdapter();
   const qs = queryStringParameters || {};
@@ -1731,6 +1785,43 @@ export const handler = async (event, context) => {
     if (method === 'PUT' && path.endsWith('/api/admin/policies/repeat-cap/overrides')) {
       const body = JSON.parse(event.body || '{}');
       return await handleUpsertRepeatCapOverride(event, decoded, body);
+    }
+
+    // ── /api/admin/repeat-cap — canonical paths per technical design ────────
+    // These are aliases for the /api/admin/policies/repeat-cap routes above,
+    // matching the endpoint paths in the RCAP technical design document.
+
+    if (method === 'GET' && /\/api\/admin\/repeat-cap$/.test(path)) {
+      return await handleGetRepeatCapPolicy(decoded, event.queryStringParameters || {});
+    }
+
+    if (method === 'PUT' && /\/api\/admin\/repeat-cap$/.test(path)) {
+      const body = JSON.parse(event.body || '{}');
+      return await handleUpdateRepeatCapPolicy(event, decoded, body);
+    }
+
+    if (method === 'POST' && /\/api\/admin\/repeat-cap\/override$/.test(path)) {
+      // POST is the "create" alias; delegates to the upsert handler which
+      // handles both create and update by scopeId.
+      const body = JSON.parse(event.body || '{}');
+      return await handleUpsertRepeatCapOverride(event, decoded, body);
+    }
+
+    {
+      const overrideMatch = path.match(/\/api\/admin\/repeat-cap\/override\/([^/]+)\/([^/]+)$/);
+      if (method === 'DELETE' && overrideMatch) {
+        const [, scope, scopeId] = overrideMatch;
+        return await handleDeleteRepeatCapOverride(event, decoded, scope, scopeId);
+      }
+    }
+
+    {
+      // Also support DELETE on the /api/admin/policies/repeat-cap/overrides/:scope/:scopeId path
+      const overrideMatch = path.match(/\/api\/admin\/policies\/repeat-cap\/overrides\/([^/]+)\/([^/]+)$/);
+      if (method === 'DELETE' && overrideMatch) {
+        const [, scope, scopeId] = overrideMatch;
+        return await handleDeleteRepeatCapOverride(event, decoded, scope, scopeId);
+      }
     }
 
     if (method === 'GET' && path.endsWith('/api/admin/audit/events')) {
