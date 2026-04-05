@@ -2,19 +2,32 @@
  * @file infra/cdk/lib/nested/monitoring-stack.ts
  * @description NestedStack: All CloudWatch alarms + dashboard + log query definitions.
  *              Estimated CloudFormation resources: ~72
+ *
+ * Cycle-breaking strategy:
+ *   - Receives restApiName and apiAccessLogGroupName as plain strings instead of
+ *     the RestApi object. CloudWatch metrics for API Gateway are constructed
+ *     using cloudwatch.Metric with dimensionsMap so no CFn Ref to ApiStack forms.
+ *   - Lambda function objects (NodejsFunction) are still received from Compute
+ *     because fn.metricErrors() / fn.metricDuration() etc. use functionName
+ *     (a CloudFormation Ref) — but this is a one-directional Monitoring → Compute
+ *     dependency only, which is acyclic.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
-import { BaseNestedStackProps, MonitoredFunction, ApiOutputs, ComputeOutputs } from '../types';
+import { BaseNestedStackProps, MonitoredFunction, ComputeOutputs } from '../types';
 
 export interface MonitoringStackProps extends BaseNestedStackProps {
-  api: apigateway.RestApi;
-  apiAccessLogGroup: logs.LogGroup;
+  /**
+   * Plain strings passed from ApiStack outputs — no CFn cross-stack Ref to ApiStack.
+   * restApiName is used as a CloudWatch metric dimension value (string literal).
+   * apiAccessLogGroupName is used for Log Insights query definitions.
+   */
+  restApiName: string;
+  apiAccessLogGroupName: string;
   compute: ComputeOutputs;
   isDev: boolean;
   isProd: boolean;
@@ -24,7 +37,7 @@ export class MonitoringStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
-    const { appEnv, api, apiAccessLogGroup, compute, isDev, isProd } = props;
+    const { appEnv, restApiName, apiAccessLogGroupName, compute, isDev, isProd } = props;
 
     const monitoredFunctions: MonitoredFunction[] = [
       { id: 'Generate',     fn: compute.generateFn,      p95MsThreshold: isDev ? 30000 : 45000 },
@@ -88,11 +101,27 @@ export class MonitoringStack extends cdk.NestedStack {
       });
     });
 
+    // ── API Gateway metrics (built from plain string dimensions — no CFn ref) ──
+
+    /**
+     * Helper — creates an API Gateway CloudWatch Metric using restApiName and
+     * appEnv as plain strings. No cross-stack Ref is emitted; CloudWatch resolves
+     * the dimension at runtime.
+     */
+    const apiMetric = (metricName: string, statistic: string, period: cdk.Duration) =>
+      new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName,
+        statistic,
+        period,
+        dimensionsMap: { ApiName: restApiName, Stage: appEnv },
+      });
+
     // ── API Gateway alarms ───────────────────────────────────────────────────
 
     new cloudwatch.Alarm(this, 'ApiGateway5xxAlarm', {
       alarmName: `learnfyra-${appEnv}-api-5xx-errors`,
-      metric: api.metricServerError({ period: cdk.Duration.minutes(1), statistic: 'sum' }),
+      metric: apiMetric('5XXError', 'Sum', cdk.Duration.minutes(1)),
       threshold: 1,
       evaluationPeriods: 1,
       datapointsToAlarm: 1,
@@ -102,7 +131,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     new cloudwatch.Alarm(this, 'ApiGatewayLatencyP95Alarm', {
       alarmName: `learnfyra-${appEnv}-api-latency-p95`,
-      metric: api.metricLatency({ period: cdk.Duration.minutes(1), statistic: 'p95' }),
+      metric: apiMetric('Latency', 'p95', cdk.Duration.minutes(1)),
       threshold: 5000,
       evaluationPeriods: 3,
       datapointsToAlarm: 2,
@@ -112,13 +141,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     new cloudwatch.Alarm(this, 'ApiGatewayThrottleAlarm', {
       alarmName: `learnfyra-${appEnv}-api-throttle-detected`,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/ApiGateway',
-        metricName: 'Count',
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(1),
-        dimensionsMap: { ApiName: api.restApiName, Stage: appEnv },
-      }),
+      metric: apiMetric('Count', 'Sum', cdk.Duration.minutes(1)),
       threshold: isProd ? 9000 : 3000,
       evaluationPeriods: 2,
       datapointsToAlarm: 2,
@@ -128,13 +151,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     new cloudwatch.Alarm(this, 'ApiGatewaySurgeAlarm', {
       alarmName: `learnfyra-${appEnv}-api-surge-detected`,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/ApiGateway',
-        metricName: 'Count',
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-        dimensionsMap: { ApiName: api.restApiName, Stage: appEnv },
-      }),
+      metric: apiMetric('Count', 'Sum', cdk.Duration.minutes(5)),
       threshold: isProd ? 10000 : 500,
       evaluationPeriods: 1,
       datapointsToAlarm: 1,
@@ -240,7 +257,7 @@ export class MonitoringStack extends cdk.NestedStack {
       'ApiAuthFailuresQueryDefinition',
       {
         name: `learnfyra-${appEnv}-auth-failures-by-route`,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryString: authFailuresByRouteQuery.join('\n'),
       }
     );
@@ -250,7 +267,7 @@ export class MonitoringStack extends cdk.NestedStack {
       'ApiHighLatencyTracesQueryDefinition',
       {
         name: `learnfyra-${appEnv}-high-latency-request-traces`,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryString: highLatencyRequestTraceQuery.join('\n'),
       }
     );
@@ -260,7 +277,7 @@ export class MonitoringStack extends cdk.NestedStack {
       'ApiRouteHotspotsQueryDefinition',
       {
         name: `learnfyra-${appEnv}-4xx-5xx-route-hotspots`,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryString: routeHotspots4xx5xxQuery.join('\n'),
       }
     );
@@ -273,7 +290,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     new logs.CfnQueryDefinition(this, 'CostByEndpointQueryDefinition', {
       name: `learnfyra-${appEnv}-cost-by-endpoint`,
-      logGroupNames: [apiAccessLogGroup.logGroupName],
+      logGroupNames: [apiAccessLogGroupName],
       queryString: costByEndpointQuery.join('\n'),
     });
 
@@ -312,7 +329,7 @@ export class MonitoringStack extends cdk.NestedStack {
         metricName,
         statistic,
         period: cdk.Duration.minutes(5),
-        dimensionsMap: { ApiName: api.restApiName, Stage: appEnv, Method: method, Resource: resource },
+        dimensionsMap: { ApiName: restApiName, Stage: appEnv, Method: method, Resource: resource },
       });
 
     dashboard.addWidgets(
@@ -371,9 +388,9 @@ export class MonitoringStack extends cdk.NestedStack {
         width: 12,
         height: 6,
         left: [
-          api.metricCount({ statistic: 'sum', period: cdk.Duration.minutes(5), label: 'Request Count' }),
-          api.metricClientError({ statistic: 'sum', period: cdk.Duration.minutes(5), label: '4XX Errors' }),
-          api.metricServerError({ statistic: 'sum', period: cdk.Duration.minutes(5), label: '5XX Errors' }),
+          apiMetric('Count',    'Sum', cdk.Duration.minutes(5)).with({ label: 'Request Count' }),
+          apiMetric('4XXError', 'Sum', cdk.Duration.minutes(5)).with({ label: '4XX Errors' }),
+          apiMetric('5XXError', 'Sum', cdk.Duration.minutes(5)).with({ label: '5XX Errors' }),
         ],
       }),
       new cloudwatch.GraphWidget({
@@ -381,9 +398,9 @@ export class MonitoringStack extends cdk.NestedStack {
         width: 12,
         height: 6,
         left: [
-          api.metricLatency({ statistic: 'p50', period: cdk.Duration.minutes(5), label: 'Latency p50' }),
-          api.metricLatency({ statistic: 'p95', period: cdk.Duration.minutes(5), label: 'Latency p95' }),
-          api.metricLatency({ statistic: 'p99', period: cdk.Duration.minutes(5), label: 'Latency p99' }),
+          apiMetric('Latency', 'p50', cdk.Duration.minutes(5)).with({ label: 'Latency p50' }),
+          apiMetric('Latency', 'p95', cdk.Duration.minutes(5)).with({ label: 'Latency p95' }),
+          apiMetric('Latency', 'p99', cdk.Duration.minutes(5)).with({ label: 'Latency p99' }),
         ],
       })
     );
@@ -420,14 +437,7 @@ export class MonitoringStack extends cdk.NestedStack {
         width: 24,
         height: 6,
         left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/ApiGateway',
-            metricName: 'Count',
-            statistic: 'Sum',
-            period: cdk.Duration.hours(1),
-            dimensionsMap: { ApiName: api.restApiName, Stage: appEnv },
-            label: 'API Requests (hourly)',
-          }),
+          apiMetric('Count', 'Sum', cdk.Duration.hours(1)).with({ label: 'API Requests (hourly)' }),
         ],
       })
     );
@@ -465,14 +475,7 @@ export class MonitoringStack extends cdk.NestedStack {
         width: 12,
         height: 6,
         left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/ApiGateway',
-            metricName: 'Count',
-            statistic: 'Average',
-            period: cdk.Duration.hours(1),
-            dimensionsMap: { ApiName: api.restApiName, Stage: appEnv },
-            label: 'Avg Requests/Hour',
-          }),
+          apiMetric('Count', 'Average', cdk.Duration.hours(1)).with({ label: 'Avg Requests/Hour' }),
         ],
       }),
       new cloudwatch.GraphWidget({
@@ -521,14 +524,7 @@ export class MonitoringStack extends cdk.NestedStack {
         width: 8,
         height: 4,
         metrics: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/ApiGateway',
-            metricName: 'Count',
-            statistic: 'Sum',
-            period: cdk.Duration.hours(1),
-            dimensionsMap: { ApiName: api.restApiName, Stage: appEnv },
-            label: 'API Count',
-          }),
+          apiMetric('Count', 'Sum', cdk.Duration.hours(1)).with({ label: 'API Count' }),
         ],
       }),
       new cloudwatch.SingleValueWidget({
@@ -569,7 +565,7 @@ export class MonitoringStack extends cdk.NestedStack {
         title: 'Cost Analyzer: Request Count + Latency by Endpoint',
         width: 12,
         height: 6,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryLines: costByEndpointQuery,
       })
     );
@@ -586,7 +582,7 @@ export class MonitoringStack extends cdk.NestedStack {
         title: 'Log Drilldown: Auth Failures by Route (401/403)',
         width: 12,
         height: 6,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryLines: authFailuresByRouteQuery,
       })
     );
@@ -596,14 +592,14 @@ export class MonitoringStack extends cdk.NestedStack {
         title: 'Log Drilldown: High-Latency Request Traces',
         width: 12,
         height: 6,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryLines: highLatencyRequestTraceQuery,
       }),
       new cloudwatch.LogQueryWidget({
         title: 'Log Drilldown: 4XX/5XX Route Hotspots',
         width: 12,
         height: 6,
-        logGroupNames: [apiAccessLogGroup.logGroupName],
+        logGroupNames: [apiAccessLogGroupName],
         queryLines: routeHotspots4xx5xxQuery,
       })
     );

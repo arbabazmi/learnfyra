@@ -2,23 +2,31 @@
  * @file infra/cdk/lib/nested/waf-stack.ts
  * @description NestedStack: WAF WebACL + association (prod only).
  *              Estimated CloudFormation resources: ~2
+ *
+ * Cycle-breaking strategy:
+ *   Receives apiStageArn as a plain string instead of the RestApi object.
+ *   No CloudFormation cross-stack Ref to ApiStack is created.
  */
 
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
 import { BaseNestedStackProps } from '../types';
 
 export interface WafStackProps extends BaseNestedStackProps {
-  api: apigateway.RestApi;
+  /**
+   * API Gateway deployment stage ARN passed as a plain string from ApiStack
+   * outputs. No CFn Ref to ApiStack is introduced — this breaks the Waf → Api
+   * dependency that would otherwise be a cross-stack reference.
+   */
+  apiStageArn: string;
 }
 
 export class WafStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: WafStackProps) {
     super(scope, id, props);
 
-    const { appEnv, api } = props;
+    const { appEnv, apiStageArn } = props;
 
     // Cost: ~$2/mo (1 WebACL $5 base already paid + 2 custom rules + 1 managed group)
     const wafAcl = new wafv2.CfnWebACL(this, 'GuestRateLimitACL', {
@@ -101,7 +109,7 @@ export class WafStack extends cdk.NestedStack {
     });
 
     new wafv2.CfnWebACLAssociation(this, 'GuestRateLimitACLAssociation', {
-      resourceArn: api.deploymentStage.stageArn,
+      resourceArn: apiStageArn,
       webAclArn: wafAcl.attrArn,
     });
   }

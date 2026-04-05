@@ -4,23 +4,36 @@
  *              wires cross-stack references via props.
  *
  * Resource budget (CloudFormation 500-resource limit applies per nested stack):
- *   StorageStack      ~60   (S3 x2, DDB x24, seed custom resources)
+ *   StorageStack      ~60   (S3 x2, DDB x24, OAI, seed custom resources)
  *   AuthStack          ~5   (Cognito UserPool, IdP, domain, client)
- *   ComputeStack     ~145   (16 Lambda functions + IAM policies)
+ *   ComputeStack     ~145   (17 Lambda functions + IAM policies)
  *   ApiStack         ~324   (RestApi + all routes + authorizer + gateway responses)
- *   CdnStack           ~7   (CloudFront + OAI + security headers policy)
+ *   CdnStack           ~6   (CloudFront + security headers policy)
  *   MonitoringStack   ~72   (45 alarms + dashboard + 7 log query definitions)
  *   WafStack           ~2   (WebACL + association — prod only)
  *
- * Dependency order:
- *   Storage (no deps)
- *   Auth    (no deps)
- *   Compute (Storage + Auth)
- *   Api     (Compute)
- *   Cdn     (Storage.frontendBucket + Api)
- *   Parent  post-wires authFn.OAUTH_CALLBACK_BASE_URL = Cdn.distributionDomainName
- *   Monitoring (Api + Compute)
- *   Waf     (Api — prod only)
+ * Acyclic dependency graph (DAG — no cycles):
+ *   Storage  (no deps)
+ *   Auth     (no deps)
+ *   Compute  → Storage, Auth
+ *   Api      → Compute  (via imported function ARNs — no back-ref to Compute)
+ *   Cdn      → Storage  (OAI + bucket), Api (restApiId string — one-directional)
+ *   Monitoring → Compute (function metrics), Api (plain string name + log group name)
+ *   Waf      → Api (deploymentStageArn string — no CFn Ref back to ApiStack)
+ *
+ * Cycle-breaking techniques applied:
+ *   1. Storage → Cdn (was): OAI moved to StorageStack; grantRead called there.
+ *      CdnStack receives OAI as a prop and uses it without calling grantRead.
+ *   2. Compute ↔ Api (was): ApiStack receives ComputeFunctionArns (plain strings)
+ *      and imports each via lambda.Function.fromFunctionArn(). Lambda::Permission
+ *      resources land in ApiStack (the importer), not ComputeStack (the owner).
+ *   3. Compute → Cdn (was): oauthCallbackBaseUrl computed statically in this
+ *      parent before ComputeStack is created; passed as a prop to ComputeStack
+ *      which sets OAUTH_CALLBACK_BASE_URL on authFn internally. No post-wire.
+ *   4. Monitoring → Api (was): MonitoringStack receives restApiName and
+ *      apiAccessLogGroupName as plain strings; CloudWatch metrics built with
+ *      cloudwatch.Metric dimensionsMap using those string literals.
+ *   5. Waf → Api (was): WafStack receives apiStageArn as a plain string.
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -95,6 +108,16 @@ export class LearnfyraStack extends cdk.Stack {
       ? `https://${webDomainName}`
       : '*';
 
+    // ── OAUTH_CALLBACK_BASE_URL — computed statically BEFORE ComputeStack ─────
+    // When custom domains are enabled, the callback URL is deterministic from
+    // webDomainName (known at synth time, no CFn dependency on CdnStack).
+    // When custom domains are disabled, the CloudFront domain is not known
+    // until runtime — pass '*' as a placeholder; authFn will construct the
+    // redirect URL dynamically using request headers at runtime.
+    const oauthCallbackBaseUrl = enableCustomDomains && webDomainName
+      ? `https://${webDomainName}`
+      : '*';
+
     // ── Tags ─────────────────────────────────────────────────────────────────
     cdk.Tags.of(this).add('Project', 'learnfyra');
     cdk.Tags.of(this).add('Application', 'learnfyra');
@@ -152,17 +175,22 @@ export class LearnfyraStack extends cdk.Stack {
     });
 
     // ── 3. Compute ────────────────────────────────────────────────────────────
+    // oauthCallbackBaseUrl is computed above from static domain strings so no
+    // Compute → Cdn cross-stack dependency forms.
     const compute = new ComputeStack(this, 'Compute', {
       appEnv,
       storage: storage.outputs,
       auth: auth.outputs,
       allowedOrigin,
+      oauthCallbackBaseUrl,
     });
 
-    // ── 4. API (RestApi + all routes + authorizer) ──────────────────────────
+    // ── 4. API (RestApi + all routes + authorizer) ────────────────────────────
+    // ApiStack receives ComputeFunctionArns (plain ARN strings) — not the
+    // NodejsFunction objects. Lambda::Permission lands in ApiStack only.
     const apiStack = new ApiStack(this, 'Api', {
       appEnv,
-      compute: compute.outputs,
+      computeArns: compute.functionArns,
       allowedOrigin,
       enableCustomDomains,
       isDev,
@@ -177,10 +205,14 @@ export class LearnfyraStack extends cdk.Stack {
     });
 
     // ── 5. CDN ────────────────────────────────────────────────────────────────
+    // OAI comes from StorageStack (already grantRead'd there).
+    // apiRestApiId is a plain string from ApiStack outputs — creates a one-
+    // directional Cdn → Api dependency, but no back-reference from Api → Cdn.
     const cdn = new CdnStack(this, 'Cdn', {
       appEnv,
       frontendBucket: storage.outputs.frontendBucket,
-      api: apiStack.outputs.api,
+      frontendOai: storage.outputs.frontendOai,
+      apiRestApiId: apiStack.outputs.api.restApiId,
       isProd,
       enableCustomDomains,
       webDomainName,
@@ -189,13 +221,7 @@ export class LearnfyraStack extends cdk.Stack {
       cloudFrontCertificateArn: props.cloudFrontCertificateArn,
     });
 
-    // ── Post-wire: OAUTH_CALLBACK_BASE_URL on authFn ──────────────────────────
-    const oauthCallbackBaseUrl = enableCustomDomains && webDomainName
-      ? `https://${webDomainName}`
-      : `https://${cdn.outputs.distribution.distributionDomainName}`;
-    compute.outputs.authFn.addEnvironment('OAUTH_CALLBACK_BASE_URL', oauthCallbackBaseUrl);
-
-    // ── Post-wire: pass distribution to ApiCoreStack for Route53 web/www/admin records
+    // ── Post-wire: pass distribution to ApiStack for Route53 web/www/admin records
     if (enableCustomDomains && zone) {
       apiStack.addCdnRoute53Records(cdn.outputs.distribution, {
         zone,
@@ -210,20 +236,23 @@ export class LearnfyraStack extends cdk.Stack {
     }
 
     // ── 6. Monitoring ─────────────────────────────────────────────────────────
+    // restApiName and apiAccessLogGroupName passed as plain strings — no CFn Ref
+    // from MonitoringStack back to ApiStack.
     new MonitoringStack(this, 'Monitoring', {
       appEnv,
-      api: apiStack.outputs.api,
-      apiAccessLogGroup: apiStack.outputs.apiAccessLogGroup,
+      restApiName: apiStack.outputs.restApiName,
+      apiAccessLogGroupName: apiStack.outputs.apiAccessLogGroup.logGroupName,
       compute: compute.outputs,
       isDev,
       isProd,
     });
 
     // ── 7. WAF (prod only) ────────────────────────────────────────────────────
+    // apiStageArn passed as a plain string — no CFn Ref from WafStack to ApiStack.
     if (isProd) {
       new WafStack(this, 'Waf', {
         appEnv,
-        api: apiStack.outputs.api,
+        apiStageArn: apiStack.outputs.deploymentStageArn,
       });
     }
 

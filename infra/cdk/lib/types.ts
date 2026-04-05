@@ -26,6 +26,12 @@ export interface BaseNestedStackProps extends cdk.NestedStackProps {
 export interface StorageOutputs {
   worksheetBucket: s3.Bucket;
   frontendBucket: s3.Bucket;
+  /**
+   * OAI created in StorageStack so that frontendBucket.grantRead(oai) happens
+   * inside StorageStack. This avoids Storage → Cdn cross-stack dependency:
+   * CdnStack receives the OAI as a prop and does NOT call grantRead itself.
+   */
+  frontendOai: cloudfront.OriginAccessIdentity;
   // All 24 DynamoDB tables
   usersTable: dynamodb.Table;
   attemptsTable: dynamodb.Table;
@@ -84,11 +90,47 @@ export interface ComputeOutputs {
   feedbackFn: NodejsFunction;
 }
 
+/**
+ * Function ARNs as plain strings — used by ApiStack to import functions via
+ * lambda.Function.fromFunctionArn(). This breaks the Compute ↔ Api cycle:
+ * Lambda::Permission resources land in ApiStack (the importer) instead of
+ * ComputeStack (the owner).
+ */
+export interface ComputeFunctionArns {
+  generateFnArn: string;
+  downloadFnArn: string;
+  authFnArn: string;
+  apiAuthorizerFnArn: string;
+  solveFnArn: string;
+  submitFnArn: string;
+  progressFnArn: string;
+  analyticsFnArn: string;
+  classFnArn: string;
+  rewardsFnArn: string;
+  studentFnArn: string;
+  adminFnArn: string;
+  dashboardFnArn: string;
+  certificatesFnArn: string;
+  guestFixtureFnArn: string;
+  adminPoliciesFnArn: string;
+  feedbackFnArn: string;
+}
+
 // ── ApiStack outputs ─────────────────────────────────────────────────────────
 
 export interface ApiOutputs {
   api: apigateway.RestApi;
   apiAccessLogGroup: logs.LogGroup;
+  /**
+   * restApiName and deploymentStageArn are exported as plain strings so that
+   * MonitoringStack and WafStack can consume them without creating a
+   * CloudFormation cross-stack Ref back to ApiStack.
+   *
+   * MonitoringStack uses restApiName for CloudWatch metric dimension strings.
+   * WafStack uses deploymentStageArn for the WebACL association resource ARN.
+   */
+  restApiName: string;
+  deploymentStageArn: string;
 }
 
 // ── CdnStack outputs ──────────────────────────────────────────────────────────

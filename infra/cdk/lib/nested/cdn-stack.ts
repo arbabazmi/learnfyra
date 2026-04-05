@@ -1,7 +1,17 @@
 /**
  * @file infra/cdk/lib/nested/cdn-stack.ts
- * @description NestedStack: CloudFront distribution + OAI + security response headers policy.
+ * @description NestedStack: CloudFront distribution + security response headers policy.
  *              Estimated CloudFormation resources: ~7
+ *
+ * Cycle-breaking strategy:
+ *   - OAI is created in StorageStack and passed as a prop. CdnStack does NOT
+ *     call frontendBucket.grantRead() — that was already done in StorageStack.
+ *     This prevents Storage → Cdn cross-stack bucket policy ref.
+ *   - API Gateway is referenced as a plain restApiId string rather than the
+ *     RestApi object. The execute domain is constructed locally from the string
+ *     so no CloudFormation Ref to ApiStack is emitted by this stack.
+ *     Cdn → Api is one-directional (string value flows parent → Cdn at synth
+ *     time only), completing the acyclic dependency graph.
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -9,13 +19,23 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
 import { BaseNestedStackProps, CdnOutputs } from '../types';
 
 export interface CdnStackProps extends BaseNestedStackProps {
   frontendBucket: s3.Bucket;
-  api: apigateway.RestApi;
+  /**
+   * OAI created in StorageStack. frontendBucket.grantRead(oai) was already
+   * called there. Do NOT call grantRead here — it would add a Storage → Cdn
+   * cross-stack dependency via the bucket policy resource.
+   */
+  frontendOai: cloudfront.OriginAccessIdentity;
+  /**
+   * The REST API ID string (e.g. "abc123xyz"). The execute-api domain is
+   * constructed as `${apiRestApiId}.execute-api.${region}.amazonaws.com`.
+   * Passing a string avoids a CloudFormation Ref to ApiStack from this stack.
+   */
+  apiRestApiId: string;
   isProd: boolean;
   enableCustomDomains: boolean;
   webDomainName?: string;
@@ -31,15 +51,11 @@ export class CdnStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: CdnStackProps) {
     super(scope, id, props);
 
-    const { appEnv, frontendBucket, api, isProd, enableCustomDomains } = props;
+    const { appEnv, frontendBucket, frontendOai, apiRestApiId, isProd, enableCustomDomains } = props;
 
-    // Origin Access Identity — grants CloudFront read access to the private bucket
-    const oai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
-      comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
-    });
-    frontendBucket.grantRead(oai);
-
-    const apiGatewayExecuteDomain = `${api.restApiId}.execute-api.${this.region}.amazonaws.com`;
+    // API Gateway execute domain — built from the plain string restApiId.
+    // No CloudFormation Ref to ApiStack is introduced by this line.
+    const apiGatewayExecuteDomain = `${apiRestApiId}.execute-api.${this.region}.amazonaws.com`;
 
     // Security response headers — HSTS, X-Frame-Options, CSP-adjacent protections
     const securityHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
@@ -92,7 +108,7 @@ export class CdnStack extends cdk.NestedStack {
           : undefined,
       certificate: cloudFrontCertificate,
       defaultBehavior: {
-        origin: new origins.S3Origin(frontendBucket, { originAccessIdentity: oai }),
+        origin: new origins.S3Origin(frontendBucket, { originAccessIdentity: frontendOai }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
