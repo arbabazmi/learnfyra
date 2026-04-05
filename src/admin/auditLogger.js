@@ -35,6 +35,14 @@ const VALID_ACTIONS = new Set([
   'QUESTION_SOFT_DELETED', 'CONFIG_UPDATED', 'SCHOOL_CREATED',
   'SCHOOL_UPDATED', 'SCHOOL_ADMIN_ASSIGNED', 'TEACHER_INVITED',
   'TEACHER_REMOVED', 'BULK_ASSIGNMENT_CREATED', 'SCHOOL_CONFIG_UPDATED',
+  // Repeat-cap policy management (added for RCAP feature — 2026-04-04)
+  'admin.repeat_cap_updated',
+  'admin.repeat_cap_override_created',
+  'admin.repeat_cap_override_deleted',
+  // Guardrail audit event types (added for AI Prompt Guardrails — 2026-04-04)
+  'GENERATION_MODERATION',          // generation.moderation — logged per attempt by generator.js
+  'GUARDRAIL_POLICY_UPDATED',       // admin.guardrail_policy_updated — admin changed policy
+  'GUARDRAIL_TEMPLATE_UPDATED',     // admin.guardrail_template_updated — admin changed template
 ]);
 
 /**

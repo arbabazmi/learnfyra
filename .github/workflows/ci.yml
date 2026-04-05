@@ -60,3 +60,6 @@ jobs:
 
       - name: CDK tests
         run: cd infra/cdk && npm test
+
+      - name: Zero Trust policy gate
+        run: node infra/cdk/scripts/zero-trust-check.js

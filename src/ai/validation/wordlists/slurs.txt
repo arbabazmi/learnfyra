@@ -1,0 +1,18 @@
+# Learnfyra — Slurs and hate terms word list
+# One token per line. Case-insensitive matching applied at runtime.
+# This list is intentionally minimal — platform admins extend via admin API.
+chink
+cracker
+dyke
+faggot
+fag
+gook
+kike
+nigger
+nigga
+spic
+wetback
+tranny
+retard
+retarded
+cripple
