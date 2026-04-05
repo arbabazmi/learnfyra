@@ -16,6 +16,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
 
@@ -379,6 +380,18 @@ export class LearnfyraStack extends cdk.Stack {
       'RepeatCapOverridesTable',
       `LearnfyraRepeatCapOverrides-${appEnv}`,
       'id'
+    );
+
+    // ── DynamoDB: QuestionExposure — per-student question exposure for repeat-cap ──
+    // PK: userId (S), SK: exposureKey (S) = "{grade}#{subject}#{topic}#{questionId}"
+    // Used by assembler.js to determine which questions a student has already seen.
+    const questionExposureTable = createTable(
+      'QuestionExposureTable',
+      `LearnfyraQuestionExposure-${appEnv}`,
+      'userId',
+      {
+        sortKeyName: 'exposureKey',
+      }
     );
 
     // ── DynamoDB: Worksheets table — stores full worksheet JSON for online solve ──
@@ -956,6 +969,10 @@ export class LearnfyraStack extends cdk.Stack {
       description: `learnfyra-${appEnv}-lambda-admin-policies — admin policies and audit events`,
     });
 
+    // NOTE: guardrailsAdminFn was removed to stay under the CloudFormation 500-resource limit.
+    // Guardrails and repeat-cap admin routes are now routed to adminFn, which receives all
+    // necessary env vars below. guardrailsAdminHandler.js routes by path+method internally.
+
     // ── Lambda: Feedback handler ────────────────────────────────────────────────
     const feedbackFn = new NodejsFunction(this, 'FeedbackFunction', {
       functionName: `learnfyra-${appEnv}-lambda-feedback`,
@@ -999,7 +1016,7 @@ export class LearnfyraStack extends cdk.Stack {
       fn.addEnvironment('ALLOWED_ORIGIN', allowedOrigin);
     });
 
-    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn, certificatesFn, adminPoliciesFn].forEach((fn) => {
+    [authFn, generateFn, progressFn, analyticsFn, classFn, rewardsFn, studentFn, dashboardFn, certificatesFn, adminPoliciesFn, adminFn].forEach((fn) => {
       fn.addEnvironment('JWT_SECRET', jwtSecretValue);
       fn.addEnvironment('AUTH_MODE', 'hybrid');
     });
@@ -1097,6 +1114,8 @@ export class LearnfyraStack extends cdk.Stack {
     adminFn.addEnvironment('ADMIN_AUDIT_EVENTS_TABLE_NAME', adminAuditEventsTable.tableName);
     adminFn.addEnvironment('ADMIN_IDEMPOTENCY_TABLE_NAME', adminIdempotencyTable.tableName);
     adminFn.addEnvironment('REPEAT_CAP_OVERRIDES_TABLE_NAME', repeatCapOverridesTable.tableName);
+    // Guardrails and repeat-cap env vars (formerly on guardrailsAdminFn, now merged into adminFn)
+    adminFn.addEnvironment('QUESTION_EXPOSURE_TABLE_NAME', questionExposureTable.tableName);
 
     certificatesFn.addEnvironment('CERTIFICATES_TABLE_NAME', certificatesTable.tableName);
     certificatesFn.addEnvironment('USERS_TABLE_NAME', usersTable.tableName);
@@ -1523,6 +1542,240 @@ export class LearnfyraStack extends cdk.Stack {
         authorizer: tokenAuthorizer,
       });
 
+    // ── Admin: Guardrails routes (JWT protected, Super Admin / Platform Admin) ──
+    // Routed to adminFn (merged from the former guardrailsAdminFn to stay under
+    // the CloudFormation 500-resource limit). adminFn receives all guardrails env vars.
+    const adminGuardrailsResource = adminResource.addResource('guardrails');
+
+    const adminGuardrailsPolicyResource = adminGuardrailsResource.addResource('policy');
+    adminGuardrailsPolicyResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+    adminGuardrailsPolicyResource.addMethod(
+      'PUT',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+
+    const adminGuardrailsTemplatesResource = adminGuardrailsResource.addResource('templates');
+    adminGuardrailsTemplatesResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+    adminGuardrailsTemplatesResource
+      .addResource('{level}')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    adminGuardrailsResource
+      .addResource('test')
+      .addMethod('POST', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Admin: Guardrail audit events (separate from existing admin/audit/events) ──
+    // GET /api/admin/audit/guardrail-events — moderation audit log
+    // Note: adminResource already has an 'audit' child; we re-use it by looking up the resource.
+    // Since CDK does not support addResource on an existing child, we route this through
+    // adminFn via a dedicated path under /api/admin/guardrails/audit for uniqueness.
+    adminGuardrailsResource
+      .addResource('audit')
+      .addMethod('GET', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── Admin: Repeat-cap top-level routes (JWT protected, Super Admin / Platform Admin) ──
+    // These are at /api/admin/repeat-cap (distinct from /api/admin/policies/repeat-cap).
+    const adminRepeatCapResource = adminResource.addResource('repeat-cap');
+    adminRepeatCapResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+    adminRepeatCapResource.addMethod(
+      'PUT',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+
+    const adminRepeatCapOverrideResource = adminRepeatCapResource.addResource('override');
+    adminRepeatCapOverrideResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
+    );
+    adminRepeatCapOverrideResource
+      .addResource('{scope}')
+      .addResource('{scopeId}')
+      .addMethod('DELETE', new apigateway.LambdaIntegration(adminFn, { proxy: true }), {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      });
+
+    // ── DynamoDB seed: initial config entries for guardrails and repeat-cap ──────
+    // Uses AwsCustomResource (runs on deploy) to put initial items into LearnfyraConfig.
+    // Uses upsert semantics: ConditionExpression prevents overwrite of admin-modified values.
+    const configTableArn = configTable.tableArn;
+
+    const seedConfigRole = new iam.Role(this, 'SeedConfigRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+      inlinePolicies: {
+        DynamoDBPut: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['dynamodb:PutItem'],
+              resources: [configTableArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    const seedTimestamp = '2026-04-04T00:00:00Z';
+
+    // Seed guardrail:policy — default medium guardrail with 3 retries
+    new cr.AwsCustomResource(this, 'SeedGuardrailPolicy', {
+      onCreate: {
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: configTable.tableName,
+          Item: {
+            configKey: { S: 'guardrail:policy' },
+            value: {
+              S: JSON.stringify({
+                guardrailLevel: 'medium',
+                retryLimit: 3,
+                enableAwsComprehend: false,
+                comprehToxicityThreshold: 0.75,
+                validationFilters: ['profanity', 'sensitiveTopics'],
+              }),
+            },
+            updatedAt: { S: seedTimestamp },
+            updatedBy: { S: 'system' },
+          },
+          // Do not overwrite if an admin has already updated this entry
+          ConditionExpression: 'attribute_not_exists(configKey)',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`seed-guardrail-policy-${appEnv}`),
+      },
+      role: seedConfigRole,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+    }).node.addDependency(configTable);
+
+    // Seed guardrail:medium:template
+    new cr.AwsCustomResource(this, 'SeedGuardrailMediumTemplate', {
+      onCreate: {
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: configTable.tableName,
+          Item: {
+            configKey: { S: 'guardrail:medium:template' },
+            value: {
+              S: 'You are generating educational worksheets for Grade [grade] students (ages [age]). All content must be safe, factual, age-appropriate, and aligned with US educational standards. Avoid violence, politics, religion, mature themes, stereotypes, or culturally insensitive material.',
+            },
+            version: { N: '1' },
+            updatedAt: { S: seedTimestamp },
+            updatedBy: { S: 'system' },
+          },
+          ConditionExpression: 'attribute_not_exists(configKey)',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`seed-guardrail-medium-template-${appEnv}`),
+      },
+      role: seedConfigRole,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+    }).node.addDependency(configTable);
+
+    // Seed guardrail:strict:template
+    new cr.AwsCustomResource(this, 'SeedGuardrailStrictTemplate', {
+      onCreate: {
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: configTable.tableName,
+          Item: {
+            configKey: { S: 'guardrail:strict:template' },
+            value: {
+              S: 'You are generating educational worksheets for young students in Grade [grade] (ages [age]). Content MUST be completely safe and appropriate for children. Use only simple, positive, and encouraging language. Do NOT include any references to violence, conflict, politics, religion, death, illness, mature themes, stereotypes, or any potentially frightening or upsetting content. All examples must use age-appropriate scenarios (family, school, nature, animals, everyday activities).',
+            },
+            version: { N: '1' },
+            updatedAt: { S: seedTimestamp },
+            updatedBy: { S: 'system' },
+          },
+          ConditionExpression: 'attribute_not_exists(configKey)',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`seed-guardrail-strict-template-${appEnv}`),
+      },
+      role: seedConfigRole,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+    }).node.addDependency(configTable);
+
+    // Seed repeatCap:global — default 20% repeat cap
+    new cr.AwsCustomResource(this, 'SeedRepeatCapGlobal', {
+      onCreate: {
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: configTable.tableName,
+          Item: {
+            configKey: { S: 'repeatCap:global' },
+            value: {
+              S: JSON.stringify({
+                value: 20,
+                updatedAt: seedTimestamp,
+                updatedBy: 'system',
+              }),
+            },
+            updatedAt: { S: seedTimestamp },
+            updatedBy: { S: 'system' },
+          },
+          ConditionExpression: 'attribute_not_exists(configKey)',
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`seed-repeat-cap-global-${appEnv}`),
+      },
+      role: seedConfigRole,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+    }).node.addDependency(configTable);
+
     const monitoredFunctions = [
       { id: 'Generate', fn: generateFn, p95MsThreshold: isDev ? 30000 : 45000 },
       { id: 'Download', fn: downloadFn, p95MsThreshold: 4000 },
@@ -1593,54 +1846,9 @@ export class LearnfyraStack extends cdk.Stack {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
         alarmDescription: `${id} Lambda error rate exceeded 5% over 5 minutes in ${appEnv}`,
       });
-
-      // ── Anomaly Detection Alarm for unusual invocation patterns
-      const anomalyDetector = new cloudwatch.CfnAnomalyDetector(this, `${id}InvocationAnomalyDetector`, {
-        namespace: 'AWS/Lambda',
-        metricName: 'Invocations',
-        stat: 'Sum',
-        dimensions: [
-          { name: 'FunctionName', value: fn.functionName },
-        ],
-      });
-
-      const anomalyMetric = new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Invocations',
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-        dimensionsMap: { FunctionName: fn.functionName },
-      });
-
-      new cloudwatch.Alarm(this, `${id}InvocationAnomalyAlarm`, {
-        alarmName: `learnfyra-${appEnv}-${id.toLowerCase()}-invocation-anomaly`,
-        metric: anomalyMetric,
-        threshold: 2,
-        evaluationPeriods: 2,
-        datapointsToAlarm: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-        alarmDescription: `${id} Lambda detected unusual invocation pattern (anomaly > 2 std dev) in ${appEnv}`,
-      }).node.addDependency(anomalyDetector);
-
-      // ── Concurrent Execution Warning: Alert if we're using >50% of estimated normal concurrent calls
-      const concurrencyThreshold = id === 'Generate' ? 50 : 20;
-      const concurrentExecutionsMetric = new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'ConcurrentExecutions',
-        statistic: 'Maximum',
-        period: cdk.Duration.minutes(1),
-        dimensionsMap: { FunctionName: fn.functionName },
-      });
-
-      new cloudwatch.Alarm(this, `${id}ConcurrentExecutionAlarm`, {
-        alarmName: `learnfyra-${appEnv}-${id.toLowerCase()}-concurrent-threshold`,
-        metric: concurrentExecutionsMetric,
-        threshold: concurrencyThreshold,
-        evaluationPeriods: 2,
-        datapointsToAlarm: 1,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-        alarmDescription: `${id} Lambda concurrent executions exceeded ${concurrencyThreshold} (approaching concurrency limit) in ${appEnv}`,
-      });
+      // NOTE: Anomaly detection (CfnAnomalyDetector + InvocationAnomalyAlarm) and
+      // ConcurrentExecutionAlarm were removed to stay under the CloudFormation 500-resource limit.
+      // The three required alarms per function (errors, duration-p95, error-rate) are retained.
     });
 
     new cloudwatch.Alarm(this, 'ApiGateway5xxAlarm', {
@@ -2014,9 +2222,9 @@ export class LearnfyraStack extends cdk.Stack {
         width: 24,
         height: 3,
         markdown:
-          '## Cost & Anomaly Visibility (DOP-08)\n' +
-          '**Anomaly Alarms**: Each Lambda function has anomaly detection enabled (unusual invocations ±2σ).\n' +
-          '**Concurrency Warning**: Yellow alert if concurrent executions exceed 50% of typical peak (Generate) or 20% (others).\n' +
+          '## Cost Visibility (DOP-08)\n' +
+          '**Alarms**: Each Lambda function has error count, p95 duration, and error-rate alarms.\n' +
+          '**Concurrency**: Monitor the concurrent execution widget below for peak usage.\n' +
           '**Cost Drivers**: Generate, Submit, Progress functions. Monitor Duration Sum for total compute time. **Est. Cost**: ~$0.20/1M requests (Lambda) + $3.50/1M API calls (API GW).',
       })
     );
