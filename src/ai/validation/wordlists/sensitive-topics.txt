@@ -1,0 +1,118 @@
+# Learnfyra — Sensitive topic keywords by category
+# Format: category:keyword
+# Used by sensitiveTopicFilter.js for pattern-based detection.
+# Grade-band thresholds are defined in sensitiveTopicFilter.js, not here.
+
+violence:murder
+violence:kill
+violence:killing
+violence:weapon
+violence:gun
+violence:knife
+violence:stab
+violence:shoot
+violence:shooting
+violence:bomb
+violence:explosion
+violence:torture
+violence:assault
+violence:attack
+violence:massacre
+violence:genocide
+violence:war
+violence:bloodshed
+violence:brutal
+violence:gruesome
+violence:decapitate
+violence:decapitation
+
+politics:democrat
+politics:republican
+politics:liberal
+politics:conservative
+politics:trump
+politics:biden
+politics:obama
+politics:political party
+politics:election fraud
+politics:impeach
+politics:partisan
+
+religion:jesus
+religion:allah
+religion:god
+religion:satan
+religion:devil
+religion:hell
+religion:bible
+religion:quran
+religion:torah
+religion:crusade
+religion:jihad
+religion:atheist
+religion:atheism
+religion:blasphemy
+religion:prayer in school
+
+sexuality:sex
+sexuality:sexual
+sexuality:porn
+sexuality:pornography
+sexuality:nude
+sexuality:naked
+sexuality:intercourse
+sexuality:masturbate
+sexuality:masturbation
+sexuality:erection
+sexuality:orgasm
+sexuality:genitals
+sexuality:prostitute
+sexuality:prostitution
+
+drugs:cocaine
+drugs:heroin
+drugs:meth
+drugs:methamphetamine
+drugs:marijuana
+drugs:cannabis
+drugs:weed
+drugs:drug dealer
+drugs:overdose
+drugs:inject drugs
+drugs:crack cocaine
+drugs:opioid
+drugs:fentanyl
+
+self-harm:suicide
+self-harm:suicidal
+self-harm:self-harm
+self-harm:self-mutilation
+self-harm:cut myself
+self-harm:hang myself
+self-harm:kill myself
+self-harm:eating disorder
+self-harm:anorexia
+self-harm:bulimia
+self-harm:overdose on pills
+
+discrimination:racist
+discrimination:racism
+discrimination:sexist
+discrimination:sexism
+discrimination:homophobic
+discrimination:homophobia
+discrimination:white supremac
+discrimination:nazi
+discrimination:antisemit
+discrimination:islamophob
+discrimination:xenophob
+
+mature-themes:abortion
+mature-themes:incest
+mature-themes:pedophile
+mature-themes:child abuse
+mature-themes:domestic violence
+mature-themes:rape
+mature-themes:sexual assault
+mature-themes:trafficking
+mature-themes:prostitution

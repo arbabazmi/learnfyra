@@ -28,7 +28,7 @@ import { withRetry } from '../utils/retryUtils.js';
 import { getQuestionBankAdapter } from '../questionBank/index.js';
 import { recordQuestionReuse } from '../questionBank/reuseHook.js';
 import { logger } from '../utils/logger.js';
-import { buildQuestionSignature, getUserQuestionHistory } from './repeatCapPolicy.js';
+import { buildQuestionSignature, getUserQuestionHistory, calculateAllocation } from './repeatCapPolicy.js';
 
 // ─── Model tiers ──────────────────────────────────────────────────────────────
 
@@ -295,9 +295,14 @@ function buildProvenanceSummary({
  * @param {string}  options.difficulty     - Easy | Medium | Hard | Mixed
  * @param {number}  options.questionCount  - Total questions requested (5–30)
  *
+ * @param {number}  [options.repeatCapPercent=100] - Effective repeat cap (0–100) resolved
+ *   upstream via resolveEffectiveRepeatCap / resolveRepeatCap. Replaces the former
+ *   hardcoded 80/20 rule. Defaults to 100 (no restriction) when not provided.
+ * @param {boolean} [options.capResolutionFallback=false] - True when the cap was resolved
+ *   via hardcoded fallback due to a DB read failure.
  * @param {string}  [options.generationMode]  - auto | bank-first
  * @param {string}  [options.provenanceLevel] - none | summary | full
- * @returns {Promise<{ worksheet: Object, bankStats: { fromBank: number, generated: number, totalStored: number }, provenance?: Object }>} 
+ * @returns {Promise<{ worksheet: Object, bankStats: Object, provenance?: Object }>}
  */
 export async function assembleWorksheet(options) {
   const {
@@ -308,6 +313,7 @@ export async function assembleWorksheet(options) {
     questionCount,
     provenanceLevel = 'summary',
     repeatCapPercent = 100,
+    capResolutionFallback = false,
     seenQuestionSignatures,
     userId,
     guestId,
@@ -338,19 +344,22 @@ export async function assembleWorksheet(options) {
     repeatUsed = result.repeatUsed;
   }
 
-  // ── Step 2.5: Apply questionId-based deduplication (80/20 rule) ────────────
+  // ── Step 2.5: Apply questionId-based deduplication (admin-configured cap) ───
+  // The effective cap comes from repeatCapPercent passed by the caller, which
+  // is resolved upstream via resolveEffectiveRepeatCap. This replaces the
+  // former hardcoded 80/20 rule (Math.ceil(questionCount * 0.8)).
   const seenQuestionIds = await getUserQuestionHistory({ userId, guestId, grade, subject });
 
   if (seenQuestionIds.size > 0 && bankedSelected.length > 0) {
     const unseenBanked = bankedSelected.filter(q => !seenQuestionIds.has(q.questionId));
     const seenBanked   = bankedSelected.filter(q =>  seenQuestionIds.has(q.questionId));
-    const minUnseen    = Math.ceil(questionCount * 0.8);
+    const { minUnseen } = calculateAllocation(questionCount, effectiveRepeatCapPercent);
 
     if (unseenBanked.length >= questionCount) {
       // Enough unseen — use only unseen
       bankedSelected = shuffled(unseenBanked).slice(0, questionCount);
     } else if (unseenBanked.length >= minUnseen) {
-      // Enough for 80% — fill remainder from seen
+      // Enough unseen to satisfy cap — fill remainder from seen (up to cap)
       const seenFill = questionCount - unseenBanked.length;
       bankedSelected = [...shuffled(unseenBanked), ...shuffled(seenBanked).slice(0, seenFill)];
     } else {
@@ -360,7 +369,8 @@ export async function assembleWorksheet(options) {
 
     logger.info(
       `Assembler — dedup: ${seenQuestionIds.size} seen IDs, ` +
-      `${unseenBanked.length} unseen candidates, using ${bankedSelected.length} from bank`
+      `${unseenBanked.length} unseen candidates, minUnseen=${minUnseen} ` +
+      `(cap=${effectiveRepeatCapPercent}%), using ${bankedSelected.length} from bank`
     );
   }
 
@@ -522,14 +532,19 @@ export async function assembleWorksheet(options) {
     actualCount: renumbered.length,
   };
 
+  const { minUnseen: minUnseenRequired } = calculateAllocation(questionCount, effectiveRepeatCapPercent);
+
   const bankStats = {
     fromBank,
     generated: aiGenerationError ? 0 : missingCount,
     totalStored,
     repeatCapPercent: effectiveRepeatCapPercent,
+    effectiveCapPercent: effectiveRepeatCapPercent,
     maxRepeatQuestions,
+    minUnseenRequired,
     repeatUsed,
     fallbackUsed: Boolean(aiGenerationError),
+    capResolutionFallback: Boolean(capResolutionFallback),
   };
 
   if (provenanceLevel === 'none') {

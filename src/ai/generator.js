@@ -14,6 +14,8 @@
  *     4. validateTopLevel()      — checks required top-level fields
  *     5. validateQuestions()     — checks each question object
  *     6. validateQuestionCount() — exact count must match requested count
+ *     7. validateWorksheetOutput() — content safety guardrail scan (NEW)
+ *        → FAIL: escalate guardrailLevel and retry (up to policy.retryLimit)
  *
  *   Bank-first assembly (when QB_ADAPTER is set and not 'off'):
  *     - Attempts to serve questions from the question bank first
@@ -22,9 +24,15 @@
  *     - Records reuse of every banked question used
  *     - Returns generationMode ('ai-only' | 'mixed' | 'bank-only') and
  *       provenanceLevel array (one entry per question: 'bank' | 'ai')
+ *
+ *   Guardrail injection (NEW):
+ *     - buildGuardrailSuffix() appended to system prompt before every Claude call
+ *     - On content safety failure: escalate to 'strict' level and retry
+ *     - All attempts logged via auditLogger as 'generation.moderation' events
  * @agent DEV
  */
 
+import { createHash } from 'crypto';
 import { anthropic, CLAUDE_MODEL, MAX_TOKENS } from './client.js';
 import { buildSystemPrompt, buildUserPrompt, buildStrictUserPrompt } from './promptBuilder.js';
 import { withRetry } from '../utils/retryUtils.js';
@@ -32,6 +40,69 @@ import { validateGrade, validateQuestionCount, validateSubject } from '../cli/va
 import { logger } from '../utils/logger.js';
 import { mockGenerateWorksheet } from './mockAi.js';
 import { recordQuestionReuse } from '../questionBank/reuseHook.js';
+
+// ─── Guardrail imports (lazy for Lambda cold start optimization) ──────────────
+
+/** @type {Function|null} */
+let _buildGuardrailSuffix = null;
+
+/**
+ * Lazily loads buildGuardrailSuffix to avoid loading DynamoDB SDK on cold starts
+ * when guardrails are not needed.
+ * @returns {Promise<Function>}
+ */
+async function getGuardrailSuffixBuilder() {
+  if (!_buildGuardrailSuffix) {
+    const mod = await import('./guardrails/guardrailsBuilder.js');
+    _buildGuardrailSuffix = mod.buildGuardrailSuffix;
+  }
+  return _buildGuardrailSuffix;
+}
+
+/** @type {Function|null} */
+let _validateWorksheetOutput = null;
+
+/**
+ * Lazily loads validateWorksheetOutput.
+ * @returns {Promise<Function>}
+ */
+async function getOutputValidator() {
+  if (!_validateWorksheetOutput) {
+    const mod = await import('./validation/outputValidator.js');
+    _validateWorksheetOutput = mod.validateWorksheetOutput;
+  }
+  return _validateWorksheetOutput;
+}
+
+/** @type {Function|null} */
+let _getGuardrailPolicy = null;
+
+/**
+ * Lazily loads getGuardrailPolicy.
+ * @returns {Promise<Function>}
+ */
+async function getGuardrailPolicyLoader() {
+  if (!_getGuardrailPolicy) {
+    const mod = await import('./guardrails/guardrailsPolicy.js');
+    _getGuardrailPolicy = mod.getGuardrailPolicy;
+  }
+  return _getGuardrailPolicy;
+}
+
+/** @type {Function|null} */
+let _writeAuditLog = null;
+
+/**
+ * Lazily loads writeAuditLog from auditLogger.
+ * @returns {Promise<Function>}
+ */
+async function getAuditLogger() {
+  if (!_writeAuditLog) {
+    const mod = await import('../admin/auditLogger.js');
+    _writeAuditLog = mod.writeAuditLog;
+  }
+  return _writeAuditLog;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -365,6 +436,58 @@ async function storeToBankSilently(questions) {
   }
 }
 
+// ─── Moderation audit helper ──────────────────────────────────────────────────
+
+/**
+ * Writes a generation.moderation audit event. Fire-and-forget — never throws.
+ *
+ * @param {Object} params
+ * @param {number} params.grade
+ * @param {string} params.subject
+ * @param {string} params.guardrailLevel
+ * @param {string} params.promptHashSha256
+ * @param {Object} params.validationResult
+ * @param {number} params.retryCount
+ * @param {string} params.modelUsed
+ * @param {string} params.actorId
+ * @returns {Promise<void>}
+ */
+async function _logModerationEvent({
+  grade,
+  subject,
+  guardrailLevel,
+  promptHashSha256,
+  validationResult,
+  retryCount,
+  modelUsed,
+  actorId,
+}) {
+  try {
+    const writeAuditLog = await getAuditLogger();
+    await writeAuditLog({
+      actorId,
+      actorRole:        'system',
+      action:           'GENERATION_MODERATION',
+      targetEntityType: 'worksheet',
+      targetEntityId:   'pending',
+      afterState: {
+        eventType:       'generation.moderation',
+        grade,
+        subject,
+        guardrailLevel,
+        promptHashSha256,
+        validationResult,
+        retryCount,
+        modelUsed,
+      },
+      ipAddress: 'system',
+      userAgent: 'generator.js',
+    });
+  } catch {
+    // Fire-and-forget — audit failure must never break worksheet generation
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -421,6 +544,15 @@ export async function generateWorksheet(options) {
   let generationMode;
   let aiQuestions = [];
 
+  // ── Moderation accumulator — hoisted so bank-only/mixed paths can reference it ─
+  /** @type {{ questionsScanned: number, questionsRejected: number, questionsRetried: number, anyFlagged: boolean }} */
+  const moderationAccumulator = {
+    questionsScanned:  0,
+    questionsRejected: 0,
+    questionsRetried:  0,
+    anyFlagged:        false,
+  };
+
   if (bankCount >= questionCount) {
     generationMode = 'bank-only';
     logger.debug(`Bank-first: serving all ${questionCount} questions from bank.`);
@@ -434,16 +566,55 @@ export async function generateWorksheet(options) {
 
   // ── Claude generation (ai-only or mixed) ────────────────────────────────
   if (aiNeeded > 0) {
-    const aiOptions   = { ...options, questionCount: aiNeeded };
-    const systemPrompt = buildSystemPrompt();
-    let attemptNumber  = 0;
+    const aiOptions        = { ...options, questionCount: aiNeeded };
+    const baseSystemPrompt = buildSystemPrompt();
+    let attemptNumber      = 0;
+
+    // ── Load guardrail policy once per generation call ─────────────────────
+    let policy = { guardrailLevel: 'medium', retryLimit: 3, validationFilters: ['profanity', 'sensitiveTopics'] };
+    try {
+      const loadPolicy = await getGuardrailPolicyLoader();
+      policy = await loadPolicy();
+    } catch (err) {
+      logger.warn(`generator: could not load guardrail policy — using default. ${err.message}`);
+    }
+
+    const guardrailRetryLimit = Math.max(
+      0,
+      Math.min(5, parseInt(process.env.GUARDRAIL_RETRY_LIMIT || String(policy.retryLimit), 10))
+    );
+
+    // Tracks guardrail-specific retry count (separate from JSON-parse retries)
+    let guardrailAttempt     = 0;
+    // Escalated to 'strict' on first guardrail failure
+    let activeGuardrailLevel = policy.guardrailLevel;
 
     const callClaude = async () => {
+      // Build guardrail-injected system prompt
+      let systemPrompt = baseSystemPrompt;
+      try {
+        const buildSuffix = await getGuardrailSuffixBuilder();
+        const suffix      = await buildSuffix({
+          grade,
+          subject,
+          guardrailLevel: activeGuardrailLevel,
+        });
+        if (suffix) systemPrompt = `${baseSystemPrompt}\n\n${suffix}`;
+      } catch (err) {
+        logger.warn(`generator: guardrail suffix build failed — proceeding without it. ${err.message}`);
+      }
+
       const userPrompt = attemptNumber === 0
         ? buildUserPrompt(aiOptions)
         : buildStrictUserPrompt(aiOptions);
 
-      logger.debug(`Claude API call (attempt ${attemptNumber + 1})…`);
+      logger.debug(
+        `Claude API call (attempt ${attemptNumber + 1}, guardrailLevel=${activeGuardrailLevel})…`
+      );
+
+      const promptHashSha256 = createHash('sha256')
+        .update(systemPrompt + userPrompt)
+        .digest('hex');
 
       const message = await anthropic.messages.create(
         {
@@ -492,6 +663,66 @@ export async function generateWorksheet(options) {
       // Validate question count matches what we asked Claude for
       validateQuestions(coerced, aiNeeded);
 
+      // ── Content safety validation ────────────────────────────────────────
+      let validationResult = { safe: true, failureReason: null, failureDetails: null, validatorsRun: [] };
+      try {
+        const validate      = await getOutputValidator();
+        validationResult    = await validate(coerced, {
+          grade,
+          subject,
+          guardrailLevel:     activeGuardrailLevel,
+          validationFilters:  policy.validationFilters,
+        });
+      } catch (err) {
+        logger.warn(`generator: outputValidator threw — skipping safety check. ${err.message}`);
+      }
+
+      // ── Accumulate moderation stats for this attempt ─────────────────────
+      const scannedCount = Array.isArray(coerced.questions) ? coerced.questions.length : 0;
+      moderationAccumulator.questionsScanned += scannedCount;
+
+      if (!validationResult.safe) {
+        moderationAccumulator.questionsRejected += scannedCount;
+        moderationAccumulator.anyFlagged         = true;
+      }
+
+      // ── Audit log this attempt (fire-and-forget) ─────────────────────────
+      _logModerationEvent({
+        grade,
+        subject,
+        guardrailLevel:  activeGuardrailLevel,
+        promptHashSha256,
+        validationResult,
+        retryCount:      guardrailAttempt,
+        modelUsed:       process.env.CLAUDE_MODEL || CLAUDE_MODEL,
+        actorId:         options.actorId || 'system',
+      }).catch(() => {}); // fire-and-forget
+
+      if (!validationResult.safe) {
+        guardrailAttempt++;
+        moderationAccumulator.questionsRetried++;
+
+        if (guardrailAttempt <= guardrailRetryLimit) {
+          // Escalate to strict for the next attempt
+          activeGuardrailLevel = 'strict';
+          logger.warn(
+            `generator: content safety check failed (${validationResult.failureReason}) ` +
+            `— retrying with strict guardrail (guardrail attempt ${guardrailAttempt}/${guardrailRetryLimit})`
+          );
+          throw new Error(
+            `Content safety validation failed: ${validationResult.failureDetails}. ` +
+            `Retrying with stricter guardrail (attempt ${guardrailAttempt}/${guardrailRetryLimit}).`
+          );
+        }
+
+        // All guardrail retries exhausted
+        throw new Error(
+          `Content safety validation failed after ${guardrailAttempt} attempt(s). ` +
+          `Reason: ${validationResult.failureDetails}. ` +
+          'Please try a different topic or contact support.'
+        );
+      }
+
       return coerced;
     };
 
@@ -504,7 +735,10 @@ export async function generateWorksheet(options) {
         }
       },
       {
-        maxRetries: parseInt(process.env.MAX_RETRIES || (isLambdaRuntime ? '0' : '3'), 10),
+        maxRetries: parseInt(
+          process.env.MAX_RETRIES || (isLambdaRuntime ? '0' : String(guardrailRetryLimit + 2)),
+          10
+        ),
         baseDelayMs: 1000,
         onRetry: (attempt, err) => {
           logger.warn(`Retry ${attempt}: ${err.message}`);
@@ -531,8 +765,26 @@ export async function generateWorksheet(options) {
           provider:  'Anthropic',
           label:     'Questions generated with AI assistance',
         },
+        moderationSummary: _buildModerationSummary(moderationAccumulator),
       };
     }
+  }
+
+  /**
+   * Builds the final moderationSummary object from the accumulated stats.
+   * Defined as an inner helper so it is reachable from all return paths.
+   * @param {{ questionsScanned: number, questionsRejected: number, questionsRetried: number, anyFlagged: boolean }} acc
+   * @returns {Object}
+   */
+  function _buildModerationSummary(acc) {
+    return {
+      flagged:           acc.anyFlagged,
+      questionsScanned:  acc.questionsScanned,
+      questionsRejected: acc.questionsRejected,
+      questionsRetried:  acc.questionsRetried,
+      anyFlagged:        acc.anyFlagged,
+      service:           'custom',
+    };
   }
 
   // ── bank-only: return the banked worksheet structure ─────────────────────
@@ -564,6 +816,7 @@ export async function generateWorksheet(options) {
         provider:  'Anthropic',
         label:     'Questions generated with AI assistance',
       },
+      moderationSummary: _buildModerationSummary(moderationAccumulator),
     };
   }
 
@@ -606,5 +859,6 @@ export async function generateWorksheet(options) {
       provider:  'Anthropic',
       label:     'Questions generated with AI assistance',
     },
+    moderationSummary: _buildModerationSummary(moderationAccumulator),
   };
 }

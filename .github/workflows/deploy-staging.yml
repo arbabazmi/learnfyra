@@ -363,6 +363,10 @@ jobs:
           check GET  "student/profile" "$BASE_API/student/profile"
           check POST "student/join-class" "$BASE_API/student/join-class" '{"classCode":"SMOKE123"}'
           check GET  "qb/questions" "$BASE_API/qb/questions"
+          check GET  "admin/guardrails/policy" "$BASE_API/admin/guardrails/policy"
+          check GET  "admin/guardrails/templates" "$BASE_API/admin/guardrails/templates"
+          check GET  "admin/guardrails/audit" "$BASE_API/admin/guardrails/audit"
+          check GET  "admin/repeat-cap" "$BASE_API/admin/repeat-cap"
 
           TOTAL=$((PASS + FAIL))
           echo ""

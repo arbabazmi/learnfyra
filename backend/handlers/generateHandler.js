@@ -581,12 +581,19 @@ export const handler = async (event, context) => {
     } = await getRepeatCapHelpers();
 
     const studentKey = buildStudentKey({ studentId, studentName, teacherId });
-    const repeatPolicy = await resolveEffectiveRepeatCap({
-      db,
-      studentId,
-      parentId,
-      teacherId,
-    });
+    let repeatPolicy;
+    let capResolutionFallback = false;
+    try {
+      repeatPolicy = await resolveEffectiveRepeatCap({
+        db,
+        studentId,
+        parentId,
+        teacherId,
+      });
+    } catch {
+      repeatPolicy = { capPercent: 20, appliedBy: 'fallback', sourceId: null };
+      capResolutionFallback = true;
+    }
 
     const seenQuestionSignatures = await getSeenQuestionSignatures({
       db,
@@ -607,6 +614,7 @@ export const handler = async (event, context) => {
       generationMode,
       provenanceLevel,
       repeatCapPercent: repeatPolicy.capPercent,
+      capResolutionFallback,
       seenQuestionSignatures,
       userId: isGuestUser ? undefined : decoded.sub,
       guestId: isGuestUser ? decoded.sub : undefined,
@@ -903,6 +911,7 @@ export const handler = async (event, context) => {
         className,
       },
       expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      moderationSummary: worksheet.moderationSummary ?? null,
     };
 
     // 9. Guest: atomically add worksheetId to GuestSessions Set + return count
@@ -950,6 +959,7 @@ export const handler = async (event, context) => {
         answerKeyKey,
         slug,
         metadata,
+        moderationSummary: worksheet.moderationSummary ?? null,
         requestId,
         clientRequestId,
         ...(guestUsage || {}),
