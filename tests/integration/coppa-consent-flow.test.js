@@ -76,6 +76,8 @@ jest.unstable_mockModule('../../src/consent/consentStore.js', () => ({
   getConsentByToken:    mockGetConsentByToken,
   grantConsent:         mockGrantConsent,
   revokeConsent:        mockRevokeConsent,
+  getConsentsByChild:   jest.fn().mockResolvedValue([]),
+  getConsentsByParent:  jest.fn().mockResolvedValue([]),
 }));
 
 jest.unstable_mockModule('../../src/auth/tokenUtils.js', () => ({
@@ -93,7 +95,7 @@ jest.unstable_mockModule('../../src/utils/rbac.js', () => ({
   verifyTeacherOwnsClass: jest.fn(),
 }));
 
-jest.unstable_mockModule('../../src/email/consentEmail.js', () => ({
+jest.unstable_mockModule('../../src/notifications/consentEmailService.js', () => ({
   sendConsentEmail: mockSendConsentEmail,
 }));
 

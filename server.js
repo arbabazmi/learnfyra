@@ -1353,6 +1353,66 @@ adminRoute('patch',  '/api/admin/schools/:schoolId',              r => `/api/adm
 adminRoute('get',    '/api/admin/audit-log',                      '/api/admin/audit-log');
 adminRoute('get',    '/api/admin/compliance-log',                 '/api/admin/compliance-log');
 
+// ── Guardrails Admin Routes (/api/admin/guardrails/*, /api/admin/repeat-cap/*, /api/admin/audit/guardrail-events) ─
+
+let _guardrailsAdminHandler;
+const getGuardrailsAdminHandler = async () => {
+  if (!_guardrailsAdminHandler) {
+    const mod = await import('./backend/handlers/guardrailsAdminHandler.js');
+    _guardrailsAdminHandler = mod.handler;
+  }
+  return _guardrailsAdminHandler;
+};
+
+function guardrailsRoute(method, expressPath, lambdaPath) {
+  const httpMethod = method.toUpperCase();
+  const fn = method === 'delete' ? 'delete' : method;
+  app[fn](expressPath, async (req, res) => {
+    try {
+      const handler = await getGuardrailsAdminHandler();
+      const path = typeof lambdaPath === 'function' ? lambdaPath(req) : lambdaPath;
+      const result = await handler(
+        {
+          httpMethod,
+          path,
+          headers: req.headers,
+          body: req.body ? JSON.stringify(req.body) : null,
+          queryStringParameters: req.query && Object.keys(req.query).length ? req.query : null,
+          pathParameters: req.params || null,
+          requestContext: { requestId: randomUUID(), identity: { sourceIp: req.ip } },
+        },
+        { callbackWaitsForEmptyEventLoop: true, functionName: 'learnfyra-guardrails-admin-local', getRemainingTimeInMillis: () => 15000 },
+      );
+      res.set(corsHeaders).status(result.statusCode).json(JSON.parse(result.body));
+    } catch (err) {
+      console.error('guardrails admin route error:', err);
+      res.set(corsHeaders).status(500).json({ error: 'Internal server error.' });
+    }
+  });
+}
+
+// Guardrail policy
+guardrailsRoute('get',    '/api/admin/guardrails/policy',                '/api/admin/guardrails/policy');
+guardrailsRoute('put',    '/api/admin/guardrails/policy',                '/api/admin/guardrails/policy');
+
+// Guardrail templates
+guardrailsRoute('get',    '/api/admin/guardrails/templates',             '/api/admin/guardrails/templates');
+guardrailsRoute('put',    '/api/admin/guardrails/templates/:level',      r => `/api/admin/guardrails/templates/${r.params.level}`);
+
+// Guardrail dry-run test
+guardrailsRoute('post',   '/api/admin/guardrails/test',                  '/api/admin/guardrails/test');
+
+// Guardrail audit events
+guardrailsRoute('get',    '/api/admin/audit/guardrail-events',           '/api/admin/audit/guardrail-events');
+
+// Repeat cap global
+guardrailsRoute('get',    '/api/admin/repeat-cap',                       '/api/admin/repeat-cap');
+guardrailsRoute('put',    '/api/admin/repeat-cap',                       '/api/admin/repeat-cap');
+
+// Repeat cap overrides
+guardrailsRoute('post',   '/api/admin/repeat-cap/override',              '/api/admin/repeat-cap/override');
+guardrailsRoute('delete', '/api/admin/repeat-cap/override/:scope/:scopeId', r => `/api/admin/repeat-cap/override/${r.params.scope}/${r.params.scopeId}`);
+
 // ── M07 School Admin Routes (/school/*) ─────────────────────────────────────
 
 let _schoolAdminHandler;
