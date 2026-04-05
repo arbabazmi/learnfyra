@@ -24,7 +24,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 import { BaseNestedStackProps, ComputeFunctionArns, ApiOutputs } from '../types';
@@ -43,17 +42,6 @@ export interface ApiStackProps extends BaseNestedStackProps {
   wwwDomainName?: string;
   adminDomainName?: string;
   authDomainName?: string;
-}
-
-export interface CdnRoute53RecordsOptions {
-  zone: route53.IHostedZone;
-  webDomainName?: string;
-  wwwDomainName?: string;
-  adminDomainName?: string;
-  authDomainName?: string;
-  apiDomainName?: string;
-  isProd: boolean;
-  isDev: boolean;
 }
 
 export class ApiStack extends cdk.NestedStack {
@@ -556,45 +544,4 @@ export class ApiStack extends cdk.NestedStack {
     };
   }
 
-  /**
-   * Adds Route53 alias records pointing to the CloudFront distribution for
-   * web, www (prod only), and admin subdomains. Called by the parent orchestrator
-   * after CdnStack is created.
-   */
-  public addCdnRoute53Records(
-    distribution: cloudfront.Distribution,
-    opts: CdnRoute53RecordsOptions
-  ): void {
-    const { zone, webDomainName, wwwDomainName, adminDomainName, isProd } = opts;
-
-    if (webDomainName) {
-      new route53.ARecord(this, 'WebDomainRecord', {
-        zone,
-        recordName: webDomainName,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.CloudFrontTarget(distribution)
-        ),
-      });
-    }
-
-    if (isProd && wwwDomainName) {
-      new route53.ARecord(this, 'WwwDomainRecord', {
-        zone,
-        recordName: wwwDomainName,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.CloudFrontTarget(distribution)
-        ),
-      });
-    }
-
-    if (adminDomainName) {
-      new route53.ARecord(this, 'AdminDomainRecord', {
-        zone,
-        recordName: adminDomainName,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.CloudFrontTarget(distribution)
-        ),
-      });
-    }
-  }
 }
