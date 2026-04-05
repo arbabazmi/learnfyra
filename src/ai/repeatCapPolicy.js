@@ -1,6 +1,9 @@
 /**
  * @file src/ai/repeatCapPolicy.js
  * @description Repeat-cap policy resolution and student exposure tracking helpers.
+ *
+ * v1.1 — Added calculateAllocation() and resolveRepeatCap() to support
+ * dynamic cap-driven assembly in assembler.js (replaces hardcoded 80/20 rule).
  */
 
 import { randomUUID } from 'crypto';
@@ -59,6 +62,15 @@ function clampPercent(value, fallback = DEFAULT_REPEAT_CAP_PERCENT) {
 
 /**
  * Resolves effective repeat cap with precedence: student > parent > teacher > default.
+ *
+ * Global default is read from two sources in priority order:
+ *   1. adminPolicies.global.repeatCapPolicy.defaultPercent  (adminHandler path)
+ *   2. config table record id='repeat-cap:global', field value  (guardrailsAdminHandler path)
+ *
+ * Override cap value is read from `item.repeatCapPercent ?? item.value` to support
+ * both the adminHandler schema (repeatCapPercent) and the guardrailsAdminHandler
+ * schema (value).
+ *
  * @param {Object} input
  * @param {Object} input.db
  * @param {string} [input.studentId]
@@ -69,12 +81,19 @@ function clampPercent(value, fallback = DEFAULT_REPEAT_CAP_PERCENT) {
 export async function resolveEffectiveRepeatCap({ db, studentId, parentId, teacherId }) {
   let defaultPercent = DEFAULT_REPEAT_CAP_PERCENT;
 
+  // Source 1: adminPolicies table (written by adminHandler repeatCapPolicy routes)
   const globalPolicy = await db.getItem('adminPolicies', 'global');
   if (globalPolicy?.repeatCapPolicy?.enabled === false) {
     return { capPercent: 100, appliedBy: 'disabled', sourceId: null };
   }
   if (globalPolicy?.repeatCapPolicy?.defaultPercent != null) {
     defaultPercent = clampPercent(globalPolicy.repeatCapPolicy.defaultPercent, DEFAULT_REPEAT_CAP_PERCENT);
+  } else {
+    // Source 2: config table (written by guardrailsAdminHandler PUT /api/admin/repeat-cap)
+    const configRecord = await db.getItem('config', 'repeat-cap:global');
+    if (configRecord?.value != null) {
+      defaultPercent = clampPercent(configRecord.value, DEFAULT_REPEAT_CAP_PERCENT);
+    }
   }
 
   const allOverrides = await db.listAll('repeatCapOverrides');
@@ -104,10 +123,23 @@ export async function resolveEffectiveRepeatCap({ db, studentId, parentId, teach
     return matches[0] || null;
   };
 
+  /**
+   * Reads the cap percent from an override record.
+   * Handles both field name conventions:
+   *   - `repeatCapPercent` (adminHandler schema)
+   *   - `value`            (guardrailsAdminHandler schema)
+   * @param {Object} item
+   * @returns {number|null}
+   */
+  const overrideCap = (item) => {
+    const raw = item.repeatCapPercent ?? item.value;
+    return raw != null ? raw : null;
+  };
+
   const studentOverride = pickOverride('student', studentId);
   if (studentOverride) {
     return {
-      capPercent: clampPercent(studentOverride.repeatCapPercent, defaultPercent),
+      capPercent: clampPercent(overrideCap(studentOverride) ?? defaultPercent, defaultPercent),
       appliedBy: 'student',
       sourceId: studentOverride.scopeId,
     };
@@ -116,7 +148,7 @@ export async function resolveEffectiveRepeatCap({ db, studentId, parentId, teach
   const parentOverride = pickOverride('parent', parentId);
   if (parentOverride) {
     return {
-      capPercent: clampPercent(parentOverride.repeatCapPercent, defaultPercent),
+      capPercent: clampPercent(overrideCap(parentOverride) ?? defaultPercent, defaultPercent),
       appliedBy: 'parent',
       sourceId: parentOverride.scopeId,
     };
@@ -125,7 +157,7 @@ export async function resolveEffectiveRepeatCap({ db, studentId, parentId, teach
   const teacherOverride = pickOverride('teacher', teacherId);
   if (teacherOverride) {
     return {
-      capPercent: clampPercent(teacherOverride.repeatCapPercent, defaultPercent),
+      capPercent: clampPercent(overrideCap(teacherOverride) ?? defaultPercent, defaultPercent),
       appliedBy: 'teacher',
       sourceId: teacherOverride.scopeId,
     };
@@ -210,6 +242,44 @@ export async function recordExposureHistory({
   }
 
   return saved;
+}
+
+/**
+ * Calculates the maximum repeat and minimum unseen question counts from a
+ * cap percentage and a total question count.
+ *
+ * @param {number} questionCount - Total questions requested
+ * @param {number} capPercent    - Effective repeat cap (0–100)
+ * @returns {{ maxRepeat: number, minUnseen: number }}
+ */
+export function calculateAllocation(questionCount, capPercent) {
+  const clampedCap = Math.max(0, Math.min(100, Number(capPercent) || 0));
+  const maxRepeat  = Math.floor(questionCount * clampedCap / 100);
+  const minUnseen  = questionCount - maxRepeat;
+  return { maxRepeat, minUnseen };
+}
+
+/**
+ * Thin wrapper that resolves the effective repeat cap for a generation context.
+ * Delegates to resolveEffectiveRepeatCap using the shared db adapter.
+ *
+ * Precedence: student override → parent override → teacher override → global default.
+ * Falls back to DEFAULT_REPEAT_CAP_PERCENT (20) if the DB read fails.
+ *
+ * @param {Object} context
+ * @param {Object} context.db          - DB adapter instance
+ * @param {string} [context.studentId] - Student userId for student-scope override
+ * @param {string} [context.parentId]  - Parent userId for parent-scope override
+ * @param {string} [context.teacherId] - Teacher userId for teacher-scope override
+ * @returns {Promise<{ capPercent: number, fallback: boolean }>} Effective repeat cap percentage (0–100) and whether fallback was used
+ */
+export async function resolveRepeatCap({ db, studentId, parentId, teacherId }) {
+  try {
+    const result = await resolveEffectiveRepeatCap({ db, studentId, parentId, teacherId });
+    return { capPercent: result.capPercent, fallback: false };
+  } catch {
+    return { capPercent: DEFAULT_REPEAT_CAP_PERCENT, fallback: true };
+  }
 }
 
 /**
