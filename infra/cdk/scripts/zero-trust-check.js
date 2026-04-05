@@ -96,13 +96,25 @@ function checkUnauthRoutes(stacks) {
 
 function checkCorsOrigins(_stacks) {
   const violations = [];
-  const cdkStackPath = resolve(__dirname, '..', 'lib', 'learnfyra-stack.ts');
+  // CORS config may live in the main stack or in a nested api-stack module.
+  const candidates = [
+    resolve(__dirname, '..', 'lib', 'learnfyra-stack.ts'),
+    resolve(__dirname, '..', 'lib', 'nested', 'api-stack.ts'),
+    resolve(__dirname, '..', 'lib', 'nested', 'api-core-stack.ts'),
+  ];
 
   let source;
-  try {
-    source = readFileSync(cdkStackPath, 'utf8');
-  } catch {
-    violations.push('  Could not read learnfyra-stack.ts to verify CORS configuration');
+  for (const p of candidates) {
+    try {
+      source = readFileSync(p, 'utf8');
+      if (source.includes('defaultCorsPreflightOptions')) break;
+      source = undefined;
+    } catch {
+      // try next candidate
+    }
+  }
+  if (!source) {
+    violations.push('  Could not find CORS configuration in any CDK source file');
     return { rule: 'Rule 2: No wildcard CORS in prod/staging', violations };
   }
 
@@ -194,23 +206,29 @@ function checkCloudFrontHeaders(stacks) {
     'XSSProtection',
   ];
 
+  // Collect all ResponseHeadersPolicy resources across ALL stacks (supports nested stacks
+  // where the policy lives in a dedicated CdnStack, not in every stack).
+  const allPolicies = [];
   for (const { name, template } of stacks) {
     const policies = getResources(template, 'AWS::CloudFront::ResponseHeadersPolicy');
-
-    if (policies.length === 0) {
-      violations.push(`  [${name}] No CloudFront::ResponseHeadersPolicy resource found`);
-      continue;
-    }
-
     for (const [logicalId, resource] of policies) {
-      const secConfig =
-        resource.Properties?.ResponseHeadersPolicyConfig?.SecurityHeadersConfig || {};
-      const presentHeaders = Object.keys(secConfig);
+      allPolicies.push({ name, logicalId, resource });
+    }
+  }
 
-      for (const required of requiredHeaders) {
-        if (!presentHeaders.includes(required)) {
-          violations.push(`  [${name}] ${logicalId} — missing security header: ${required}`);
-        }
+  if (allPolicies.length === 0) {
+    violations.push('  No CloudFront::ResponseHeadersPolicy resource found in any stack');
+    return { rule: 'Rule 5: CloudFront security response headers', violations };
+  }
+
+  for (const { name, logicalId, resource } of allPolicies) {
+    const secConfig =
+      resource.Properties?.ResponseHeadersPolicyConfig?.SecurityHeadersConfig || {};
+    const presentHeaders = Object.keys(secConfig);
+
+    for (const required of requiredHeaders) {
+      if (!presentHeaders.includes(required)) {
+        violations.push(`  [${name}] ${logicalId} — missing security header: ${required}`);
       }
     }
   }
