@@ -172,6 +172,7 @@ export class LearnfyraStack extends cdk.Stack {
       versioned: isProd,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
       lifecycleRules: [
         {
           id: 'expire-worksheets',
@@ -188,6 +189,7 @@ export class LearnfyraStack extends cdk.Stack {
       removalPolicy,
       autoDeleteObjects: !isProd,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
     });
 
     const createTable = (
@@ -464,7 +466,9 @@ export class LearnfyraStack extends cdk.Stack {
       restApiName: `learnfyra-${appEnv}-apigw`,
       description: `Learnfyra API — ${appEnv}`,
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: isDev
+          ? apigateway.Cors.ALL_ORIGINS
+          : (enableCustomDomains ? [`https://${webDomainName}`] : apigateway.Cors.ALL_ORIGINS),
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
       },
@@ -515,6 +519,33 @@ export class LearnfyraStack extends cdk.Stack {
     // ── CloudFront distribution ──────────────────────────────────────────────
     const apiGatewayExecuteDomain = `${api.restApiId}.execute-api.${this.region}.amazonaws.com`;
 
+    // Security response headers — HSTS, X-Frame-Options, CSP-adjacent protections
+    const securityHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeadersPolicy', {
+      responseHeadersPolicyName: `learnfyra-${appEnv}-security-headers`,
+      securityHeadersBehavior: {
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.seconds(63072000),
+          includeSubdomains: true,
+          preload: true,
+          override: true,
+        },
+        contentTypeOptions: { override: true },
+        frameOptions: {
+          frameOption: cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        xssProtection: {
+          protection: true,
+          modeBlock: true,
+          override: true,
+        },
+      },
+    });
+
     const distribution = new cloudfront.Distribution(this, 'CloudFrontDistribution', {
       comment: `learnfyra-${appEnv}-cloudfront`,
       defaultRootObject: 'index.html',
@@ -530,6 +561,7 @@ export class LearnfyraStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+        responseHeadersPolicy: securityHeadersPolicy,
       },
       additionalBehaviors: {
         '/api/*': {
@@ -541,6 +573,7 @@ export class LearnfyraStack extends cdk.Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: securityHeadersPolicy,
         },
       },
       errorResponses: [
@@ -1157,41 +1190,75 @@ export class LearnfyraStack extends cdk.Stack {
       fn.addEnvironment('QB_TABLE_NAME', `LearnfyraQuestionBank-${appEnv}`);
     });
 
-    const dynamoTableArnPattern = `arn:aws:dynamodb:${this.region}:${this.account}:table/Learnfyra*-${appEnv}`;
-    const dynamoIndexArnPattern = `${dynamoTableArnPattern}/index/*`;
-
-    [
-      generateFn,
-      authFn,
-      solveFn,
-      submitFn,
-      progressFn,
-      analyticsFn,
-      classFn,
-      rewardsFn,
-      studentFn,
-      adminFn,
-      dashboardFn,
-      certificatesFn,
-      adminPoliciesFn,
-      feedbackFn,
-    ].forEach((fn) => {
+    // ── Per-function DynamoDB IAM (least privilege) ──────────────────────────
+    const grantDynamo = (
+      fn: NodejsFunction,
+      tables: dynamodb.Table[],
+      actions: string[]
+    ) => {
+      const resources = tables.flatMap((t) => [t.tableArn, `${t.tableArn}/index/*`]);
       fn.addToRolePolicy(
         new iam.PolicyStatement({
-          actions: [
-            'dynamodb:GetItem',
-            'dynamodb:PutItem',
-            'dynamodb:UpdateItem',
-            'dynamodb:DeleteItem',
-            'dynamodb:Query',
-            'dynamodb:Scan',
-            'dynamodb:BatchGetItem',
-            'dynamodb:BatchWriteItem',
-          ],
-          resources: [dynamoTableArnPattern, dynamoIndexArnPattern],
+          actions: actions.map((a) => `dynamodb:${a}`),
+          resources,
         })
       );
-    });
+    };
+
+    const readWrite = ['GetItem', 'PutItem', 'UpdateItem', 'Query'];
+    const readWriteDelete = ['GetItem', 'PutItem', 'UpdateItem', 'DeleteItem', 'Query'];
+    const readOnly = ['GetItem', 'Query'];
+    const fullAccess = ['GetItem', 'PutItem', 'UpdateItem', 'DeleteItem', 'Query', 'Scan', 'BatchGetItem', 'BatchWriteItem'];
+
+    grantDynamo(generateFn,
+      [worksheetsTable, modelConfigTable, modelAuditLogTable, questionExposureHistoryTable, adminPoliciesTable, repeatCapOverridesTable, guestSessionsTable, userQuestionHistoryTable, questionBankTable],
+      ['GetItem', 'PutItem', 'UpdateItem', 'Query', 'BatchGetItem', 'BatchWriteItem']);
+
+    grantDynamo(authFn,
+      [usersTable, passwordResetsTable, guestSessionsTable],
+      readWriteDelete);
+
+    grantDynamo(solveFn, [worksheetsTable], readOnly);
+
+    grantDynamo(submitFn, [worksheetsTable], readWrite);
+
+    grantDynamo(progressFn,
+      [worksheetsTable, userQuestionHistoryTable, attemptsTable, aggregatesTable, certificatesTable, parentLinksTable, usersTable],
+      readWrite);
+
+    grantDynamo(analyticsFn,
+      [attemptsTable, aggregatesTable, classesTable, membershipsTable, usersTable],
+      ['GetItem', 'Query', 'Scan']);
+
+    grantDynamo(classFn,
+      [classesTable, membershipsTable, usersTable],
+      readWriteDelete);
+
+    grantDynamo(rewardsFn,
+      [attemptsTable, membershipsTable, rewardProfilesTable, usersTable],
+      readWrite);
+
+    grantDynamo(studentFn,
+      [classesTable, membershipsTable, usersTable],
+      readWriteDelete);
+
+    grantDynamo(adminFn,
+      [usersTable, attemptsTable, aggregatesTable, certificatesTable, classesTable, membershipsTable, generationLogTable, configTable, modelConfigTable, modelAuditLogTable, questionExposureHistoryTable, rewardProfilesTable, parentLinksTable, passwordResetsTable, adminPoliciesTable, adminAuditEventsTable, adminIdempotencyTable, repeatCapOverridesTable, questionBankTable],
+      fullAccess);
+
+    grantDynamo(dashboardFn,
+      [attemptsTable, aggregatesTable, worksheetsTable],
+      readOnly);
+
+    grantDynamo(certificatesFn,
+      [certificatesTable, usersTable],
+      ['GetItem', 'PutItem', 'Query']);
+
+    grantDynamo(adminPoliciesFn,
+      [usersTable, adminPoliciesTable, adminAuditEventsTable, adminIdempotencyTable, configTable, modelConfigTable, modelAuditLogTable, repeatCapOverridesTable],
+      ['GetItem', 'PutItem', 'UpdateItem', 'DeleteItem', 'Query', 'BatchGetItem', 'BatchWriteItem']);
+
+    grantDynamo(feedbackFn, [feedbackTable], ['GetItem', 'PutItem', 'Query']);
 
     // In dev, bypass QuestionBank lookup and route all requests to AI generation.
     // This populates the bank from scratch. Toggle off once bank is sufficiently populated.
@@ -1216,7 +1283,11 @@ export class LearnfyraStack extends cdk.Stack {
     downloadResource.addMethod(
       'GET',
       new apigateway.LambdaIntegration(downloadFn, { proxy: true }),
-      { apiKeyRequired: false }
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
+      }
     );
 
     const authResource = apiResource.addResource('auth');
@@ -1234,11 +1305,15 @@ export class LearnfyraStack extends cdk.Stack {
       .addResource('logout')
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     authResource
       .addResource('refresh')
       .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer: tokenAuthorizer,
       });
     authResource
       .addResource('guest')
@@ -2453,18 +2528,19 @@ export class LearnfyraStack extends cdk.Stack {
       }
     }
 
-    // ── Outputs ────────────────────────────────────────────────────────────────
-    // ── WAF: Rate limit POST /auth/guest (prod only) ───────────────────────
+    // ── WAF: Rate limiting + OWASP protection (prod only) ──────────────────
+    // Cost: ~$2/mo (1 WebACL $5 base already paid + 2 custom rules + 1 managed group)
     if (isProd) {
-      const guestRateLimitAcl = new wafv2.CfnWebACL(this, 'GuestRateLimitACL', {
+      const wafAcl = new wafv2.CfnWebACL(this, 'GuestRateLimitACL', {
         scope: 'REGIONAL',
         defaultAction: { allow: {} },
         visibilityConfig: {
           cloudWatchMetricsEnabled: true,
-          metricName: `GuestRateLimit-${appEnv}`,
+          metricName: `LearnfyraWAF-${appEnv}`,
           sampledRequestsEnabled: true,
         },
         rules: [
+          // Rule 1: Rate limit guest token issuance — 20 req/5min per IP
           {
             name: 'GuestTokenIssuerRateLimit',
             priority: 1,
@@ -2476,7 +2552,7 @@ export class LearnfyraStack extends cdk.Stack {
             },
             statement: {
               rateBasedStatement: {
-                limit: 20, // 20 requests per 5-minute sliding window per IP
+                limit: 20,
                 aggregateKeyType: 'IP',
                 scopeDownStatement: {
                   byteMatchStatement: {
@@ -2489,14 +2565,58 @@ export class LearnfyraStack extends cdk.Stack {
               },
             },
           },
+          // Rule 2: Rate limit /api/generate — 100 req/5min per IP (protects Claude API costs)
+          {
+            name: 'GenerateEndpointRateLimit',
+            priority: 2,
+            action: { block: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `GenerateRateLimit-${appEnv}`,
+              sampledRequestsEnabled: true,
+            },
+            statement: {
+              rateBasedStatement: {
+                limit: 100,
+                aggregateKeyType: 'IP',
+                scopeDownStatement: {
+                  byteMatchStatement: {
+                    fieldToMatch: { uriPath: {} },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: '/api/generate',
+                    textTransformations: [{ priority: 0, type: 'NONE' }],
+                  },
+                },
+              },
+            },
+          },
+          // Rule 3: AWS Managed — Common Rule Set (OWASP top 10: SQLi, XSS, bad inputs, Log4Shell)
+          {
+            name: 'AWSCommonRuleSet',
+            priority: 10,
+            overrideAction: { none: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `AWSCommonRuleSet-${appEnv}`,
+              sampledRequestsEnabled: true,
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+          },
         ],
       });
 
       new wafv2.CfnWebACLAssociation(this, 'GuestRateLimitACLAssociation', {
         resourceArn: api.deploymentStage.stageArn,
-        webAclArn: guestRateLimitAcl.attrArn,
+        webAclArn: wafAcl.attrArn,
       });
     }
+
+    // ── Outputs ────────────────────────────────────────────────────────────────
 
     new cdk.CfnOutput(this, 'FrontendUrl', {
       value: `https://${distribution.distributionDomainName}`,
