@@ -13,17 +13,26 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { existsSync } from 'fs';
-import { BaseNestedStackProps, StorageOutputs, AuthOutputs, ComputeOutputs } from '../types';
+import { BaseNestedStackProps, StorageOutputs, AuthOutputs, ComputeOutputs, ComputeFunctionArns } from '../types';
 
 export interface ComputeStackProps extends BaseNestedStackProps {
   storage: StorageOutputs;
   auth: AuthOutputs;
   allowedOrigin: string;
   /**
-   * OAUTH_CALLBACK_BASE_URL is NOT set inside ComputeStack.
-   * The parent orchestrator calls authFn.addEnvironment('OAUTH_CALLBACK_BASE_URL', ...)
-   * after CdnStack is created to avoid a circular dependency.
+   * OAUTH_CALLBACK_BASE_URL set here to avoid Compute → Cdn circular dependency.
+   * The parent orchestrator computes the value statically (webDomainName when
+   * custom domains are enabled, or '*' as a placeholder that CDN stack will
+   * never introduce a back-reference to Compute).
+   *
+   * When custom domains are disabled the parent passes the CloudFront domain
+   * using a concrete string only when it can be computed without referencing
+   * CdnStack outputs — i.e. the parent uses webDomainName when available.
+   * In practice: pass webDomainName-based URL when enableCustomDomains=true,
+   * otherwise pass a '*' placeholder (authFn will fall back to ALLOWED_ORIGIN
+   * at runtime for local redirect construction).
    */
+  oauthCallbackBaseUrl: string;
 }
 
 function resolveHandlerEntry(handlerFile: string): string {
@@ -47,11 +56,12 @@ function resolveHandlerEntry(handlerFile: string): string {
 
 export class ComputeStack extends cdk.NestedStack {
   public readonly outputs: ComputeOutputs;
+  public readonly functionArns: ComputeFunctionArns;
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
 
-    const { appEnv, storage, auth, allowedOrigin } = props;
+    const { appEnv, storage, auth, allowedOrigin, oauthCallbackBaseUrl } = props;
     const isDev = appEnv === 'dev';
     const isProd = appEnv === 'prod';
     const tracingMode =
@@ -603,12 +613,13 @@ export class ComputeStack extends cdk.NestedStack {
     });
 
     // ── Cognito env vars on authFn ───────────────────────────────────────────
-    // NOTE: OAUTH_CALLBACK_BASE_URL is intentionally NOT set here.
-    // It depends on the CloudFront distribution domain which is created after ComputeStack.
-    // The parent stack (learnfyra-stack.ts) calls authFn.addEnvironment after CdnStack exists.
+    // OAUTH_CALLBACK_BASE_URL is set here using the value passed in from the
+    // parent orchestrator. The parent computes it statically (webDomainName
+    // when custom domains are on, '*' otherwise) so no Compute → Cdn ref forms.
     authFn.addEnvironment('COGNITO_USER_POOL_ID', auth.userPool.userPoolId);
     authFn.addEnvironment('COGNITO_APP_CLIENT_ID', auth.userPoolClient.userPoolClientId);
     authFn.addEnvironment('COGNITO_DOMAIN', auth.cognitoDomainUrl);
+    authFn.addEnvironment('OAUTH_CALLBACK_BASE_URL', oauthCallbackBaseUrl);
 
     // ── dev: skip question bank lookup ───────────────────────────────────────
 
@@ -771,6 +782,30 @@ export class ComputeStack extends cdk.NestedStack {
       guestFixtureFn,
       adminPoliciesFn,
       feedbackFn,
+    };
+
+    // ── Function ARNs as plain strings (no cross-stack CFn refs) ─────────────
+    // ApiStack imports these via lambda.Function.fromFunctionArn() so that
+    // Lambda::Permission resources land in ApiStack, not ComputeStack.
+    // This breaks the Compute ↔ Api circular dependency.
+    this.functionArns = {
+      generateFnArn: generateFn.functionArn,
+      downloadFnArn: downloadFn.functionArn,
+      authFnArn: authFn.functionArn,
+      apiAuthorizerFnArn: apiAuthorizerFn.functionArn,
+      solveFnArn: solveFn.functionArn,
+      submitFnArn: submitFn.functionArn,
+      progressFnArn: progressFn.functionArn,
+      analyticsFnArn: analyticsFn.functionArn,
+      classFnArn: classFn.functionArn,
+      rewardsFnArn: rewardsFn.functionArn,
+      studentFnArn: studentFn.functionArn,
+      adminFnArn: adminFn.functionArn,
+      dashboardFnArn: dashboardFn.functionArn,
+      certificatesFnArn: certificatesFn.functionArn,
+      guestFixtureFnArn: guestFixtureFn.functionArn,
+      adminPoliciesFnArn: adminPoliciesFn.functionArn,
+      feedbackFnArn: feedbackFn.functionArn,
     };
   }
 }

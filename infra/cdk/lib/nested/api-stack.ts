@@ -4,6 +4,13 @@
  *              + gateway responses + custom domain (optional).
  *              Estimated CloudFormation resources: ~324
  *
+ * Cycle-breaking strategy:
+ *   Props receive ComputeFunctionArns (plain ARN strings) instead of the
+ *   NodejsFunction objects from ComputeStack. Each function is imported via
+ *   lambda.Function.fromFunctionArn(). CDK then places Lambda::Permission
+ *   resources HERE in ApiStack rather than in ComputeStack, making the
+ *   dependency Compute → Api one-directional with no back-reference.
+ *
  * NOTE: CDK places all API Gateway resources in the stack that owns the RestApi,
  * regardless of where addResource() is called. Splitting routes across nested
  * stacks is not possible with L2 constructs. If this stack exceeds 500 resources,
@@ -13,16 +20,18 @@
 
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
-import { BaseNestedStackProps, ComputeOutputs, ApiOutputs } from '../types';
+import { BaseNestedStackProps, ComputeFunctionArns, ApiOutputs } from '../types';
 
 export interface ApiStackProps extends BaseNestedStackProps {
-  compute: ComputeOutputs;
+  /** Plain ARN strings — imported via fromFunctionArn to avoid Compute ↔ Api cycle */
+  computeArns: ComputeFunctionArns;
   allowedOrigin: string;
   enableCustomDomains: boolean;
   isDev: boolean;
@@ -55,13 +64,37 @@ export class ApiStack extends cdk.NestedStack {
 
     const {
       appEnv,
-      compute,
+      computeArns,
       allowedOrigin,
       enableCustomDomains,
       isDev,
       isProd,
     } = props;
     const removalPolicy = isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
+
+    // ── Import Lambda functions by ARN ────────────────────────────────────────
+    // Using fromFunctionArn causes Lambda::Permission to be created in this
+    // stack (ApiStack) rather than in ComputeStack, breaking the cycle.
+    const importFn = (id: string, arn: string) =>
+      lambda.Function.fromFunctionArn(this, id, arn);
+
+    const generateFn     = importFn('ImportedGenerateFn',     computeArns.generateFnArn);
+    const downloadFn     = importFn('ImportedDownloadFn',     computeArns.downloadFnArn);
+    const authFn         = importFn('ImportedAuthFn',         computeArns.authFnArn);
+    const apiAuthorizerFn= importFn('ImportedApiAuthorizerFn',computeArns.apiAuthorizerFnArn);
+    const solveFn        = importFn('ImportedSolveFn',        computeArns.solveFnArn);
+    const submitFn       = importFn('ImportedSubmitFn',       computeArns.submitFnArn);
+    const progressFn     = importFn('ImportedProgressFn',     computeArns.progressFnArn);
+    const analyticsFn    = importFn('ImportedAnalyticsFn',    computeArns.analyticsFnArn);
+    const classFn        = importFn('ImportedClassFn',        computeArns.classFnArn);
+    const rewardsFn      = importFn('ImportedRewardsFn',      computeArns.rewardsFnArn);
+    const studentFn      = importFn('ImportedStudentFn',      computeArns.studentFnArn);
+    const adminFn        = importFn('ImportedAdminFn',        computeArns.adminFnArn);
+    const dashboardFn    = importFn('ImportedDashboardFn',    computeArns.dashboardFnArn);
+    const certificatesFn = importFn('ImportedCertificatesFn', computeArns.certificatesFnArn);
+    const guestFixtureFn = importFn('ImportedGuestFixtureFn', computeArns.guestFixtureFnArn);
+    const adminPoliciesFn= importFn('ImportedAdminPoliciesFn',computeArns.adminPoliciesFnArn);
+    const feedbackFn     = importFn('ImportedFeedbackFn',     computeArns.feedbackFnArn);
 
     // ── API Gateway access log group ─────────────────────────────────────────
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
@@ -141,7 +174,7 @@ export class ApiStack extends cdk.NestedStack {
 
     // ── Token authorizer ──────────────────────────────────────────────────────
     const tokenAuthorizer = new apigateway.TokenAuthorizer(this, 'ApiTokenAuthorizer', {
-      handler: compute.apiAuthorizerFn,
+      handler: apiAuthorizerFn,
       identitySource: apigateway.IdentitySource.header('Authorization'),
       resultsCacheTtl: cdk.Duration.minutes(5),
     });
@@ -153,7 +186,7 @@ export class ApiStack extends cdk.NestedStack {
     // POST /api/generate
     apiResource
       .addResource('generate')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.generateFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(generateFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -162,7 +195,7 @@ export class ApiStack extends cdk.NestedStack {
     // GET /api/download
     apiResource
       .addResource('download')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.downloadFn, { proxy: true }), {
+      .addMethod('GET', new apigateway.LambdaIntegration(downloadFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -172,55 +205,55 @@ export class ApiStack extends cdk.NestedStack {
     const authResource = apiResource.addResource('auth');
     authResource
       .addResource('register')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
     authResource
       .addResource('login')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
     authResource
       .addResource('logout')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
       });
     authResource
       .addResource('refresh')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
       });
     authResource
       .addResource('guest')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
     authResource
       .addResource('forgot-password')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
     authResource
       .addResource('reset-password')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
 
     authResource
       .addResource('oauth')
       .addResource('{provider}')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
 
     authResource
       .addResource('callback')
       .addResource('{provider}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.authFn, { proxy: true }), {
+      .addMethod('GET', new apigateway.LambdaIntegration(authFn, { proxy: true }), {
         apiKeyRequired: false,
       });
 
@@ -228,14 +261,14 @@ export class ApiStack extends cdk.NestedStack {
     apiResource
       .addResource('guest')
       .addResource('preview')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.guestFixtureFn, { proxy: true }), {
+      .addMethod('GET', new apigateway.LambdaIntegration(guestFixtureFn, { proxy: true }), {
         apiKeyRequired: false,
       });
 
     // POST /api/submit
     apiResource
       .addResource('submit')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.submitFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(submitFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -244,7 +277,7 @@ export class ApiStack extends cdk.NestedStack {
     // POST /api/feedback
     apiResource
       .addResource('feedback')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.feedbackFn, { proxy: true }), {
+      .addMethod('POST', new apigateway.LambdaIntegration(feedbackFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -254,7 +287,7 @@ export class ApiStack extends cdk.NestedStack {
     apiResource
       .addResource('solve')
       .addResource('{worksheetId}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.solveFn, { proxy: true }), {
+      .addMethod('GET', new apigateway.LambdaIntegration(solveFn, { proxy: true }), {
         apiKeyRequired: false,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
         authorizer: tokenAuthorizer,
@@ -273,115 +306,115 @@ export class ApiStack extends cdk.NestedStack {
     const progressResource = apiResource.addResource('progress');
     progressResource
       .addResource('save')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.progressFn, { proxy: true }), authOpts);
+      .addMethod('POST', new apigateway.LambdaIntegration(progressFn, { proxy: true }), authOpts);
     progressResource
       .addResource('history')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.progressFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), authOpts);
     progressResource
       .addResource('insights')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.progressFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), authOpts);
     progressResource
       .addResource('parent')
       .addResource('{childId}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.progressFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), authOpts);
 
     // GET /api/worksheets/mine
     apiResource
       .addResource('worksheets')
       .addResource('mine')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.progressFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(progressFn, { proxy: true }), authOpts);
 
     // /api/dashboard/*
     const dashboardResource = apiResource.addResource('dashboard');
     dashboardResource
       .addResource('stats')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.dashboardFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), authOpts);
     dashboardResource
       .addResource('recent-worksheets')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.dashboardFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), authOpts);
     dashboardResource
       .addResource('subject-progress')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.dashboardFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(dashboardFn, { proxy: true }), authOpts);
 
     // /api/class/*
     const classResource = apiResource.addResource('class');
     classResource
       .addResource('create')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.classFn, { proxy: true }), authOpts);
+      .addMethod('POST', new apigateway.LambdaIntegration(classFn, { proxy: true }), authOpts);
     classResource
       .addResource('{id}')
       .addResource('students')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.classFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(classFn, { proxy: true }), authOpts);
 
     // GET /api/analytics/class/{id}
     apiResource
       .addResource('analytics')
       .addResource('class')
       .addResource('{id}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.analyticsFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(analyticsFn, { proxy: true }), authOpts);
 
     // /api/rewards/*
     const rewardsResource = apiResource.addResource('rewards');
     rewardsResource
       .addResource('student')
       .addResource('{id}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.rewardsFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(rewardsFn, { proxy: true }), authOpts);
     rewardsResource
       .addResource('class')
       .addResource('{id}')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.rewardsFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(rewardsFn, { proxy: true }), authOpts);
 
     // /api/student/*
     const studentResource = apiResource.addResource('student');
     const studentProfileResource = studentResource.addResource('profile');
     studentProfileResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.studentFn, { proxy: true }),
+      new apigateway.LambdaIntegration(studentFn, { proxy: true }),
       authOpts
     );
     studentProfileResource.addMethod(
       'PATCH',
-      new apigateway.LambdaIntegration(compute.studentFn, { proxy: true }),
+      new apigateway.LambdaIntegration(studentFn, { proxy: true }),
       authOpts
     );
     studentResource
       .addResource('join-class')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.studentFn, { proxy: true }), authOpts);
+      .addMethod('POST', new apigateway.LambdaIntegration(studentFn, { proxy: true }), authOpts);
 
     // /api/qb/*
     const qbResource = apiResource.addResource('qb');
     const qbQuestionsResource = qbResource.addResource('questions');
     qbQuestionsResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     qbQuestionsResource.addMethod(
       'POST',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     const qbQuestionById = qbQuestionsResource.addResource('{id}');
     qbQuestionById.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     qbQuestionById
       .addResource('reuse')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }), authOpts);
+      .addMethod('POST', new apigateway.LambdaIntegration(adminFn, { proxy: true }), authOpts);
 
     // /api/certificates/*
     const certificatesResource = apiResource.addResource('certificates');
     certificatesResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.certificatesFn, { proxy: true }),
+      new apigateway.LambdaIntegration(certificatesFn, { proxy: true }),
       authOpts
     );
     certificatesResource
       .addResource('{id}')
       .addResource('download')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.certificatesFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(certificatesFn, { proxy: true }), authOpts);
 
     // /api/admin/*
     const adminResource = apiResource.addResource('admin');
@@ -389,90 +422,90 @@ export class ApiStack extends cdk.NestedStack {
     const adminPoliciesResource = adminResource.addResource('policies');
     adminPoliciesResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }),
       authOpts
     );
     adminPoliciesResource
       .addResource('model-routing')
-      .addMethod('PUT', new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }), authOpts);
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), authOpts);
     adminPoliciesResource
       .addResource('budget-usage')
-      .addMethod('PUT', new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }), authOpts);
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), authOpts);
     adminPoliciesResource
       .addResource('validation-profile')
-      .addMethod('PUT', new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }), authOpts);
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), authOpts);
 
     const repeatCapResource = adminPoliciesResource.addResource('repeat-cap');
     repeatCapResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }),
       authOpts
     );
     repeatCapResource.addMethod(
       'PUT',
-      new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }),
       authOpts
     );
     repeatCapResource
       .addResource('overrides')
-      .addMethod('PUT', new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }), authOpts);
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), authOpts);
 
     adminResource
       .addResource('audit')
       .addResource('events')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.adminPoliciesFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(adminPoliciesFn, { proxy: true }), authOpts);
 
     // /api/admin/guardrails/*
     const adminGuardrailsResource = adminResource.addResource('guardrails');
     const adminGuardrailsPolicyResource = adminGuardrailsResource.addResource('policy');
     adminGuardrailsPolicyResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     adminGuardrailsPolicyResource.addMethod(
       'PUT',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     const adminGuardrailsTemplatesResource = adminGuardrailsResource.addResource('templates');
     adminGuardrailsTemplatesResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     adminGuardrailsTemplatesResource
       .addResource('{level}')
-      .addMethod('PUT', new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }), authOpts);
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminFn, { proxy: true }), authOpts);
     adminGuardrailsResource
       .addResource('test')
-      .addMethod('POST', new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }), authOpts);
+      .addMethod('POST', new apigateway.LambdaIntegration(adminFn, { proxy: true }), authOpts);
     adminGuardrailsResource
       .addResource('audit')
-      .addMethod('GET', new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }), authOpts);
+      .addMethod('GET', new apigateway.LambdaIntegration(adminFn, { proxy: true }), authOpts);
 
     // /api/admin/repeat-cap/*
     const adminRepeatCapResource = adminResource.addResource('repeat-cap');
     adminRepeatCapResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     adminRepeatCapResource.addMethod(
       'PUT',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     const adminRepeatCapOverrideResource = adminRepeatCapResource.addResource('override');
     adminRepeatCapOverrideResource.addMethod(
       'POST',
-      new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }),
+      new apigateway.LambdaIntegration(adminFn, { proxy: true }),
       authOpts
     );
     adminRepeatCapOverrideResource
       .addResource('{scope}')
       .addResource('{scopeId}')
-      .addMethod('DELETE', new apigateway.LambdaIntegration(compute.adminFn, { proxy: true }), authOpts);
+      .addMethod('DELETE', new apigateway.LambdaIntegration(adminFn, { proxy: true }), authOpts);
 
     // ── Optional: API Gateway custom domain + API Route53 A record ────────────
     if (enableCustomDomains && props.apiCertificateArn && props.apiDomainName) {
@@ -515,7 +548,12 @@ export class ApiStack extends cdk.NestedStack {
       }
     }
 
-    this.outputs = { api, apiAccessLogGroup };
+    this.outputs = {
+      api,
+      apiAccessLogGroup,
+      restApiName: api.restApiName,
+      deploymentStageArn: api.deploymentStage.stageArn,
+    };
   }
 
   /**

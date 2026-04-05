@@ -11,6 +11,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cr from 'aws-cdk-lib/custom-resources';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { Construct } from 'constructs';
 import { BaseNestedStackProps, StorageOutputs } from '../types';
 
@@ -54,6 +55,15 @@ export class StorageStack extends cdk.NestedStack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
     });
+
+    // ── CloudFront OAI — created here so grantRead modifies THIS stack's
+    //    bucket policy and never forces a Storage → Cdn cross-stack ref.
+    //    CdnStack receives the OAI as a prop and uses it directly without
+    //    calling grantRead again.
+    const frontendOai = new cloudfront.OriginAccessIdentity(this, 'FrontendOAI', {
+      comment: `OAI for learnfyra-${appEnv}-s3-frontend`,
+    });
+    frontendBucket.grantRead(frontendOai);
 
     // ── DynamoDB helper ───────────────────────────────────────────────────────
     const createTable = (
@@ -410,6 +420,7 @@ export class StorageStack extends cdk.NestedStack {
     this.outputs = {
       worksheetBucket,
       frontendBucket,
+      frontendOai,
       usersTable,
       attemptsTable,
       aggregatesTable,
