@@ -19,6 +19,8 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import { Construct } from 'constructs';
 import { BaseNestedStackProps, CdnOutputs } from '../types';
 
@@ -37,12 +39,15 @@ export interface CdnStackProps extends BaseNestedStackProps {
    */
   apiRestApiId: string;
   isProd: boolean;
+  isDev: boolean;
   enableCustomDomains: boolean;
   webDomainName?: string;
   wwwDomainName?: string;
   adminDomainName?: string;
   /** ACM certificate ARN (us-east-1, required for CloudFront when custom domains enabled) */
   cloudFrontCertificateArn?: string;
+  /** Route53 hosted zone — required when enableCustomDomains is true */
+  zone?: route53.IHostedZone;
 }
 
 export class CdnStack extends cdk.NestedStack {
@@ -142,6 +147,42 @@ export class CdnStack extends cdk.NestedStack {
         },
       ],
     });
+
+    // ── Route53 alias records for CloudFront (web, www, admin) ─────────────
+    // These live in CdnStack (which owns the distribution) rather than ApiStack
+    // to avoid an Api → Cdn cross-stack ref that would create a cycle with
+    // the existing Cdn → Api ref (via apiRestApiId).
+    if (enableCustomDomains && props.zone) {
+      if (props.webDomainName) {
+        new route53.ARecord(this, 'WebDomainRecord', {
+          zone: props.zone,
+          recordName: props.webDomainName,
+          target: route53.RecordTarget.fromAlias(
+            new route53Targets.CloudFrontTarget(distribution)
+          ),
+        });
+      }
+
+      if (props.isProd && props.wwwDomainName) {
+        new route53.ARecord(this, 'WwwDomainRecord', {
+          zone: props.zone,
+          recordName: props.wwwDomainName,
+          target: route53.RecordTarget.fromAlias(
+            new route53Targets.CloudFrontTarget(distribution)
+          ),
+        });
+      }
+
+      if (props.adminDomainName) {
+        new route53.ARecord(this, 'AdminDomainRecord', {
+          zone: props.zone,
+          recordName: props.adminDomainName,
+          target: route53.RecordTarget.fromAlias(
+            new route53Targets.CloudFrontTarget(distribution)
+          ),
+        });
+      }
+    }
 
     this.outputs = { distribution };
   }

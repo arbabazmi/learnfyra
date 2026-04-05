@@ -208,32 +208,22 @@ export class LearnfyraStack extends cdk.Stack {
     // OAI comes from StorageStack (already grantRead'd there).
     // apiRestApiId is a plain string from ApiStack outputs — creates a one-
     // directional Cdn → Api dependency, but no back-reference from Api → Cdn.
+    // Route53 CloudFront alias records (web, www, admin) are created inside
+    // CdnStack to avoid an Api → Cdn back-reference that would form a cycle.
     const cdn = new CdnStack(this, 'Cdn', {
       appEnv,
       frontendBucket: storage.outputs.frontendBucket,
       frontendOai: storage.outputs.frontendOai,
       apiRestApiId: apiStack.outputs.api.restApiId,
       isProd,
+      isDev,
       enableCustomDomains,
       webDomainName,
       wwwDomainName,
       adminDomainName,
       cloudFrontCertificateArn: props.cloudFrontCertificateArn,
+      zone,
     });
-
-    // ── Post-wire: pass distribution to ApiStack for Route53 web/www/admin records
-    if (enableCustomDomains && zone) {
-      apiStack.addCdnRoute53Records(cdn.outputs.distribution, {
-        zone,
-        webDomainName,
-        wwwDomainName,
-        adminDomainName,
-        isProd,
-        isDev,
-        authDomainName,
-        apiDomainName,
-      });
-    }
 
     // ── 6. Monitoring ─────────────────────────────────────────────────────────
     // restApiName and apiAccessLogGroupName passed as plain strings — no CFn Ref
